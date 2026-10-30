@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" id="quexin-hero" width="800" height="600" viewBox="0 0 800 600" fill="none" role="img" aria-labelledby="qx-title qx-description" style="--qx-primary:#78D8CA;--qx-surface:#0B1715;--qx-ink:#E7F2EE;--qx-outline:#839B94;--qx-backdrop:#0E2A24;--qx-container:#07534C;--qx-frame:#203732;--qx-placeholder:#172B27;--qx-muted:#67827B;--qx-route:#3D6259;--qx-wing:#8ECDF7;--qx-white:#003832">
 <title id="qx-title">鹊信 · 消息跨屏，实时无界</title>
-<desc id="qx-description">系统通知横幅从手机屏幕顶部滑入，停留在听筒下方；主屏幕保持静止。通知随后自动复制并推送到平板和笔记本，原通知保留在手机顶部。画面无文字标签。</desc>
+<desc id="qx-description">系统通知横幅从源设备屏幕顶部滑入，停留在听筒下方；主屏幕保持静止。通知随后自动复制并推送到平板和笔记本，原通知保留在源设备顶部。画面无文字标签。</desc>
 <style>#quexin-hero .qx-still{display:none}@media(prefers-reduced-motion:reduce){#quexin-hero .qx-motion{display:none}#quexin-hero .qx-still{display:inline}}</style>
 <defs>
     <clipPath id="qx-phone-screen-clip"><rect x="123" y="201" width="134" height="264" rx="22"/></clipPath>

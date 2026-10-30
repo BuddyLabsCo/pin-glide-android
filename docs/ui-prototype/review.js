@@ -7,7 +7,19 @@
     toggles: {
       home: true,
       office: true
-    }
+    },
+    deviceId: "home",
+    homeReturn: "ready",
+    removedDeviceIds: [],
+    homePresence: "online",
+    homeUnknown: false,
+    cameraPermission: "granted",
+    pairingAlias: params.get("alias") || "我的设备",
+    keyFailureId: "",
+    aliases: {},
+    renameDraft: undefined,
+    testPending: params.get("testPreview") === "pending",
+    testNotice: ""
   };
   const PAIRING_PROGRESS_STEPS = [
     "正在打开配对通道",
@@ -54,9 +66,46 @@
   };
 
   const DEVICES = [
-    { id: "home", name: "我的电脑", online: true, changedAt: "刚刚" },
-    { id: "office", name: "办公室电脑", online: true, changedAt: "2 分钟前" }
+    { id: "home", receiverId: "receiver-home", pairingId: "pairing-home", name: "我的电脑", online: true, changedAt: "刚刚" },
+    { id: "office", receiverId: "receiver-office", pairingId: "pairing-office", name: "办公室电脑", online: true, changedAt: "2 分钟前" }
   ];
+  const EXTRA_DEVICES = [
+    { id: "study", receiverId: "receiver-study", pairingId: "pairing-study", name: "书房设备", online: true, changedAt: "刚刚" },
+    { id: "spare", receiverId: "receiver-spare", pairingId: "pairing-spare", name: "备用设备", online: true, changedAt: "刚刚" },
+    { id: "living", receiverId: "receiver-living", pairingId: "pairing-living", name: "客厅设备", online: true, changedAt: "刚刚" }
+  ];
+  const PAIRED_DEVICE = { id: "new", receiverId: "receiver-new", pairingId: "pairing-new", name: "我的设备" };
+  const TEST_OUTCOMES = {
+    received: "测试消息已发送",
+    offline: "测试消息未发送：目标设备离线",
+    rejected: "测试消息未发送：配对已移除",
+    send_failed: "投递未确认：发送连接中断",
+    ack_timeout: "投递未确认：等待设备确认超时",
+    interrupted: "投递未确认：服务处理被中断",
+    mixed: "办公室电脑：目标设备离线",
+    request_error: "测试消息未发送：请求参数无效",
+    uncertain: "投递未确认：无法获取投递结果",
+    no_target: "测试消息未发送：没有可用的目标设备",
+    auth_expired: "测试消息未发送：登录已失效，请重新登录"
+  };
+  state.testNotice = TEST_OUTCOMES[params.get("testPreview")] || "";
+
+  const HOME_GROUPS = [
+    { id: "overview", label: "首页状态" },
+    { id: "permission", label: "短信权限" },
+    { id: "camera", label: "相机权限" },
+    { id: "login", label: "重新登录" },
+    { id: "device", label: "设备管理" },
+    { id: "rename", label: "重命名" },
+    { id: "remove", label: "移除配对" },
+    { id: "revocation", label: "注册撤销" }
+  ];
+  const HOME_READY_COPY = "新短信会被端到端加密后送往选中的设备。";
+  const HOME_HERO_STATES = {
+    ready: { title: "转发已就绪", copy: HOME_READY_COPY },
+    disabled: { title: "尚未选择接收设备", copy: "开启至少一台设备的接收开关后，鹊信才会转发新短信。", tone: "warning" },
+    offline: { title: "接收目标均已离线", copy: "已开启接收的设备当前均离线。目标设备上线后才能接收新短信，离线期间的短信不会补发。", tone: "warning", status: "全部离线" }
+  };
 
   const PAGES = {
     onboarding: {
@@ -67,7 +116,7 @@
         { id: "welcome", label: "欢迎", title: "欢迎使用鹊信", render: onboardingWelcome },
         { id: "privacy", label: "隐私", title: "隐私与数据处理", render: onboardingPrivacy },
         { id: "sms", label: "短信权限", title: "允许接收短信", render: onboardingSms },
-        { id: "sms-system", label: "短信系统弹窗", title: "Android 短信权限", render: onboardingSmsPrompt },
+        { id: "sms-system", label: "短信系统弹窗", title: "Android 短信权限", render: () => onboardingSmsPrompt() },
         { id: "sms-denied", label: "短信被拒绝", title: "短信权限未开启", render: onboardingSmsDenied },
         { id: "battery", label: "后台准备", title: "关闭电池优化", render: onboardingBattery },
         { id: "qq-login", label: "QQ 登录", title: "连接你的 QQ", render: onboardingQq },
@@ -77,7 +126,7 @@
         { id: "camera-system", label: "相机系统弹窗", title: "Android 相机权限", render: onboardingCameraPrompt },
         { id: "camera-denied", label: "相机被拒绝", title: "相机权限未开启", render: onboardingCameraDenied },
         { id: "camera-blocked", label: "相机永久拒绝", title: "需要前往系统设置", render: onboardingCameraBlocked },
-        { id: "scanner", label: "扫描二维码", title: "扫描电脑二维码", render: pairingScanner },
+        { id: "scanner", label: "扫描二维码", title: "扫描设备二维码", render: pairingScanner },
         { id: "scanner-invalid", label: "无效二维码", title: "不是鹊信二维码", render: onboardingScannerInvalid },
         { id: "session-expired", label: "会话失效", title: "二维码已失效", render: onboardingSessionExpired },
         { id: "consent", label: "确认设备", title: "确认连接设备", render: onboardingConsent },
@@ -95,56 +144,74 @@
     home: {
       number: "02",
       title: "首页与设备",
-      description: "转发状态、最近结果与 Receiver 管理",
+      description: "转发状态与设备管理",
       screens: [
-        { id: "ready", label: "已就绪", title: "转发已就绪", render: homeReady },
-        { id: "permission-lost", label: "短信权限失效", title: "转发已暂停", render: homePermissionLost },
-        { id: "battery-lost", label: "后台准备失效", title: "后台处理不可用", render: homeBatteryLost },
-        { id: "login-expired", label: "登录失效", title: "需要重新登录", render: homeLoginExpired },
-        { id: "offline", label: "电脑离线", title: "有一台电脑离线", render: homeOffline },
-        { id: "empty", label: "无设备", title: "等待第一台电脑", render: homeEmpty },
-        { id: "menu", label: "更多菜单", title: "主页菜单", render: homeMenu },
-        { id: "device-sheet", label: "设备详情", title: "管理电脑", render: homeDeviceSheet },
-        { id: "rename-device", label: "重命名", title: "重命名电脑", render: homeRenameDevice },
-        { id: "remove-confirm", label: "移除配对", title: "移除配对确认", render: homeRemoveConfirm },
-        { id: "removed", label: "移除完成", title: "配对已移除", render: homeRemoved },
-        { id: "revoked", label: "已撤销", title: "设备注册已撤销", render: homeRevoked }
+        { id: "ready", group: "overview", label: "已就绪", title: "转发已就绪", render: homeReady },
+        { id: "full", group: "overview", label: "已满5台", title: "我的设备 · 已满5台", render: homeReady },
+        { id: "already-added", group: "overview", label: "重复扫码返回", title: "这台设备已添加", render: () => homeReady({ notice: "这台设备已添加" }) },
+        { id: "loading", group: "overview", label: "首次加载", title: "正在获取设备", render: () => homeLoading() },
+        { id: "pull-down", group: "overview", label: "下拉提示", title: "下拉刷新设备列表", render: () => homeReady({ refreshState: "pulling" }) },
+        { id: "pull-release", group: "overview", label: "松开刷新", title: "松开刷新设备列表", render: () => homeReady({ refreshState: "release" }) },
+        { id: "refreshing", group: "overview", label: "正在刷新", title: "正在刷新设备列表", render: () => homeLoading(true) },
+        { id: "load-error", group: "overview", label: "加载失败", title: "暂时无法获取设备", render: () => homeLoadError() },
+        { id: "refresh-error", group: "overview", label: "更新失败", title: "设备状态未更新", render: () => homeLoadError(true) },
+        { id: "offline", group: "overview", label: "部分离线", title: "有设备离线", render: homeReady },
+        { id: "all-offline", group: "overview", label: "全部离线", title: "所有设备离线", render: homeReady },
+        { id: "all-disabled", group: "overview", label: "全部关闭接收", title: "尚未选择接收设备", render: homeReady },
+        { id: "key-error", group: "overview", label: "本地密钥异常", title: "密钥丢失或损坏", render: homeReady },
+        { id: "empty", group: "overview", label: "无设备", title: "等待第一台设备", render: () => homeEmpty() },
+        { id: "permission-lost", group: "permission", label: "权限失效", title: "转发已暂停", render: homePermissionLost },
+        { id: "permission-system", group: "permission", label: "系统授权", title: "Android 短信权限（系统界面示意）", render: () => onboardingSmsPrompt(homePermissionLost(), "permission-restored", "home:sms-denied") },
+        { id: "permission-no-prompt", group: "permission", label: "不再询问", title: "权限失效 · 直接前往系统设置", render: () => homePermissionLost({ noPrompt: true }) },
+        { id: "permission-denied-toast", group: "permission", label: "未授权提示", title: "权限失效 · 短信权限未开启", render: () => homePermissionLost({ notice: "短信权限未开启" }) },
+        { id: "permission-settings-error-toast", group: "permission", label: "设置失败提示", title: "权限失效 · 手动开启权限", render: () => homePermissionLost({ notice: "请手动打开鹊信应用设置，授予短信权限", noPrompt: true }) },
+        { id: "permission-restored", group: "permission", label: "权限已恢复", title: "短信权限已恢复", render: () => homeReady({ notice: "短信权限已开启，转发已恢复" }) },
+        { id: "camera-system", group: "camera", label: "相机系统弹窗", title: "Android 相机权限（系统界面示意）", render: () => homeCameraPermission("system") },
+        { id: "camera-denied", group: "camera", label: "相机被拒绝", title: "相机权限未开启 · 留在首页", render: () => homeCameraPermission("denied") },
+        { id: "camera-blocked", group: "camera", label: "相机永久拒绝", title: "需要前往系统设置 · 留在首页", render: () => homeCameraPermission("blocked") },
+        { id: "login-expired", group: "login", label: "登录失效", title: "需要重新登录", render: homeLoginExpired },
+        { id: "login-loading", group: "login", label: "验证中", title: "正在验证 QQ 授权", render: () => homeLoginFlow("loading") },
+        { id: "login-cancelled", group: "login", label: "授权取消", title: "登录未完成", render: () => homeLoginFlow("cancelled") },
+        { id: "login-error", group: "login", label: "登录失败", title: "暂时无法登录", render: () => homeLoginFlow("error") },
+        { id: "login-account-mismatch", group: "login", label: "账号不一致", title: "请使用原 QQ 账号", render: () => homeLoginFlow("mismatch") },
+        { id: "login-restored", group: "login", label: "登录已恢复", title: "原有配对已保留", render: () => homeReady({ notice: "登录已恢复，原有配对已保留" }) },
+        { id: "device-sheet", group: "device", label: "设备详情", title: "管理设备", render: () => homeDeviceSheet() },
+        { id: "device-offline", group: "device", label: "离线设备", title: "管理离线设备", render: () => homeDeviceSheet({ offline: true }) },
+        { id: "device-disabled", group: "device", label: "关闭接收", title: "已关闭这台设备的接收", render: () => homeDeviceSheet({ receiving: false }) },
+        { id: "device-key-error", group: "device", label: "本地密钥异常", title: "密钥丢失或损坏", render: homeDeviceSheet },
+        { id: "device-gone", group: "device", label: "配对已失效", title: "这台设备的配对已不存在", render: homeDeviceGone },
+        { id: "rename-device", group: "rename", label: "编辑名称", title: "重命名设备", render: () => homeRenameDevice() },
+        { id: "rename-blank", group: "rename", label: "名称为空", title: "设备名称不能为空", render: () => homeRenameDevice({ value: "", error: "请输入设备名称" }) },
+        { id: "rename-too-long", group: "rename", label: "名称过长", title: "设备名称不能超过 40 字", render: () => homeRenameDevice({ value: "a".repeat(41), error: "设备名称不能超过 40 字" }) },
+        { id: "rename-duplicate", group: "rename", label: "名称重复", title: "设备名称已存在", render: () => homeRenameDevice({ value: "办公室电脑", error: "已有一台同名设备，请换一个名称" }) },
+        { id: "rename-saving", group: "rename", label: "保存中", title: "正在保存名称", render: () => homeRenameDevice({ value: "家用设备", saving: true }) },
+        { id: "rename-error", group: "rename", label: "保存失败", title: "名称未保存", render: () => homeRenameDevice({ value: "家用设备", failed: true }) },
+        { id: "rename-saved", group: "rename", label: "保存成功", title: "设备名称已更新", render: () => homeDeviceSheet({ renamed: true }) },
+        { id: "remove-confirm", group: "remove", label: "移除确认", title: "移除配对确认", render: () => homeRemoveConfirm() },
+        { id: "removing", group: "remove", label: "移除中", title: "正在移除配对", render: () => homeRemoveConfirm({ status: "pending" }) },
+        { id: "remove-error", group: "remove", label: "移除失败", title: "移除失败", render: () => homeRemoveConfirm({ status: "failed" }) },
+        { id: "removed", group: "remove", label: "移除完成", title: "配对已移除", render: homeRemoved },
+        { id: "removed-last", group: "remove", label: "最后一台已移除", title: "已无接收设备", render: homeRemoved },
+        { id: "revoked", group: "revocation", label: "已撤销", title: "设备注册已撤销", render: homeRevoked }
       ]
     },
     pairing: {
       number: "03",
-      title: "电脑配对",
-      description: "扫码、模式确认、所有者验证与密钥进度",
+      title: "设备配对",
+      description: "扫码添加设备、配对确认与连接进度",
       screens: [
-        { id: "camera-permission", label: "相机权限", title: "允许扫描二维码", render: pairingCameraPermission },
-        { id: "scanner", label: "扫描二维码", title: "扫描电脑二维码", render: pairingScanner },
-        { id: "invalid-qr", label: "无效二维码", title: "不是鹊信二维码", render: pairingInvalidQr, media: true },
-        { id: "consent", label: "新电脑确认", title: "确认连接电脑", render: pairingConsent },
-        { id: "add-sender", label: "添加手机", title: "添加到已有电脑", render: pairingAddSender },
-        { id: "re-pair", label: "更新密钥", title: "更新已有配对", render: pairingRePair },
-        { id: "owner-proof", label: "所有者验证", title: "恢复电脑访问", render: pairingOwnerProof },
-        { id: "recovery-warning", label: "恢复警告", title: "中断共享连接", render: pairingRecoveryWarning },
-        { id: "progress", label: "密钥进度", title: "建立加密连接", render: pairingProgress },
+        { id: "scanner", label: "扫描二维码", title: "扫描设备二维码", render: pairingScanner },
+        { id: "invalid-qr", label: "无效二维码", title: "不是鹊信二维码", render: pairingInvalidQr },
+        { id: "consent", label: "配对确认", title: "确认添加新设备", render: pairingConsent },
+        { id: "consent-blank", label: "名称为空", title: "设备名称不能为空", render: () => pairingConsent({ alias: "", error: "请输入设备名称", confirmDisabled: true }) },
+        { id: "consent-duplicate", label: "名称重复", title: "设备名称已存在", render: () => pairingConsent({ alias: "办公室电脑", error: "已有一台同名设备，请换一个名称", confirmDisabled: true }) },
+        { id: "progress", label: "打开通道", title: "建立加密连接", render: () => pairingProgress() },
+        { id: "progress-identity", label: "生成身份", title: "建立加密连接", render: () => pairingProgress(1) },
+        { id: "progress-key", label: "交换密钥", title: "建立加密连接", render: () => pairingProgress(2) },
+        { id: "progress-confirm", label: "确认配对", title: "建立加密连接", render: () => pairingProgress(3) },
         { id: "expired", label: "会话结束", title: "二维码已失效", render: pairingExpired },
-        { id: "receiver-limit", label: "设备上限", title: "已达到电脑上限", render: pairingReceiverLimit },
-        { id: "failure-preserved", label: "保留旧配对", title: "配对未完成", render: pairingFailurePreserved },
+        { id: "failure-preserved", label: "配对失败", title: "配对未完成", render: pairingFailurePreserved },
         { id: "success", label: "完成", title: "配对完成", render: pairingSuccess }
-      ]
-    },
-    delivery: {
-      number: "04",
-      title: "投递结果",
-      description: "测试消息、逐目标状态、不确定结果与空 OTP",
-      screens: [
-        { id: "test-start", label: "测试消息", title: "发送测试消息", render: deliveryTestStart },
-        { id: "processing", label: "处理中", title: "正在准备测试消息", render: deliveryProcessing },
-        { id: "result-all", label: "全部到达", title: "测试消息结果", render: deliveryResultAll },
-        { id: "result-mixed", label: "混合结果", title: "部分电脑离线", render: deliveryResultMixed },
-        { id: "result-uncertain", label: "送达未确认", title: "投递结果不确定", render: deliveryResultUncertain },
-        { id: "result-empty-otp", label: "未识别码", title: "短信已发送", render: deliveryResultEmptyOtp },
-        { id: "result-rejected", label: "目标被拒绝", title: "部分目标不可用", render: deliveryResultRejected },
-        { id: "no-target", label: "无接收目标", title: "没有接收电脑", render: deliveryNoTarget },
-        { id: "auth-expired", label: "授权失效", title: "登录状态已失效", render: deliveryAuthExpired }
       ]
     },
     settings: {
@@ -167,12 +234,11 @@
     }
   };
 
-  const PAGE_ORDER = ["onboarding", "home", "pairing", "delivery", "settings"];
+  const PAGE_ORDER = ["onboarding", "home", "pairing", "settings"];
   const PAGE_FILES = {
     onboarding: "01-onboarding.html",
     home: "02-home.html",
     pairing: "03-pairing.html",
-    delivery: "04-delivery.html",
     settings: "05-settings.html"
   };
 
@@ -194,6 +260,7 @@
 
   function actionAttrs(target) {
     if (!target) return "";
+    if (target.startsWith("home:")) return `data-home-action="${target.slice(5)}"`;
     return target.startsWith("page:")
       ? `data-href="${target.slice(5)}"`
       : `data-screen="${target}"`;
@@ -243,7 +310,7 @@
     } = options;
 
     const extras = [];
-    if (add) extras.push(iconButton("add", "添加电脑", add, "filled"));
+    if (add) extras.push(iconButton("add", "添加设备", add, "filled"));
     if (more) extras.push(iconButton("more", "更多", more));
     if (settings) extras.push(iconButton("settings", "设置", "page:05-settings.html?screen=settings"));
 
@@ -318,6 +385,24 @@
     }).join("");
   }
 
+  function scanDemo() {
+    if (state.page !== "pairing" || state.screen !== "scanner") return "";
+    const scanQuery = new URLSearchParams({ screen: "consent" });
+    params.forEach((value, key) => {
+      if (key === "enabled" || key.startsWith("alias-")) scanQuery.set(key, value);
+    });
+    return `<div class="scan-demo" aria-label="扫码结果演示">
+      <span>扫码结果演示</span>
+      <a class="screen-tab" href="03-pairing.html?${scanQuery}">新设备</a>
+      ${DEVICES.map((device) => {
+        const query = new URLSearchParams(scanQuery);
+        query.set("screen", "already-added");
+        query.set("device", device.id);
+        return `<a class="screen-tab" data-scan-demo="${device.id}" href="02-home.html?${query}">已添加：${escapeHtml(params.get(`alias-${device.id}`) || device.name)}</a>`;
+      }).join("")}
+    </div>`;
+  }
+
   function render() {
     const page = PAGES[state.page];
     if (!page) return;
@@ -349,10 +434,10 @@
         <button class="toolbar-arrow" id="nextScreen" aria-label="下一个界面" style="transform:rotate(180deg)">${icon("back")}</button>
       </section>
 
+      ${state.page === "home" ? `<div class="screen-groups" aria-label="操作分组">${HOME_GROUPS.map((group) => `<button class="screen-tab ${group.id === screen.group ? "is-active" : ""}" data-review-screen="${page.screens.find((item) => item.group === group.id).id}">${group.label}</button>`).join("")}</div>` : ""}
       <div class="screen-tabs" aria-label="界面状态">
-        ${page.screens.map((item) => `<button class="screen-tab ${item.id === state.screen ? "is-active" : ""}" data-review-screen="${item.id}">${item.label}</button>`).join("")}
-      </div>
-
+        ${page.screens.filter((item) => state.page !== "home" || item.group === screen.group).map((item) => `<button class="screen-tab ${item.id === state.screen ? "is-active" : ""}" data-review-screen="${item.id}">${item.label}</button>`).join("")}
+      </div>${scanDemo()}${testMessageDemo()}
       <main class="preview-grid">
         <section class="preview-column">
           <div class="preview-label">LIGHT <span>Material 3</span></div>
@@ -368,13 +453,15 @@
     `;
     document.title = `${page.number} ${page.title} · 鹊信`;
     if (location.protocol !== "file:") {
-      history.replaceState(null, "", `${location.pathname}?screen=${encodeURIComponent(state.screen)}`);
+      params.set("screen", state.screen);
+      history.replaceState(null, "", `${location.pathname}?${params}`);
     }
     document.getElementById("previousScreen").addEventListener("click", () => moveScreen(-1));
     document.getElementById("nextScreen").addEventListener("click", () => moveScreen(1));
     document.querySelectorAll("[data-review-screen]").forEach((button) => {
       button.addEventListener("click", () => {
         state.screen = button.dataset.reviewScreen;
+        if (state.page === "home") resetHomeFixture(state.screen);
         render();
       });
     });
@@ -385,6 +472,7 @@
     const current = screens.findIndex((item) => item.id === state.screen);
     const next = (current + delta + screens.length) % screens.length;
     state.screen = screens[next].id;
+    if (state.page === "home") resetHomeFixture(state.screen);
     render();
     window.scrollTo({ top: 0 });
   }
@@ -446,15 +534,15 @@
     });
   }
 
-  function systemPermissionPrompt({ title, iconName }) {
+  function systemPermissionPrompt({ title, iconName, allowTarget, denyTarget }) {
     return `
       <div class="scrim dialog-scrim system-permission-scrim">
         <div class="system-permission-dialog" role="dialog" aria-modal="true">
           <span class="system-permission-icon">${icon(iconName)}</span>
           <h2>${title}</h2>
           <div class="system-permission-actions">
-            <button class="system-permission-button">允许</button>
-            <button class="system-permission-button">不允许</button>
+            <button class="system-permission-button" ${actionAttrs(allowTarget)}>允许</button>
+            <button class="system-permission-button" ${actionAttrs(denyTarget)}>不允许</button>
           </div>
         </div>
       </div>
@@ -465,20 +553,22 @@
     return `<div class="toast-message" role="status">${message}</div>`;
   }
 
-  function snackbarMessage(message, actionLabel = "") {
+  function snackbarMessage(message, actionLabel = "", actionTarget = "") {
     return `
       <div class="snackbar above-actions" role="status">
         ${icon("info")}
         <span style="flex:1">${message}</span>
-        ${actionLabel ? `<button class="snackbar-action">${actionLabel}</button>` : ""}
+        ${actionLabel ? `<button class="snackbar-action"${actionTarget ? ` ${actionAttrs(actionTarget)}` : ""}>${actionLabel}</button>` : ""}
       </div>
     `;
   }
 
-  function onboardingSmsPrompt() {
-    return onboardingSms() + systemPermissionPrompt({
+  function onboardingSmsPrompt(background = onboardingSms(), allowTarget, denyTarget) {
+    return background + systemPermissionPrompt({
       title: "要允许“鹊信”发送和查看短信吗？",
-      iconName: "sms"
+      iconName: "sms",
+      allowTarget,
+      denyTarget
     });
   }
 
@@ -519,7 +609,7 @@
       iconName: "account",
       brand: true,
       title: "连接你的 QQ",
-      copy: "使用 QQ 登录账号、管理电脑和授权加密转发。",
+      copy: "使用 QQ 登录账号、管理设备和授权加密转发。",
       primary: { label: "使用 QQ 登录", target: "qq-loading", icon: "chevron" },
       trust: ""
     });
@@ -560,7 +650,7 @@
       step: 4,
       iconName: "qr",
       title: "连接第一台设备",
-      copy: "在接收端打开鹊信并显示二维码，然后扫描并确认。完成后，这台手机就可以开始转发短信。",
+      copy: "在接收端打开鹊信并显示二维码，然后扫描并确认。完成后，当前设备就可以开始转发短信。",
       primary: { label: "扫描二维码", target: "scanner", icon: "qr" },
       secondary: { label: "稍后配对", target: "page:02-home.html?screen=empty" },
       trust: ""
@@ -644,7 +734,7 @@
   } = {}) {
     return pairConsentBase({
       title: "连接新设备",
-      copy: "确认后，这台设备会开始接收你选中的短信，双方会建立一条独立的加密配对。",
+      copy: "确认后，目标设备会开始接收你选中的短信，双方会建立一条独立的加密配对。",
       primary: "确认并建立密钥",
       backTarget: "scanner",
       alias,
@@ -680,31 +770,54 @@
   }
 
   /* Home */
-  function deviceRows({ officeOffline = false } = {}) {
-    return `<div class="device-list">${DEVICES.map((device) => {
-      const online = officeOffline && device.id === "office" ? false : device.online;
+  function deviceRows({ devices = DEVICES, officeOffline = false, allOffline = false, allDisabled = false, unknown = false, disabled = false, highlightedDeviceId = "" } = {}) {
+    return `<div class="device-list">${devices.map((device) => {
+      const online = !allOffline && !(officeOffline && device.id === "office") && device.online;
+      const name = escapeHtml(state.aliases[device.id] || device.name);
+      const highlighted = device.id === highlightedDeviceId;
       return `
-        <div class="device-row">
-          <span class="device-icon">${icon("computer")}</span>
-          <span class="device-copy">
-            <span class="device-name">${device.name}</span>
-            <span class="device-meta"><span class="presence ${online ? "" : "offline"}"></span>${online ? "在线" : "离线"} · ${device.changedAt}</span>
-          </span>
-          <button class="switch-control" role="switch" aria-checked="${state.toggles[device.id]}" aria-label="${device.name}接收短信" data-toggle="${device.id}"></button>
-          <button class="row-action" data-screen="device-sheet" aria-label="${device.name}更多操作">${icon("more")}</button>
+        <div class="device-row${highlighted ? " is-highlighted" : ""}" ${disabled ? "" : `data-screen="device-sheet" data-device="${device.id}"`}>
+          <button class="device-detail" data-screen="device-sheet" data-device="${device.id}" aria-label="管理${name}" ${disabled ? "disabled" : ""}>
+            <span class="device-icon">${icon("computer")}</span>
+            <span class="device-copy">
+              <span class="device-name">${name}</span>
+              <span class="device-meta">${unknown ? "状态待更新" : `<span class="presence ${online ? "" : "offline"}"></span>${online ? "在线" : "离线"} · 状态变化：${device.changedAt}`}</span>
+              <span class="device-scan-hint">刚刚扫描的设备</span>
+              ${state.keyFailureId === device.id ? '<span class="device-key-error">密钥丢失或损坏</span>' : ""}
+            </span>
+          </button>
+          <button class="switch-control" role="switch" aria-checked="${!allDisabled && state.toggles[device.id]}" aria-label="${name}接收短信" data-toggle="${device.id}" ${disabled || state.keyFailureId === device.id ? "disabled" : ""}></button>
         </div>
       `;
     }).join("")}</div>`;
   }
 
-  function summaryButton({ value = "刚刚 · 2 台电脑已到达", tone = "success", label = "已到达", target = "page:04-delivery.html?screen=result-all" } = {}) {
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+  }
+
+  function homeDeviceList(options = {}) {
+    options = {
+      devices: DEVICES.filter((device) => !state.removedDeviceIds.includes(device.id)),
+      officeOffline: state.homePresence === "partial",
+      allOffline: state.homePresence === "offline",
+      unknown: state.homeUnknown,
+      highlightedDeviceId: state.page === "home" && state.screen === "already-added" ? state.deviceId : "",
+      ...options
+    };
+    const mode = options.refreshState || "";
+    const count = options.devices.length;
+    const full = count >= 5;
+    const labels = { pulling: "下拉刷新", release: "松开刷新", refreshing: "正在刷新" };
     return `
-      <button class="summary-button" ${actionAttrs(target)}>
-        <span class="summary-icon">${icon("send")}</span>
-        <span class="summary-copy"><span class="summary-label">最近一次转发</span><span class="summary-value">${value}</span></span>
-        <span class="pill ${tone}">${label}</span>
-        ${icon("chevron", "chevron")}
-      </button>
+      <section class="device-refresh" ${mode === "refreshing" ? 'data-refreshing="true" aria-busy="true"' : ""} ${state.page === "home" && !options.disabled ? 'data-refresh-list tabindex="0" role="region" aria-label="设备列表，可下拉刷新或按 Enter 刷新"' : ""}>
+        <div class="pull-refresh-hint" data-pull-hint role="status" ${mode ? "" : "hidden"}>
+          ${mode === "refreshing" ? '<span class="small-spinner" aria-hidden="true"></span>' : icon("refresh")}
+          <span data-pull-label>${labels[mode] || "下拉刷新"}</span>
+        </div>
+        <div class="section-head"><h3>我的设备</h3><span class="section-count${full ? " is-full" : ""}">${full ? "已满5台" : `${count} 台`}</span></div>
+        ${deviceRows(options)}
+      </section>
     `;
   }
 
@@ -712,9 +825,7 @@
     title,
     copy,
     tone = "success",
-    status = "全部在线",
-    media = false,
-    iconName = "check"
+    status = ""
   }) {
     const background = tone === "warning"
       ? "background:linear-gradient(135deg,var(--md-warning-container),var(--md-surface-2));"
@@ -722,13 +833,10 @@
         ? "background:linear-gradient(135deg,var(--md-error-container),var(--md-surface-2));"
         : "";
     return `
-      <div class="status-hero" style="${background}">
+      <div class="status-hero" data-tone="${tone}" style="${background}">
         <div class="status-hero-head">
           <div><h2>${title}</h2><p>${copy}</p></div>
-          <span class="pill ${tone}">${status}</span>
-        </div>
-        <div class="bridge-visual">
-          <span class="bridge-node">${icon("phone")}</span><span class="bridge-line"></span><span class="bridge-node">${icon("computer")}</span>
+          ${status ? `<span class="pill ${tone}">${status}</span>` : ""}
         </div>
       </div>
     `;
@@ -736,69 +844,66 @@
 
   function homeBase({
     heroMarkup,
-    content = summaryButton() + `<div class="section-head"><h3>我的电脑</h3><span class="section-count">2 台</span></div>` + deviceRows(),
-    menu = "",
+    content = homeDeviceList(),
     overlay = "",
-    fab = true,
+    fab = DEVICES.filter((device) => !state.removedDeviceIds.includes(device.id)).length < 5,
     appOptions = {}
   }) {
     return `
       <div class="app-scroll">
         <div class="screen-pad ${fab ? "with-fab" : ""}">
-          ${appBar({ more: "menu", settings: true, ...appOptions })}
+          ${appBar({ settings: true, ...appOptions })}
           ${heroMarkup}
           ${content}
         </div>
-        ${fab ? `<button class="extended-fab" data-href="${screenHref("pairing", "scanner")}">${icon("add")}添加电脑</button>` : ""}
-        ${menu}
+        ${fab ? `<button class="extended-fab" data-home-action="add-device">${icon("add")}添加设备</button>` : ""}
       </div>
       ${overlay}
     `;
   }
 
-  function homeReady() {
+  function homeReady({ notice = "", refreshState = "" } = {}) {
+    const devices = DEVICES.filter((device) => !state.removedDeviceIds.includes(device.id));
+    if (!devices.length) return homeEmpty(notice);
+    const selected = devices.filter((device) => state.toggles[device.id]);
+    const allDisabled = !selected.length;
+    const allOffline = selected.length > 0 && selected.every((device) => state.homePresence === "offline" || (state.homePresence === "partial" && device.id === "office"));
     return homeBase({
-      heroMarkup: hero({
-        title: "转发已就绪",
-        copy: "新短信会被端到端加密后送往选中的电脑。",
-        status: "全部在线"
-      })
+      heroMarkup: hero(HOME_HERO_STATES[allDisabled ? "disabled" : allOffline ? "offline" : "ready"]),
+      content: homeDeviceList({ allDisabled, refreshState }),
+      overlay: notice ? toastMessage(notice) : ""
     });
   }
 
-  function homePermissionLost() {
+  function homeCameraPermission(status) {
+    const background = state.homeReturn === "empty" ? homeEmpty() : homeBackground();
+    if (status === "system") {
+      return background + systemPermissionPrompt({
+        title: "要允许“鹊信”拍照和录制视频吗？",
+        iconName: "camera",
+        allowTarget: "home:camera-granted",
+        denyTarget: "home:camera-denied"
+      });
+    }
+    return background + (status === "denied"
+      ? toastMessage("相机权限未开启")
+      : snackbarMessage("相机权限已被永久拒绝", "去设置", "home:open-camera-settings"));
+  }
+
+  function homePermissionLost({ notice = "", noPrompt = false } = {}) {
     return homeBase({
       heroMarkup: hero({
         title: "转发已暂停",
         copy: "短信权限已被关闭，新短信不会进入处理流程。",
         tone: "warning",
-        status: "权限失效",
-        iconName: "sms"
+        status: "权限失效"
       }),
       content: `
         <div class="info-card warning">${icon("warning")}<span>重新开启短信权限后，转发会自动恢复；无需重新登录或重新配对。</span></div>
-        <div style="margin-top:12px">${button("filled-button", "重新开启短信权限", "page:01-onboarding.html?screen=sms-denied", { full: true, iconName: "settings" })}</div>
-        <div class="section-head"><h3>我的电脑</h3><span class="section-count">2 台</span></div>
-        ${deviceRows()}
-      `
-    });
-  }
-
-  function homeBatteryLost() {
-    return homeBase({
-      heroMarkup: hero({
-        title: "后台处理不可用",
-        copy: "电池优化已重新开启，系统可能阻止短信到达后的短时处理。",
-        tone: "warning",
-        status: "后台受限",
-        iconName: "battery"
-      }),
-      content: `
-        <div class="info-card warning">${icon("warning")}<span>Android 可能在后台限制鹊信。重新关闭电池优化后，转发会自动恢复。</span></div>
-        <div style="margin-top:12px">${button("filled-button", "打开电池优化设置", "page:01-onboarding.html?screen=battery", { full: true, iconName: "settings" })}</div>
-        <div class="section-head"><h3>我的电脑</h3><span class="section-count">2 台</span></div>
-        ${deviceRows()}
-      `
+        <div style="margin-top:12px">${button("filled-button", "重新开启短信权限", noPrompt ? "home:open-sms-settings" : "home:request-sms", { full: true, iconName: "settings" })}</div>
+        ${homeDeviceList()}
+      `,
+      overlay: notice ? toastMessage(notice) : ""
     });
   }
 
@@ -806,190 +911,392 @@
     return homeBase({
       heroMarkup: hero({
         title: "需要重新登录",
-        copy: "QQ 授权窗口已结束。电脑配对会保留，重新登录后即可继续。",
+        copy: "登录凭据已失效，无法自动续期。使用原 QQ 账号重新登录，可保留当前设备已有的配对。",
         tone: "warning",
-        status: "登录失效",
-        iconName: "account"
+        status: "登录失效"
       }),
       content: `
-        <div style="margin-top:12px">${button("filled-button", "使用 QQ 重新登录", "page:01-onboarding.html?screen=qq-login", { full: true, iconName: "account" })}</div>
-        <div class="section-head"><h3>我的电脑</h3><span class="section-count">2 台</span></div>
-        ${deviceRows()}
-      `
+        <div style="margin-top:12px">${button("filled-button", "使用 QQ 重新登录", "login-loading", { full: true, iconName: "account" })}</div>
+        ${homeDeviceList({ unknown: true, disabled: true })}
+      `,
+      fab: false
     });
   }
 
-  function homeOffline() {
-    return homeBase({
-      heroMarkup: hero({
-        title: "转发已就绪",
-        copy: "办公室电脑当前离线。开启接收的离线电脑仍会提交给服务端并返回离线结果。",
-        status: "1 台离线",
-        tone: "warning"
-      }),
-      content: summaryButton({
-        value: "刚刚 · 1 台已到达 · 1 台离线",
-        tone: "warning",
-        label: "部分离线",
-        target: "page:04-delivery.html?screen=result-mixed"
-      }) + `<div class="section-head"><h3>我的电脑</h3><span class="section-count">2 台</span></div>` + deviceRows({ officeOffline: true })
-    });
-  }
-
-  function homeEmpty() {
+  function homeEmpty(notice = "") {
     return homeBase({
       heroMarkup: hero({
         title: "账号已连接",
-        copy: "添加第一台电脑后，鹊信才会开始转发新短信。",
-        status: "等待电脑"
+        copy: "添加第一台设备后，鹊信才会开始转发新短信。",
+        status: "等待设备",
+        tone: "warning"
       }),
       content: `
         <div class="empty-state" style="margin-top:14px;">
           <span class="empty-icon">${icon("computer")}</span>
-          <h3>还没有电脑</h3>
-          <p>打开 Windows 端鹊信并显示二维码，然后用这台手机扫描。</p>
-          ${button("tonal-button", "添加第一台电脑", "page:03-pairing.html?screen=scanner", { iconName: "qr" })}
+          <h3>还没有设备</h3>
+          <p>打开目标设备上的鹊信并显示二维码，然后用当前设备扫描。</p>
+          ${button("tonal-button", "添加第一台设备", "home:add-device", { iconName: "qr" })}
         </div>
-      `
+      `,
+      fab: false,
+      overlay: notice ? toastMessage(notice) : ""
     });
   }
 
-  function homeMenu() {
-    return homeBase({
-      heroMarkup: hero({ title: "转发已就绪", copy: "新短信会被端到端加密后送往选中的电脑。", status: "全部在线" }),
-      menu: `
-        <div class="menu">
-          <button data-href="${screenHref("delivery", "test-start")}">${icon("send")}发送测试消息</button>
-          <button data-href="${screenHref("settings", "settings")}">${icon("settings")}设置</button>
-        </div>
-      `
-    });
-  }
-
-  function homeDeviceSheet() {
-    return homeBase({
-      heroMarkup: hero({ title: "转发已就绪", copy: "新短信会被端到端加密后送往选中的电脑。", status: "全部在线" }),
-      overlay: `
+  function homeDeviceSheet({ offline = state.homeReturn === "all-offline" || (state.homeReturn === "offline" && state.deviceId === "office"), receiving = state.toggles[state.deviceId], renamed = false } = {}) {
+    const device = DEVICES.find((item) => item.id === state.deviceId);
+    const name = escapeHtml(renamed ? state.aliases[device.id] || "家用设备" : state.aliases[device.id] || device.name);
+    return homeBackground() + `
         <div class="scrim sheet-scrim">
-          <div class="sheet">
+          <div class="sheet" role="dialog" aria-modal="true" aria-label="${name}">
             <div class="sheet-handle"></div>
             <div class="sheet-head">
-              <div><h2 class="sheet-title">我的电脑</h2><p class="body-small" style="margin-top:5px;">在线 · 刚刚更新</p></div>
+              <div><h2 class="sheet-title">${name}</h2><p class="body-small" style="margin-top:5px;">${state.homeUnknown ? "状态待更新" : `${offline ? "离线" : "在线"} · 状态变化：${device.changedAt}`}</p></div>
               <span class="device-icon">${icon("computer")}</span>
             </div>
+            ${state.keyFailureId === device.id ? `<div class="info-card error">${icon("error")}<span>密钥丢失或损坏，已关闭此设备转发。</span></div>` : ""}
             <div class="list-group" style="margin-top:0">
               <div class="list-item">
-                ${icon("send")}
-                <span><span class="list-item-title">接收短信</span><span class="list-item-desc">关闭后仍保留这台电脑的配对</span></span>
-                <button class="switch-control" role="switch" aria-checked="${state.toggles.home}" aria-label="接收短信" data-toggle="home"></button>
+                ${icon("sms")}
+                <span><span class="list-item-title">接收短信</span><span class="list-item-desc">关闭后仍保留这台设备的配对</span></span>
+                <button class="switch-control" role="switch" aria-checked="${receiving}" aria-label="接收短信" data-toggle="${device.id}" ${state.keyFailureId === device.id ? "disabled" : ""}></button>
               </div>
-              <button class="list-item" data-screen="rename-device">${icon("edit")}<span class="list-item-title">重命名电脑</span>${icon("chevron")}</button>
-              <button class="list-item danger-label" data-screen="remove-confirm">${icon("trash")}<span class="list-item-title">移除这台电脑的配对</span>${icon("chevron")}</button>
+              <button class="list-item" data-test-message aria-busy="${state.testPending}" ${state.keyFailureId === device.id || state.testPending ? 'disabled aria-disabled="true"' : ""}>${icon("send")}<span class="list-item-title">${state.testPending ? "正在发送…" : "发送测试消息"}</span></button>
+              <button class="list-item" data-screen="rename-device">${icon("edit")}<span class="list-item-title">重命名设备</span>${icon("chevron")}</button>
+              <button class="list-item danger-label" data-screen="remove-confirm">${icon("trash")}<span class="list-item-title">移除这台设备的配对</span>${icon("chevron")}</button>
             </div>
-            ${button("outlined-button", "关闭", "ready", { full: true })} 
+            ${button("outlined-button", "关闭", state.homeReturn, { full: true })}
+            ${state.testNotice ? toastMessage(escapeHtml(state.testNotice)) : ""}
           </div>
         </div>
-      `
-    });
+        ${renamed ? toastMessage("设备名称已更新") : ""}
+      `;
   }
 
-  function homeRenameDevice() {
-    return homeBase({
-      heroMarkup: hero({ title: "转发已就绪", copy: "新短信会被端到端加密后送往选中的电脑。", status: "全部在线" }),
-      overlay: `
+  function homeRenameDevice({ value = state.renameDraft ?? state.aliases[state.deviceId] ?? DEVICES.find((item) => item.id === state.deviceId).name, error = "", saving = false, failed = false } = {}) {
+    return homeBackground() + `
         <div class="scrim sheet-scrim">
-          <div class="sheet">
+          <div class="sheet" role="dialog" aria-modal="true" aria-label="重命名设备">
             <div class="sheet-handle"></div>
             <div class="sheet-head">
-              <div><h2 class="sheet-title">重命名电脑</h2><p class="body-small" style="margin-top:5px;">别名只对当前 Sender 可见</p></div>
+              <div><h2 class="sheet-title">重命名设备</h2><p class="body-small" style="margin-top:5px;">别名只对当前设备可见</p></div>
               <span class="device-icon">${icon("computer")}</span>
             </div>
-            <label class="alias-label" for="deviceAlias">电脑名称</label>
-            <input class="alias-input" id="deviceAlias" value="我的电脑" maxlength="40">
-            <p class="body-small" style="margin-top:8px;">其他 Sender 对这台电脑的称呼不会改变。</p>
+            <label class="alias-field">
+              <span class="alias-label">设备名称</span>
+              <input class="alias-input ${error ? "is-invalid" : ""}" data-rename-input value="${escapeHtml(value)}" autocomplete="off" spellcheck="false" aria-label="设备名称" aria-invalid="${Boolean(error)}" required ${saving ? "disabled" : ""}>
+              <span class="${error ? "alias-error" : "alias-help"}" data-rename-help aria-live="polite">${error || "不能为空，也不能与本机已配对的设备重名。"}</span>
+            </label>
+            ${failed ? `<div class="info-card error">${icon("error")}<span>名称保存失败，输入已保留。请检查网络后重试；设备列表会核对实际保存结果。</span></div>` : ""}
             <div class="half-row" style="margin-top:18px;">
-              ${button("outlined-button", "取消", "device-sheet", { full: true })}
-              ${button("filled-button", "保存", "device-sheet", { full: true })}
+              ${button("outlined-button", "取消", "device-sheet", { full: true, disabled: saving })}
+              <button class="filled-button full" data-home-action="save-alias" ${error || saving ? "disabled" : ""}>${saving ? `<span class="small-spinner" aria-hidden="true"></span>` : ""}<span>${saving ? "正在保存" : failed ? "重新保存" : "保存"}</span></button>
             </div>
           </div>
         </div>
-      `
-    });
+      `;
   }
 
-  function homeRemoveConfirm() {
-    return homeBase({
-      heroMarkup: hero({ title: "转发已就绪", copy: "新短信会被端到端加密后送往选中的电脑。", status: "全部在线" }),
-      overlay: `
+  function homeRemoveConfirm({ status = "confirm" } = {}) {
+    const pending = status === "pending";
+    const failed = status === "failed";
+    const name = escapeHtml(state.aliases[state.deviceId] || DEVICES.find((item) => item.id === state.deviceId).name);
+    return homeBackground() + `
         <div class="scrim dialog-scrim">
-          <div class="dialog">
+          <div class="dialog" role="dialog" aria-modal="true" aria-label="移除配对">
             <div class="dialog-icon error">${icon("trash")}</div>
-            <h2>移除“我的电脑”？</h2>
-            <p>这台手机会停止向它发送短信。接收端和其他 Sender 的配对不会被关闭。</p>
+            <h2>${pending ? "正在移除配对" : `移除“${name}”？`}</h2>
+            <p>当前设备会停止向目标设备发送短信。目标设备和其他设备的配对不会被关闭。</p>
+            ${failed ? `<div class="info-card error">${icon("error")}<span>移除失败，已关闭此设备转发。请检查网络后重试；设备列表会在下次刷新时核对配对状态。</span></div>` : ""}
+            ${pending ? `<div class="home-pending" role="status"><span class="small-spinner" aria-hidden="true"></span>正在提交，请稍候</div>` : ""}
             <div class="dialog-actions">
-              ${button("text-button", "取消", "device-sheet")}
-              ${button("danger-button", "移除配对", "removed")}
+              ${button("text-button", "取消", "device-sheet", { disabled: pending })}
+              ${button("danger-button", failed ? "重试移除" : "移除配对", "home:remove-pairing", { disabled: pending })}
             </div>
           </div>
         </div>
-      `
-    });
+      `;
   }
 
   function homeRemoved() {
-    return homeBase({
-      heroMarkup: hero({ title: "转发已就绪", copy: "新短信仍会送往其他已开启接收的电脑。", status: "全部在线" }),
-      content: `
-        ${summaryButton({ value: "刚刚 · 2 台电脑已到达", tone: "success", label: "已到达" })}
-        <div class="section-head"><h3>我的电脑</h3><span class="section-count">1 台</span></div>
-        <div class="device-list">
-          <div class="device-row">
-            <span class="device-icon">${icon("computer")}</span>
-            <span class="device-copy">
-              <span class="device-name">办公室电脑</span>
-              <span class="device-meta"><span class="presence"></span>在线 · 2 分钟前</span>
-            </span>
-            <button class="switch-control" role="switch" aria-checked="${state.toggles.office}" aria-label="办公室电脑接收短信" data-toggle="office"></button>
-            <button class="row-action" data-screen="device-sheet" aria-label="办公室电脑更多操作">${icon("more")}</button>
-          </div>
-        </div>
-      `,
-      overlay: `<div class="snackbar">${icon("check")}已移除“我的电脑”的配对</div>`
-    });
+    return homeBackground("配对已移除");
   }
 
   function homeRevoked() {
     return `
-      <div class="revoked-screen">
-        <span class="empty-icon">${icon("lock")}</span>
-        <h2>设备注册已撤销</h2>
-        <p>这台手机的旧注册已被安全撤销，不能恢复。重新登录会创建新的设备注册，之后需要重新配对电脑。</p>
-        ${button("filled-button", "退出并重新登录", "page:01-onboarding.html?screen=qq-login", { full: true, iconName: "account" })}
-        ${button("text-button", "查看隐私与数据", "page:05-settings.html?screen=privacy", { full: true })}
+      <div class="revoked-screen home-revoked">
+        <div class="home-revoked-content">
+          <span class="empty-icon">${icon("lock")}</span>
+          <h2>设备注册已撤销</h2>
+          <p>当前设备的旧注册已被安全撤销，不能恢复。重新登录会创建新的设备注册，之后需要重新配对设备。</p>
+        </div>
+        <div class="wizard-actions">
+          ${button("filled-button", "退出并重新登录", "page:01-onboarding.html?screen=qq-login", { full: true, iconName: "account" })}
+        </div>
       </div>
     `;
+  }
+
+  function homeBackground(notice = "") {
+    if (["permission-lost", "permission-no-prompt", "permission-denied-toast", "permission-settings-error-toast"].includes(state.homeReturn)) {
+      return homePermissionLost({ notice, noPrompt: state.homeReturn !== "permission-lost" && state.homeReturn !== "permission-denied-toast" });
+    }
+    if (state.removedDeviceIds.length === DEVICES.length) return homeEmpty(notice);
+    if (state.homeReturn === "refreshing") return homeLoading(true) + (notice ? toastMessage(notice) : "");
+    if (state.homeReturn === "refresh-error") return homeLoadError(true) + (notice ? toastMessage(notice) : "");
+    return homeReady({ notice });
+  }
+
+  function homeFlowPage({ title, copy, iconName = "info", busy = false, brand = false, back = "ready", actions = "" }) {
+    return `
+      <div class="screen-fill">
+        ${appBar({ title: "鹊信", subtitle: "", back: true, backTarget: back, settings: false })}
+        <div class="wizard-content">
+          <div class="wizard-emblem ${busy ? "spinner" : ""}">${brand ? qqMark(92) : icon(iconName)}</div>
+          <h2 class="title-lg">${title}</h2>
+          <p class="body wizard-copy">${copy}</p>
+        </div>
+        <div class="wizard-actions">${actions}</div>
+      </div>
+    `;
+  }
+
+  function homeLoading(cached = false) {
+    if (cached) {
+      return homeReady({ refreshState: "refreshing" });
+    }
+    return homeBase({
+      heroMarkup: hero({ title: "正在准备转发", copy: "正在获取服务端返回的设备和配对状态。" }),
+      content: `<div class="empty-state"><span class="small-spinner" aria-hidden="true"></span><p role="status">正在获取设备列表</p></div>`,
+      fab: false
+    });
+  }
+
+  function homeLoadError(cached = false) {
+    const devices = DEVICES.filter((device) => !state.removedDeviceIds.includes(device.id));
+    const allDisabled = cached && devices.length > 0 && devices.every((device) => !state.toggles[device.id]);
+    return homeBase({
+      heroMarkup: hero(allDisabled ? HOME_HERO_STATES.disabled : { title: cached ? "设备状态未更新" : "暂时无法获取设备", copy: cached ? "网络或服务暂时不可用。请检查网络后下拉设备列表重试。" : "网络或服务暂时不可用。请检查网络，回到前台时会自动重新获取。", tone: "warning" }),
+      content: cached
+        ? `<div class="info-card warning">${icon("info")}<span>已有配对仍保留。当前无法确认设备是否在线。</span></div>${homeDeviceList({ unknown: true })}`
+        : `<section class="device-refresh" data-refresh-list tabindex="0" role="region" aria-label="设备列表，可下拉刷新或按 Enter 刷新"><div class="pull-refresh-hint" data-pull-hint role="status" hidden>${icon("refresh")}<span data-pull-label>下拉刷新</span></div><div class="empty-state"><span class="empty-icon">${icon("cloud_off")}</span><h3>设备列表暂不可用</h3><p>下拉刷新设备列表。这不代表配对已被删除，也不代表登录失效。</p></div></section>`,
+      fab: false
+    });
+  }
+
+  function homeLoginFlow(stage) {
+    const busy = stage === "loading";
+    const views = {
+      loading: ["正在验证 QQ 授权", "请稍候，原有配对会保留。"],
+      cancelled: ["登录未完成", "QQ 授权已取消，转发仍暂停。原有配对和名称未改变。"],
+      error: ["暂时无法登录", "网络或服务暂时不可用。原有配对仍保留，请稍后重新登录。"],
+      mismatch: ["请使用原 QQ 账号", "本次授权无法恢复当前设备的原注册。请确认使用原 QQ 账号重试；若要切换账号，请返回设置操作。"]
+    };
+    const [title, copy] = views[stage];
+    return homeFlowPage({
+      title,
+      copy,
+      brand: true,
+      busy,
+      back: "login-expired",
+      actions: busy
+        ? button("text-button", "取消", "login-cancelled", { full: true })
+        : button("filled-button", "使用 QQ 重新登录", "login-loading", { full: true, iconName: "account" })
+    });
+  }
+
+  function homeDeviceGone() {
+    return homeFlowPage({
+      title: "这台设备的配对已不存在",
+      copy: "配对可能已在其他位置被移除或撤销。当前操作没有继续执行，需要重新配对后才能向它转发。",
+      iconName: "computer",
+      back: "removed",
+      actions: button("filled-button", "返回设备列表", "removed", { full: true }) + button("text-button", "重新添加设备", "page:03-pairing.html?screen=scanner", { full: true })
+    });
+  }
+
+  function validateHomeAlias(value) {
+    const name = value.trim();
+    if (!name) return "请输入设备名称";
+    if (Array.from(name).length > 40) return "设备名称不能超过 40 字";
+    if (DEVICES.some((device) => !state.removedDeviceIds.includes(device.id) && device.id !== state.deviceId && (state.aliases[device.id] || device.name).toLowerCase() === name.toLowerCase())) {
+      return "已有一台同名设备，请换一个名称";
+    }
+    return "";
+  }
+
+  function resetHomeFixture(screen) {
+    DEVICES.splice(2, 3, ...(screen === "full" ? EXTRA_DEVICES : []));
+    state.cameraPermission = { "camera-system": "prompt", "camera-denied": "prompt", "camera-blocked": "blocked" }[screen] || "granted";
+    state.deviceId = ["device-offline", "already-added"].includes(screen) ? "office" : "home";
+    state.homeReturn = screen === "device-offline" ? "offline" : "ready";
+    state.removedDeviceIds = screen === "removed-last" ? ["home", "office"] : screen === "removed" ? ["home"] : [];
+    state.homePresence = screen === "all-offline" ? "offline" : ["offline", "device-offline"].includes(screen) ? "partial" : "online";
+    state.homeUnknown = ["refreshing", "refresh-error"].includes(screen);
+    state.keyFailureId = ["key-error", "device-key-error"].includes(screen) ? "home" : "";
+    if (screen === "device-key-error") state.homeReturn = "key-error";
+    state.aliases = screen === "rename-saved" ? { home: "家用设备" } : {};
+    state.toggles = Object.fromEntries(DEVICES.map((device) => [device.id, screen !== "all-disabled" && !(screen === "device-disabled" && device.id === "home")]));
+    if (state.keyFailureId || ["removing", "remove-error"].includes(screen)) state.toggles.home = false;
+    state.renameDraft = undefined;
+  }
+
+  function updateHomeAlias(value) {
+    state.renameDraft = value;
+    const error = validateHomeAlias(value);
+    document.querySelectorAll("[data-rename-input]").forEach((input) => {
+      input.value = value;
+      input.classList.toggle("is-invalid", Boolean(error));
+      input.setAttribute("aria-invalid", String(Boolean(error)));
+    });
+    document.querySelectorAll("[data-rename-help]").forEach((help) => {
+      help.textContent = error || "不能为空，也不能与本机已配对的设备重名。";
+      help.className = error ? "alias-error" : "alias-help";
+    });
+    document.querySelectorAll('[data-home-action="save-alias"]').forEach((save) => { save.disabled = Boolean(error); });
+  }
+
+  function handleHomePermissionAction(action) {
+    // Android settings are an external destination, not another app-owned preview page.
+    if (action === "open-sms-settings" || action === "open-camera-settings") return true;
+    if (action === "camera-granted" || (action === "add-device" && state.cameraPermission === "granted")) {
+      state.cameraPermission = "granted";
+      const query = new URLSearchParams({ screen: "scanner", enabled: DEVICES.filter((device) => state.toggles[device.id]).map((device) => device.id).join(",") });
+      DEVICES.forEach((device) => {
+        if (state.aliases[device.id]) query.set(`alias-${device.id}`, state.aliases[device.id]);
+      });
+      location.href = `${PAGE_FILES.pairing}?${query}`;
+      return true;
+    }
+    if (action === "add-device") {
+      if (!state.screen.startsWith("camera-")) state.homeReturn = state.screen;
+      state.screen = state.cameraPermission === "blocked" ? "camera-blocked" : "camera-system";
+      return true;
+    }
+    const destinations = {
+      "request-sms": "permission-system",
+      "sms-granted": "permission-restored",
+      "sms-denied": "permission-denied-toast",
+      "sms-settings-error": "permission-settings-error-toast",
+      "camera-denied": "camera-denied"
+    };
+    if (!destinations[action]) return false;
+    state.screen = destinations[action];
+    return true;
+  }
+
+  // Preview actions only change in-memory fixtures; no service or device permission is changed.
+  function handleHomeAction(event) {
+    if (state.page !== "home") return;
+    if (state.page === "home" && performance.now() < homeIgnoreClickUntil) return;
+    if (state.page === "home" && event.target.matches(".scrim")) {
+      dismissHomeOverlay();
+      return;
+    }
+    const control = event.target.closest(".app-viewport button, .app-viewport .device-row[data-device]");
+    if (!control || control.disabled) return;
+    if (control.dataset.href) {
+      location.href = control.dataset.href;
+      return;
+    }
+    if (state.page !== "home") return;
+    if (handleHomePermissionAction(control.dataset.homeAction)) {
+      render();
+      return;
+    }
+    if (control.dataset.toggle) {
+      if (state.screen === "all-disabled") state.toggles = { home: false, office: false };
+      state.toggles[control.dataset.toggle] = control.getAttribute("aria-checked") !== "true";
+      if (state.screen === "device-disabled") state.screen = "device-sheet";
+      if (state.screen === "all-disabled") state.screen = "ready";
+      render();
+      return;
+    }
+    if (control.dataset.homeAction === "remove-pairing") {
+      state.toggles[state.deviceId] = false;
+      state.removedDeviceIds.push(state.deviceId);
+      state.screen = state.removedDeviceIds.length === DEVICES.length ? "removed-last" : "removed";
+    } else if (control.dataset.homeAction === "save-alias") {
+      const value = control.closest(".sheet").querySelector("[data-rename-input]").value;
+      updateHomeAlias(value);
+      if (validateHomeAlias(value)) return;
+      state.aliases[state.deviceId] = value.trim();
+      state.screen = "rename-saved";
+    } else if (control.dataset.screen) {
+      if (control.dataset.screen === "removed" && state.screen === "device-gone") state.removedDeviceIds.push(state.deviceId);
+      if (control.dataset.device) {
+        state.deviceId = control.dataset.device;
+        state.homeReturn = state.screen;
+      }
+      state.screen = control.dataset.screen;
+      state.renameDraft = undefined;
+    } else {
+      return;
+    }
+    render();
+  }
+
+  function dismissHomeOverlay() {
+    if (["rename-saving", "removing"].includes(state.screen)) return;
+    if (["rename-device", "rename-blank", "rename-too-long", "rename-duplicate", "rename-error", "remove-confirm", "remove-error"].includes(state.screen)) {
+      state.screen = "device-sheet";
+    } else if (["device-sheet", "device-offline", "device-disabled", "device-key-error", "rename-saved"].includes(state.screen)) {
+      state.screen = state.homeReturn;
+    } else {
+      return;
+    }
+    state.renameDraft = undefined;
+    render();
+  }
+
+  let homePull;
+  let homeIgnoreClickUntil = 0;
+
+  function startHomePull(event) {
+    if (state.page !== "home" || (event.type === "pointerdown" && (event.pointerType === "touch" || event.button !== 0))) return;
+    const list = event.target.closest("[data-refresh-list]");
+    if (!list || list.dataset.refreshing || event.target.closest("input,[data-toggle]") || list.closest(".app-scroll").scrollTop > 0) return;
+    homePull = { list, start: event.touches?.[0]?.clientY ?? event.clientY, distance: 0 };
+  }
+
+  function moveHomePull(event) {
+    if (!homePull || (event.type === "pointermove" && event.pointerType === "touch")) return;
+    homePull.distance = Math.max(0, (event.touches?.[0]?.clientY ?? event.clientY) - homePull.start);
+    if (!homePull.distance) return;
+    if (event.cancelable) event.preventDefault();
+    const hint = homePull.list.querySelector("[data-pull-hint]");
+    hint.hidden = false;
+    hint.style.height = `${Math.min(homePull.distance, 64)}px`;
+    hint.querySelector("[data-pull-label]").textContent = homePull.distance >= 64 ? "松开刷新" : "下拉刷新";
+  }
+
+  function endHomePull(event) {
+    if (!homePull) return;
+    const refresh = homePull.distance >= 64 && !event.type.endsWith("cancel");
+    const hint = homePull.list.querySelector("[data-pull-hint]");
+    // A pull starting on a device row must not also open its details.
+    if (homePull.distance > 8) homeIgnoreClickUntil = performance.now() + 350;
+    homePull = undefined;
+    if (refresh) {
+      beginHomeRefresh(hint.parentElement);
+    } else {
+      hint.hidden = true;
+      hint.style.height = "";
+    }
+  }
+
+  function beginHomeRefresh(list) {
+    if (list.dataset.refreshing) return;
+    list.dataset.refreshing = "true";
+    list.setAttribute("aria-busy", "true");
+    const hint = list.querySelector("[data-pull-hint]");
+    hint.hidden = false;
+    hint.style.height = "48px";
+    hint.innerHTML = '<span class="small-spinner" aria-hidden="true"></span><span data-pull-label>正在刷新</span>';
   }
 
   /* Pairing */
-  function pairingCameraPermission() {
-    return `
-      <div class="screen-fill">
-        ${appBar({ title: "扫描二维码", subtitle: "", back: true, backTarget: "page:02-home.html?screen=ready", settings: false })}
-        <div class="wizard-content">
-          <div class="wizard-emblem">${icon("camera")}</div>
-          <div class="eyebrow">相机权限</div>
-          <h2 class="title-lg">扫描电脑上的二维码</h2>
-          <p class="body wizard-copy">相机只用于本次配对。鹊信不会保存画面，也不会在后台使用相机。</p>
-          <span class="trust-line">${icon("shield")}识别完成后立即关闭相机</span>
-        </div>
-        <div class="wizard-actions">
-          ${button("filled-button", "允许使用相机", "scanner", { full: true, iconName: "camera" })}
-          ${button("text-button", "取消", "page:02-home.html?screen=ready", { full: true })}
-        </div>
-      </div>
-    `;
-  }
-
   function mockQr() {
     const pattern = [
       1,1,1,0,1,0,1,1,1,
@@ -1006,24 +1313,25 @@
   }
 
   function pairingScanner() {
+    const exit = state.page === "onboarding" ? "pair-start" : "page:02-home.html?screen=ready";
     return `
       <div class="scanner">
         <div class="scanner-grid"></div>
         <div class="scanner-content">
           <div class="scanner-top">
-            ${iconButton("close", "取消", "page:02-home.html?screen=ready")}
+            ${iconButton("close", "取消", exit)}
             <div style="flex:1;text-align:center"><span class="app-title" style="font-size:18px">扫描二维码</span></div>
             <span style="width:48px"></span>
           </div>
-          <h2 class="scanner-title">对准电脑上的二维码</h2>
-          <p class="scanner-copy">二维码 5 分钟内有效。请确认电脑屏幕上的鹊信窗口处于打开状态。</p>
+          <h2 class="scanner-title">对准目标设备上的二维码</h2>
+          <p class="scanner-copy">二维码 5 分钟内有效。请确认目标设备屏幕上的鹊信窗口处于打开状态。</p>
           <div class="viewfinder">
             <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
             <span class="scan-line"></span>
             ${mockQr()}
           </div>
           <div class="scanner-actions">
-            ${button("text-button", "取消", "page:02-home.html?screen=ready", { full: true })}
+            ${button("text-button", "取消", exit, { full: true })}
           </div>
         </div>
       </div>
@@ -1031,26 +1339,12 @@
   }
 
   function pairingInvalidQr() {
-    return `
-      <div class="scanner">
-        <div class="scanner-grid"></div>
-        <div class="scanner-content" style="justify-content:center;">
-          <div class="empty-icon" style="width:92px;height:92px;background:rgba(255,180,171,.16);color:#ffb4ab;">${icon("error")}</div>
-          <h2 class="scanner-title" style="margin-top:28px;">不是鹊信配对码</h2>
-          <p class="scanner-copy">请回到 Windows 端鹊信，重新显示配对二维码后再扫描。</p>
-          <div class="scanner-actions" style="margin-top:34px;">
-            ${button("filled-button", "重新扫描", "scanner", { full: true, iconName: "camera" })}
-            ${button("text-button", "取消", "page:02-home.html?screen=ready", { full: true })}
-          </div>
-        </div>
-      </div>
-    `;
+    return onboardingScannerInvalid();
   }
 
   function pairConsentBase({
     title,
     copy,
-    warning = "",
     primary,
     backTarget,
     alias = "我的设备",
@@ -1068,10 +1362,9 @@
           </div>
           <h2 class="title-lg">${title}</h2>
           <p class="body muted" style="margin-top:10px;">${copy}</p>
-          ${warning ? `<div class="info-card warning">${icon("warning")}<span>${warning}</span></div>` : ""}
           <label class="alias-field">
             <span class="alias-label">设备名称</span>
-            <input class="alias-input ${error ? "is-invalid" : ""}" name="alias" value="${alias}" maxlength="40" autocomplete="off" spellcheck="false" aria-label="设备名称" aria-invalid="${Boolean(error)}" required>
+            <input class="alias-input ${error ? "is-invalid" : ""}" name="alias" value="${escapeHtml(alias)}" maxlength="40" autocomplete="off" spellcheck="false" aria-label="设备名称" aria-invalid="${Boolean(error)}" required>
             <span class="${error ? "alias-error" : "alias-help"}">${error || "不能为空，也不能与本机已配对的设备重名。"}</span>
           </label>
           <div class="list-group" style="margin-top:12px">
@@ -1079,93 +1372,60 @@
           </div>
         </div>
         <div class="wizard-actions">
-          ${button("filled-button", primary, "progress", { full: true, iconName: "key", disabled: confirmDisabled })}
+          ${button("filled-button", primary, state.page === "onboarding" ? "progress-opening" : "progress", { full: true, iconName: "key", disabled: confirmDisabled })}
           ${button("text-button", secondaryLabel, secondaryTarget, { full: true })}
         </div>
       </div>
     `;
   }
 
-  function pairingConsent() {
+  function pairingConsent(options = {}) {
     return pairConsentBase({
-      title: "连接新设备",
-      copy: "确认后，这台设备会开始接收你选中的短信，双方会建立一条独立的加密配对。",
-      primary: "确认并建立密钥",
-      backTarget: "scanner"
+      title: "添加新设备",
+      copy: "确认后，目标设备会开始接收你选中的短信，双方会建立一条独立的加密配对。",
+      primary: "确认添加设备",
+      backTarget: "page:02-home.html?screen=ready",
+      alias: state.pairingAlias,
+      ...options
     });
   }
 
-  function pairingAddSender() {
-    return `
-      <div class="app-scroll">
-        <div class="screen-pad">
-          ${appBar({ title: "确认配对", subtitle: "", back: true, backTarget: "scanner", settings: false })}
-          <div class="pair-visual">
-            <span class="pair-node">${appIcon(70)}</span><span class="pair-link"></span><span class="pair-node">${icon("computer")}</span>
-          </div>
-          <div class="eyebrow">已有电脑</div>
-          <h2 class="title-lg">把这台手机添加到“我的电脑”？</h2>
-          <p class="body muted" style="margin-top:10px;">这台电脑已有接收连接。添加新的 Sender 不会中断现有连接，也不会替换其他手机的配对。</p>
-          <div class="list-group" style="margin-top:18px">
-            <div class="list-item">${icon("computer")}<span><span class="list-item-title">我的电脑</span><span class="list-item-desc">已有 Windows 接收连接</span></span><span class="list-item-value">保持在线</span></div>
-            <div class="list-item">${icon("key")}<span><span class="list-item-title">新配对</span><span class="list-item-desc">为这台手机单独建立密钥</span></span><span class="list-item-value">04:31</span></div>
-          </div>
-          ${button("filled-button", "确认添加这台手机", "progress", { full: true, iconName: "key" })}
-          ${button("text-button", "取消", "page:02-home.html?screen=ready", { full: true })}
-        </div>
-      </div>
-    `;
-  }
-
-  function pairingRePair() {
-    return pairConsentBase({
-      title: "更新这台电脑的密钥",
-      copy: "旧配对会持续可用，直到双方确认新密钥。若未完成，旧配对保持不变。",
-      warning: "只有双方都完成确认后，服务才会原子切换到新的 Pairing ID。",
-      primary: "确认并更新密钥",
-      backTarget: "scanner"
+  function updatePairingAlias(value) {
+    state.pairingAlias = value;
+    const name = value.trim();
+    const error = !name ? "请输入设备名称"
+      : Array.from(name).length > 40 ? "设备名称不能超过 40 字"
+      : DEVICES.some((device) => (params.get(`alias-${device.id}`) || device.name).toLowerCase() === name.toLowerCase()) ? "已有一台同名设备，请换一个名称" : "";
+    document.querySelectorAll('.pair-screen input[name="alias"]').forEach((input) => {
+      input.value = value;
+      input.classList.toggle("is-invalid", Boolean(error));
+      input.setAttribute("aria-invalid", String(Boolean(error)));
+      input.setCustomValidity(error);
     });
+    document.querySelectorAll(".pair-screen .alias-help, .pair-screen .alias-error").forEach((help) => {
+      help.textContent = error || "不能为空，也不能与本机已配对的设备重名。";
+      help.className = error ? "alias-error" : "alias-help";
+    });
+    document.querySelectorAll('.pair-screen [data-screen="progress"]').forEach((confirm) => { confirm.disabled = Boolean(error); });
   }
 
-  function pairingOwnerProof() {
-    return `
-      <div class="screen-fill">
-        ${appBar({ title: "恢复电脑访问", subtitle: "", back: true, backTarget: "scanner", settings: false })}
-        <div class="wizard-content">
-          <div class="wizard-emblem" style="background:var(--md-warning-container);color:var(--md-warning);">${icon("person_check")}</div>
-          <div class="eyebrow" style="color:var(--md-warning)">需要所有者验证</div>
-          <h2 class="title-lg">重新验证你的 QQ</h2>
-          <p class="body wizard-copy">恢复 Receiver 凭据需要一次新的 QQ 账号所有者证明。普通的访问令牌不能代替这一步。</p>
-          <div class="info-card warning" style="width:100%;text-align:left;">${icon("warning")}<span>恢复会替换电脑的现有接收凭据，并中断所有 Sender 的共享连接。</span></div>
-        </div>
-        <div class="wizard-actions">
-          ${button("filled-button", "验证 QQ 并继续", "recovery-warning", { full: true, iconName: "account" })}
-          ${button("text-button", "取消", "page:02-home.html?screen=ready", { full: true })}
-        </div>
-      </div>
-    `;
-  }
-
-  function pairingRecoveryWarning() {
-    return `
-      <div class="screen-fill">
-        ${appBar({ title: "恢复确认", subtitle: "", back: true, backTarget: "owner-proof", settings: false })}
-        <div class="wizard-content">
-          <div class="wizard-emblem" style="background:var(--md-error-container);color:var(--md-error);">${icon("cloud_off")}</div>
-          <div class="eyebrow" style="color:var(--md-error)">共享连接会中断</div>
-          <h2 class="title-lg">所有 Sender 会暂时断开</h2>
-          <p class="body wizard-copy">恢复成功后，电脑需要使用新的接收凭据重新连接。只有双方仍持有可用密钥的配对会被保留。</p>
-          <div class="info-card error" style="width:100%;text-align:left;">${icon("warning")}<span>不会创建新的 Pairing，也不会占用额外设备名额。</span></div>
-          <div class="info-card" style="width:100%;text-align:left;">
-            <span class="checkbox checked">${icon("check")}</span><span>我已了解这会中断其他 Sender 到这台电脑的连接。</span>
-          </div>
-        </div>
-        <div class="wizard-actions">
-          ${button("danger-button", "继续恢复", "progress", { full: true, iconName: "warning" })}
-          ${button("text-button", "取消", "page:02-home.html?screen=ready", { full: true })}
-        </div>
-      </div>
-    `;
+  function handlePairingAction(event) {
+    if (state.page !== "pairing" && !(state.page === "onboarding" && state.screen === "success")) return;
+    const control = event.target.closest(".app-viewport button");
+    if (!control || control.disabled) return;
+    if (control.dataset.href) {
+      location.href = control.dataset.href;
+    } else if (control.dataset.screen) {
+      if (control.dataset.screen === "scanner") state.pairingAlias = "我的设备";
+      if (control.dataset.screen === "progress") {
+        const input = control.closest(".pair-screen").querySelector('input[name="alias"]');
+        updatePairingAlias(input.value);
+        if (!input.reportValidity()) return;
+        state.pairingAlias = state.pairingAlias.trim();
+      }
+      state.screen = control.dataset.screen;
+      render();
+    }
   }
 
   function pairingProgress(stageIndex = 0) {
@@ -1182,48 +1442,25 @@
   }
 
   function pairingExpired() {
-    return `
-      <div class="screen-fill" style="align-items:center;justify-content:center;text-align:center;">
-        <div class="wizard-emblem" style="background:var(--md-warning-container);color:var(--md-warning);">${icon("clock")}</div>
-        <div class="eyebrow" style="color:var(--md-warning)">会话已结束</div>
-        <h2 class="title-lg">二维码已失效</h2>
-        <p class="body-small" style="max-width:300px;margin-top:10px;">配对会话已过期、取消或被新的会话取代。请让 Windows 端重新显示二维码。</p>
-        <div class="wizard-actions" style="width:100%;margin-top:28px;">
-          ${button("filled-button", "扫描新二维码", "scanner", { full: true, iconName: "camera" })}
-          ${button("text-button", "返回首页", "page:02-home.html?screen=ready", { full: true })}
-        </div>
-      </div>
-    `;
-  }
-
-  function pairingReceiverLimit() {
-    return `
-      <div class="screen-fill" style="align-items:center;justify-content:center;text-align:center;">
-        <div class="wizard-emblem" style="background:var(--md-warning-container);color:var(--md-warning);">${icon("computer")}</div>
-        <div class="eyebrow" style="color:var(--md-warning)">已达到 5 台</div>
-        <h2 class="title-lg">电脑数量已满</h2>
-        <p class="body-small" style="max-width:306px;margin-top:10px;">一个 Sender 最多关联 5 台不同的电脑。移除一台电脑的配对后，可以重新扫描这台新电脑。</p>
-        <div class="wizard-actions" style="width:100%;margin-top:28px;">
-          ${button("filled-button", "管理电脑配对", "page:02-home.html?screen=ready", { full: true, iconName: "computer" })}
-          ${button("text-button", "取消", "page:02-home.html?screen=ready", { full: true })}
-        </div>
-      </div>
-    `;
+    return onboardingPairingError({
+      iconName: "clock",
+      eyebrow: "会话已结束",
+      title: "二维码已失效",
+      copy: "配对会话已过期、被占用或已被取消。请让接收端重新显示二维码。",
+      primary: { label: "扫描新二维码", target: "scanner", icon: "qr" },
+      secondary: { label: "返回首页", target: "page:02-home.html?screen=ready" }
+    });
   }
 
   function pairingFailurePreserved() {
-    return `
-      <div class="screen-fill" style="align-items:center;justify-content:center;text-align:center;">
-        <div class="wizard-emblem" style="background:var(--md-error-container);color:var(--md-error);">${icon("cloud_off")}</div>
-        <div class="eyebrow" style="color:var(--md-error)">未提交新配对</div>
-        <h2 class="title-lg">配对未完成</h2>
-        <p class="body-small" style="max-width:306px;margin-top:10px;">连接中断或确认超时。原来的配对与密钥仍然有效，不会留下半完成的关联。</p>
-        <div class="wizard-actions" style="width:100%;margin-top:28px;">
-          ${button("filled-button", "重新扫描", "scanner", { full: true, iconName: "refresh" })}
-          ${button("text-button", "返回首页", "page:02-home.html?screen=ready", { full: true })}
-        </div>
-      </div>
-    `;
+    return onboardingPairingError({
+      iconName: "cloud_off",
+      eyebrow: "配对尚未生效",
+      title: "配对未完成",
+      copy: "连接中断或确认超时，未能添加这台设备。已有设备的配对不受影响，请重新扫描后再试。",
+      primary: { label: "重新扫描", target: "scanner", icon: "refresh" },
+      secondary: { label: "返回首页", target: "page:02-home.html?screen=ready" }
+    });
   }
 
   function pairingSuccess() {
@@ -1234,200 +1471,51 @@
           <h2 class="title-xl">配对完成</h2>
         </div>
         <div class="wizard-actions">
-          ${button("filled-button", "发送测试消息", "page:04-delivery.html?screen=test-start", { full: true, iconName: "send" })}
+          <button class="filled-button full" data-test-message aria-busy="${state.testPending}" ${state.testPending ? 'disabled aria-disabled="true"' : ""}>${icon("send")}<span>${state.testPending ? "正在发送…" : "发送测试消息"}</span></button>
           ${button("text-button", "进入首页", "page:02-home.html?screen=ready", { full: true })}
         </div>
+        ${state.testNotice ? toastMessage(escapeHtml(state.testNotice)) : ""}
       </div>
     `;
   }
 
-  /* Delivery */
-  function deliveryHomeBackground() {
-    return `
-      <div class="app-scroll">
-        <div class="screen-pad">
-          ${appBar({ more: "page:02-home.html?screen=menu", settings: true })}
-          ${hero({ title: "转发已就绪", copy: "新短信会被端到端加密后送往选中的电脑。", status: "全部在线" })}
-          ${summaryButton({ target: "page:04-delivery.html?screen=result-all" })}
-          <div class="section-head"><h3>我的电脑</h3><span class="section-count">2 台</span></div>
-          ${deviceRows({ officeOffline: false })}
-        </div>
-      </div>
-    `;
+  /* Inline test-message preview; no network requests are made. */
+  let testMessageTimer;
+
+  function testMessageDemo() {
+    const homeEntry = state.page === "home" && ["device-sheet", "device-offline", "device-disabled"].includes(state.screen);
+    const pairingEntry = ["onboarding", "pairing"].includes(state.page) && state.screen === "success";
+    if (!homeEntry && !pairingEntry) return "";
+    return `<div class="scan-demo" aria-label="测试消息反馈演示">
+      <label>测试结果演示 <select id="testOutcome">${Object.entries(TEST_OUTCOMES).map(([key, copy]) => `<option value="${key}" ${key === (params.get("testResult") || params.get("testPreview") || "received") ? "selected" : ""}>${copy}</option>`).join("")}</select></label>
+      <span>点击手机内的“发送测试消息”查看原地反馈</span>
+    </div>`;
   }
 
-  function deliveryTestStart() {
-    return `
-      <div class="app-scroll">
-        <div class="screen-pad">
-          ${appBar({ title: "发送测试消息", subtitle: "", back: true, backTarget: "page:02-home.html?screen=ready", settings: false })}
-          <div class="eyebrow">正常发送链路</div>
-          <h2 class="title-lg">验证手机与电脑</h2>
-          <p class="body muted" style="margin-top:8px;">测试消息会经过与真实短信相同的提取、验证、加密和上传路径。</p>
-          <div class="simulated-sms">
-            <div style="display:flex;align-items:center;justify-content:space-between;"><span class="label">模拟短信</span><span class="pill neutral">仅测试</span></div>
-            <div class="sms-bubble">【鹊信】这是一条测试短信，验证码 482913。请勿用于真实登录。</div>
-          </div>
-          <div class="section-head"><h3>发送到</h3><span class="section-count">2 台</span></div>
-          <div class="target-chips">
-            <span class="target-chip">${icon("computer")}我的电脑</span>
-            <span class="target-chip">${icon("computer")}办公室电脑</span>
-          </div>
-          <div class="info-card">${icon("info")}<span>“已到达电脑”只表示 Windows 收到消息，不代表已经弹窗或复制验证码。</span></div>
-          ${button("filled-button", "开始测试", "processing", { full: true, iconName: "send" })}
-        </div>
-      </div>
-    `;
-  }
-
-  function deliveryProcessing() {
-    return `
-      <div class="app-scroll">
-        <div class="pair-progress">
-          <div class="spinner">${appIcon(92)}</div>
-          <h2 class="title-lg">正在准备测试消息</h2>
-          <p class="body-small" style="max-width:286px;margin-top:10px;">请保持网络连接。完成后会按电脑显示到达状态。</p>
-          <div class="progress-list">
-            <div class="progress-row">${icon("check")}准备临时模型凭据</div>
-            <div class="progress-row active">${icon("refresh")}提取并验证测试验证码</div>
-            <div class="progress-row">${icon("lock")}逐台加密并上传</div>
-          </div>
-          ${button("text-button", "查看结果", "result-all")}
-        </div>
-      </div>
-    `;
-  }
-
-  function deliverySheet({ title, status, tone, copy, rows, extra = "", actions }) {
-    return `
-      <div class="scrim sheet-scrim">
-        <div class="sheet">
-          <div class="sheet-handle"></div>
-          <div class="sheet-head">
-            <div><h2 class="sheet-title">${title}</h2><p class="body-small" style="margin-top:5px;">${copy}</p></div>
-            <span class="pill ${tone}">${status}</span>
-          </div>
-          <div class="result-list">${rows}</div>
-          ${extra}
-          <div style="margin-top:16px">${actions}</div>
-        </div>
-      </div>
-    `;
-  }
-
-  function resultRow({ name, online = true, status, tone = "success" }) {
-    return `<div class="result-row"><span class="result-icon">${icon("computer")}</span><span><span class="device-name">${name}</span><span class="device-meta"><span class="presence ${online ? "" : "offline"}"></span>${online ? "在线" : "离线"}</span></span><span class="result-status ${tone}">${status}</span></div>`;
-  }
-
-  function deliveryOverlay(options) {
-    return deliveryHomeBackground() + deliverySheet(options);
-  }
-
-  function deliveryResultAll() {
-    return deliveryOverlay({
-      title: "测试消息结果",
-      status: "已到达",
-      tone: "success",
-      copy: "2 台电脑均已到达",
-      rows: `
-        ${resultRow({ name: "我的电脑", status: "已到达电脑" })}
-        ${resultRow({ name: "办公室电脑", status: "已到达电脑" })}
-      `,
-      extra: `<div class="info-card">${icon("info")}<span>到达状态不等于 Windows 已解密、弹窗或复制。请在电脑上确认测试消息是否出现。</span></div>`,
-      actions: button("filled-button", "知道了", "page:02-home.html?screen=ready", { full: true })
-    });
-  }
-
-  function deliveryResultMixed() {
-    return deliveryOverlay({
-      title: "测试消息结果",
-      status: "部分离线",
-      tone: "warning",
-      copy: "1 台到达 · 1 台离线",
-      rows: `
-        ${resultRow({ name: "我的电脑", status: "已到达电脑" })}
-        ${resultRow({ name: "办公室电脑", online: false, status: "离线", tone: "warning" })}
-      `,
-      extra: `<div class="info-card warning">${icon("warning")}<span>离线是本次投递的最终结果，不会自动补发。点击“知道了”后不会创建新的消息。</span></div>`,
-      actions: button("filled-button", "知道了", "page:02-home.html?screen=offline", { full: true })
-    });
-  }
-
-  function deliveryResultUncertain() {
-    return deliveryOverlay({
-      title: "投递结果不确定",
-      status: "送达未确认",
-      tone: "warning",
-      copy: "电脑可能已经收到消息",
-      rows: `
-        ${resultRow({ name: "我的电脑", status: "已到达电脑" })}
-        ${resultRow({ name: "办公室电脑", status: "确认超时", tone: "warning" })}
-      `,
-      extra: `
-        <div class="info-card warning">${icon("warning")}<span>这项结果不能证明消息未到达。鹊信不会自动创建新的消息或提供重试按钮。</span></div>
-        <dl class="diagnostic"><div><dt>请求 ID</dt><dd>req_8f2c…</dd></div><div><dt>目标数量</dt><dd>2</dd></div><div><dt>结果类别</dt><dd>ack_timeout</dd></div></dl>
-      `,
-      actions: button("filled-button", "知道了", "page:02-home.html?screen=offline", { full: true })
-    });
-  }
-
-  function deliveryResultEmptyOtp() {
-    return deliveryOverlay({
-      title: "最近一次转发",
-      status: "未识别码",
-      tone: "neutral",
-      copy: "短信全文已到达 2 台电脑",
-      rows: `
-        ${resultRow({ name: "我的电脑", status: "已到达电脑" })}
-        ${resultRow({ name: "办公室电脑", status: "已到达电脑" })}
-      `,
-      extra: `<div class="info-card">${icon("info")}<span><strong>未识别验证码不是发送失败。</strong> Windows 仍会显示短信全文，但这条消息没有可复制的 OTP。</span></div>`,
-      actions: button("filled-button", "知道了", "page:02-home.html?screen=ready", { full: true })
-    });
-  }
-
-  function deliveryResultRejected() {
-    return deliveryOverlay({
-      title: "测试消息结果",
-      status: "部分失败",
-      tone: "error",
-      copy: "1 台到达 · 1 台目标不可用",
-      rows: `
-        ${resultRow({ name: "我的电脑", status: "已到达电脑" })}
-        ${resultRow({ name: "办公室电脑", online: false, status: "配对已移除", tone: "error" })}
-      `,
-      extra: `<div class="info-card error">${icon("error")}<span>这台电脑的配对已不存在。请返回设备列表刷新后重新配对。</span></div>`,
-      actions: button("filled-button", "返回设备列表", "page:02-home.html?screen=ready", { full: true })
-    });
-  }
-
-  function deliveryNoTarget() {
-    return deliveryHomeBackground() + `
-      <div class="scrim dialog-scrim">
-        <div class="dialog">
-          <div class="dialog-icon">${icon("computer")}</div>
-          <h2>没有接收电脑</h2>
-          <p>所有电脑的接收开关都已关闭。打开至少一台电脑后，才能发送测试消息。</p>
-          <div class="dialog-actions">${button("filled-button", "返回首页", "page:02-home.html?screen=ready")}</div>
-        </div>
-      </div>
-    `;
-  }
-
-  function deliveryAuthExpired() {
-    return deliveryHomeBackground() + `
-      <div class="scrim dialog-scrim">
-        <div class="dialog">
-          <div class="dialog-icon error">${icon("account")}</div>
-          <h2>登录状态已失效</h2>
-          <p>发布权限已过期，自动刷新也未能完成。重新登录不会删除现有电脑配对。</p>
-          <div class="dialog-actions">
-            ${button("text-button", "取消", "page:02-home.html?screen=ready")}
-            ${button("filled-button", "重新登录", "page:01-onboarding.html?screen=qq-login")}
-          </div>
-        </div>
-      </div>
-    `;
+  function handleTestMessage(event) {
+    const control = event.target.closest(".app-viewport [data-test-message]");
+    if (!control || control.disabled || state.testPending) return;
+    event.stopImmediatePropagation();
+    const origin = state.screen;
+    const target = state.page === "home" ? DEVICES.find((device) => device.id === state.deviceId) : PAIRED_DEVICE;
+    state.testTarget = { receiverId: target.receiverId, pairingId: target.pairingId };
+    const deviceId = state.deviceId;
+    const outcome = params.get("testResult") || "received";
+    clearTimeout(testMessageTimer);
+    state.testPending = true;
+    state.testNotice = "";
+    render();
+    testMessageTimer = setTimeout(() => {
+      state.testPending = false;
+      if (state.screen === origin && state.deviceId === deviceId) {
+        state.testNotice = TEST_OUTCOMES[outcome] || "投递未确认：未知投递结果";
+      }
+      render();
+      testMessageTimer = setTimeout(() => {
+        state.testNotice = "";
+        render();
+      }, 4000);
+    }, 1200);
   }
 
   /* Settings */
@@ -1461,12 +1549,12 @@
       </div>
       <div class="group-label">安全与隐私</div>
       <div class="list-group">
-        <button class="list-item" data-screen="security">${icon("shield")}<span><span class="list-item-title">设备访问安全</span><span class="list-item-desc">永久撤销这台手机的注册</span></span>${icon("chevron")}</button>
+        <button class="list-item" data-screen="security">${icon("shield")}<span><span class="list-item-title">设备访问安全</span><span class="list-item-desc">永久撤销当前设备的注册</span></span>${icon("chevron")}</button>
         <button class="list-item" data-screen="privacy">${icon("lock")}<span><span class="list-item-title">隐私与数据</span><span class="list-item-desc">短信、OTP 与本地密钥说明</span></span>${icon("chevron")}</button>
       </div>
       <div class="group-label">关于</div>
       <div class="list-group">
-        <div class="list-item">${icon("info")}<span><span class="list-item-title">鹊信</span><span class="list-item-desc">Pin Glide Android Sender</span></span><span class="list-item-value">1.0</span></div>
+        <div class="list-item">${icon("info")}<span><span class="list-item-title">鹊信</span><span class="list-item-desc">Pin Glide Android</span></span><span class="list-item-value">1.0</span></div>
       </div>
     `);
   }
@@ -1492,9 +1580,9 @@
       </div>
       <div class="list-group">
         <button class="list-item" data-screen="switch-account">${icon("swap")}<span><span class="list-item-title">切换 QQ 账号</span><span class="list-item-desc">清除本机旧身份与旧配对</span></span>${icon("chevron")}</button>
-        <button class="list-item danger-label" data-screen="logout-confirm">${icon("logout")}<span><span class="list-item-title">退出登录</span><span class="list-item-desc">立即停止转发，但保留电脑配对</span></span>${icon("chevron")}</button>
+        <button class="list-item danger-label" data-screen="logout-confirm">${icon("logout")}<span><span class="list-item-title">退出登录</span><span class="list-item-desc">立即停止转发，但保留设备配对</span></span>${icon("chevron")}</button>
       </div>
-      <div class="info-card">${icon("shield")}<span>退出登录会撤销这台 Sender 的访问凭据。电脑之间的共享接收连接不会被关闭。</span></div>
+      <div class="info-card">${icon("shield")}<span>退出登录会撤销当前设备 的访问凭据。目标设备的共享接收连接不会被关闭。</span></div>
     `);
   }
 
@@ -1504,7 +1592,7 @@
         <div class="dialog">
           <div class="dialog-icon error">${icon("swap")}</div>
           <h2>切换 QQ 账号？</h2>
-          <p>这台手机的旧身份、旧配对密钥和本地设备关联会被清除。其他 Sender 与电脑的连接不受影响。</p>
+          <p>当前设备的旧身份、旧配对密钥和本地设备关联会被清除。其他设备 与设备的连接不受影响。</p>
           <div class="dialog-actions">
             ${button("text-button", "取消", "account")}
             ${button("danger-button", "继续切换", "page:01-onboarding.html?screen=qq-login")}
@@ -1523,9 +1611,9 @@
       </div>
       <div class="list-group">
         <button class="list-item" data-screen="switch-account">${icon("swap")}<span><span class="list-item-title">切换 QQ 账号</span><span class="list-item-desc">清除本机旧身份与旧配对</span></span>${icon("chevron")}</button>
-        <button class="list-item danger-label" data-screen="logout-confirm">${icon("logout")}<span><span class="list-item-title">退出登录</span><span class="list-item-desc">立即停止转发，但保留电脑配对</span></span>${icon("chevron")}</button>
+        <button class="list-item danger-label" data-screen="logout-confirm">${icon("logout")}<span><span class="list-item-title">退出登录</span><span class="list-item-desc">立即停止转发，但保留设备配对</span></span>${icon("chevron")}</button>
       </div>
-      <div class="info-card">${icon("shield")}<span>退出登录会撤销这台 Sender 的访问凭据。电脑之间的共享接收连接不会被关闭。</span></div>
+      <div class="info-card">${icon("shield")}<span>退出登录会撤销当前设备 的访问凭据。目标设备的共享接收连接不会被关闭。</span></div>
     `;
   }
 
@@ -1535,7 +1623,7 @@
         <div class="dialog">
           <div class="dialog-icon">${icon("logout")}</div>
           <h2>退出登录？</h2>
-          <p>鹊信会立即停止本机转发，并尝试撤销服务端凭据。电脑配对和本地配对密钥会保留。</p>
+          <p>鹊信会立即停止本机转发，并尝试撤销服务端凭据。设备配对和本地配对密钥会保留。</p>
           <div class="dialog-actions">
             ${button("text-button", "取消", "account")}
             ${button("filled-button", "退出登录", "logout-unconfirmed")}
@@ -1551,7 +1639,7 @@
         <div class="wizard-emblem" style="background:var(--md-warning-container);color:var(--md-warning);">${icon("cloud_off")}</div>
         <div class="eyebrow" style="color:var(--md-warning)">本机已退出</div>
         <h2 class="title-lg">服务端撤销未确认</h2>
-        <p class="body-small" style="max-width:312px;margin-top:10px;">这台手机已停止转发，但网络不可用，无法确认服务端是否已撤销访问凭据。请稍后重试。</p>
+        <p class="body-small" style="max-width:312px;margin-top:10px;">当前设备已停止转发，但网络不可用，无法确认服务端是否已撤销访问凭据。请稍后重试。</p>
         <div class="wizard-actions" style="width:100%;margin-top:26px;">
           ${button("filled-button", "重试撤销", "settings", { full: true, iconName: "refresh" })}
           ${button("text-button", "保留本机退出状态", "page:01-onboarding.html?screen=welcome", { full: true })}
@@ -1562,13 +1650,13 @@
 
   function settingsSecurity() {
     return settingsBase(`
-      <div class="info-card warning">${icon("warning")}<span>安全撤销需要新的 QQ 账号所有者验证。撤销后，这台手机的旧 Sender 注册不能恢复。</span></div>
+      <div class="info-card warning">${icon("warning")}<span>安全撤销需要新的 QQ 账号所有者验证。撤销后，当前设备的旧注册不能恢复。</span></div>
       <div class="list-group">
-        <button class="list-item danger-label" data-screen="owner-proof">${icon("lock")}<span><span class="list-item-title">永久撤销本机注册</span><span class="list-item-desc">关闭设备注册并移除这台 Sender 的所有 Pairing</span></span>${icon("chevron")}</button>
+        <button class="list-item danger-label" data-screen="owner-proof">${icon("lock")}<span><span class="list-item-title">永久撤销本机注册</span><span class="list-item-desc">关闭设备注册并移除当前设备 的所有配对</span></span>${icon("chevron")}</button>
       </div>
       <div class="group-label">普通管理</div>
       <div class="list-group">
-        <button class="list-item" data-href="02-home.html?screen=ready">${icon("computer")}<span><span class="list-item-title">管理电脑配对</span><span class="list-item-desc">移除单台电脑只影响当前 Sender</span></span>${icon("chevron")}</button>
+        <button class="list-item" data-href="02-home.html?screen=ready">${icon("computer")}<span><span class="list-item-title">管理设备配对</span><span class="list-item-desc">移除单台设备只影响当前设备</span></span>${icon("chevron")}</button>
       </div>
     `);
   }
@@ -1581,7 +1669,7 @@
           <div class="wizard-emblem brand">${appIcon(92)}</div>
           <div class="eyebrow">需要所有者证明</div>
           <h2 class="title-lg">重新验证你的 QQ</h2>
-          <p class="body wizard-copy">安全撤销会永久关闭这台 Sender。必须使用与当前账号一致的 QQ 所有者证明，普通访问令牌不能继续。</p>
+          <p class="body wizard-copy">安全撤销会永久关闭当前设备。必须使用与当前账号一致的 QQ 所有者证明，普通访问令牌不能继续。</p>
           <div class="info-card warning" style="width:100%;text-align:left;">${icon("warning")}<span>验证通过后仍需再一次明确确认，才会执行撤销。</span></div>
         </div>
         <div class="wizard-actions">
@@ -1597,8 +1685,8 @@
       <div class="scrim dialog-scrim">
         <div class="dialog">
           <div class="dialog-icon error">${icon("lock")}</div>
-          <h2>永久撤销这台手机？</h2>
-          <p>这会关闭当前 Sender 注册，移除它的所有电脑配对并立即停止转发。旧注册不能恢复，只能重新登录并重新配对。</p>
+          <h2>永久撤销当前设备？</h2>
+          <p>这会关闭当前设备 注册，移除它的所有设备配对并立即停止转发。旧注册不能恢复，只能重新登录并重新配对。</p>
           <div class="dialog-actions">
             ${button("text-button", "取消", "security")}
             ${button("danger-button", "永久撤销", "revoked")}
@@ -1610,9 +1698,9 @@
 
   function settingsSecurityContent() {
     return `
-      <div class="info-card warning">${icon("warning")}<span>安全撤销需要新的 QQ 账号所有者验证。撤销后，这台手机的旧 Sender 注册不能恢复。</span></div>
+      <div class="info-card warning">${icon("warning")}<span>安全撤销需要新的 QQ 账号所有者验证。撤销后，当前设备的旧注册不能恢复。</span></div>
       <div class="list-group">
-        <button class="list-item danger-label" data-screen="owner-proof">${icon("lock")}<span><span class="list-item-title">永久撤销本机注册</span><span class="list-item-desc">关闭设备注册并移除这台 Sender 的所有 Pairing</span></span>${icon("chevron")}</button>
+        <button class="list-item danger-label" data-screen="owner-proof">${icon("lock")}<span><span class="list-item-title">永久撤销本机注册</span><span class="list-item-desc">关闭设备注册并移除当前设备 的所有配对</span></span>${icon("chevron")}</button>
       </div>
     `;
   }
@@ -1622,7 +1710,7 @@
       <div class="revoked-screen">
         <span class="empty-icon">${icon("lock")}</span>
         <h2>本机注册已撤销</h2>
-        <p>服务端已经关闭这台 Sender 的注册并移除它的配对。旧注册不能恢复，重新登录会创建新的安装注册。</p>
+        <p>服务端已经关闭当前设备 的注册并移除它的配对。旧注册不能恢复，重新登录会创建新的安装注册。</p>
         ${button("filled-button", "重新登录", "page:01-onboarding.html?screen=qq-login", { full: true, iconName: "account" })}
         ${button("text-button", "返回设置", "page:05-settings.html?screen=settings", { full: true })}
       </div>
@@ -1648,5 +1736,67 @@
   }
 
   if (!PAGES[state.page]) return;
+  if (state.page === "home") {
+    resetHomeFixture(params.get("origin") === "full" ? "full" : state.screen);
+    const device = DEVICES.find((item) => item.id === params.get("device"));
+    if (device) {
+      const origin = params.get("origin");
+      if (PAGES.home.screens.some((item) => item.id === origin && ["overview", "permission"].includes(item.group))) {
+        resetHomeFixture(origin);
+        state.homeReturn = origin;
+      }
+      state.deviceId = device.id;
+      if (params.has("alias")) state.aliases[device.id] = params.get("alias");
+      if (params.has("enabled")) {
+        const enabled = params.get("enabled").split(",");
+        DEVICES.forEach((item) => { state.toggles[item.id] = enabled.includes(item.id) && item.id !== state.keyFailureId; });
+      }
+    }
+    DEVICES.forEach((item) => {
+      if (params.has(`alias-${item.id}`)) state.aliases[item.id] = params.get(`alias-${item.id}`);
+    });
+  }
+  document.addEventListener("click", handleTestMessage);
+  document.addEventListener("change", (event) => {
+    if (event.target.id === "testOutcome") params.set("testResult", event.target.value);
+  });
+  document.addEventListener("click", handleHomeAction);
+  document.addEventListener("click", handlePairingAction);
+  document.addEventListener("input", (event) => {
+    if (state.page === "home" && event.target.matches("[data-rename-input]")) updateHomeAlias(event.target.value);
+    if (state.page === "pairing" && event.target.matches('.pair-screen input[name="alias"]')) updatePairingAlias(event.target.value);
+  });
+  document.addEventListener("pointerdown", startHomePull);
+  document.addEventListener("pointermove", moveHomePull);
+  document.addEventListener("pointerup", endHomePull);
+  document.addEventListener("pointercancel", endHomePull);
+  document.addEventListener("touchstart", startHomePull, { passive: true });
+  document.addEventListener("touchmove", moveHomePull, { passive: false });
+  document.addEventListener("touchend", endHomePull);
+  document.addEventListener("touchcancel", endHomePull);
+  let sheetDrag;
+  document.addEventListener("pointerdown", (event) => {
+    if (state.page === "home" && event.target.matches(".sheet-handle")) sheetDrag = event.clientY;
+  });
+  document.addEventListener("pointerup", (event) => {
+    if (sheetDrag !== undefined && event.clientY - sheetDrag >= 64) dismissHomeOverlay();
+    sheetDrag = undefined;
+  });
+  document.addEventListener("pointercancel", () => { sheetDrag = undefined; });
+  document.addEventListener("keydown", (event) => {
+    // Escape stands in for Android system Back in the desktop pairing preview.
+    if (state.page === "pairing" && event.key === "Escape") {
+      event.preventDefault();
+      if (!state.screen.startsWith("progress")) location.href = screenHref("home", "ready");
+      return;
+    }
+    if (state.page === "home" && event.key === "Escape") {
+      dismissHomeOverlay();
+      return;
+    }
+    if (state.page !== "home" || !event.target.matches("[data-refresh-list]") || !["Enter", " "].includes(event.key)) return;
+    event.preventDefault();
+    beginHomeRefresh(event.target);
+  });
   render();
 })();
