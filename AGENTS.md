@@ -10,7 +10,7 @@ Track issues in GitHub Issues. Read `docs/agents/issue-tracker.md` before issue 
 
 ### Triage labels
 
-Use the default five triage labels. Read `docs/agents/triage-labels.md` before applying labels.
+Read `docs/agents/triage-labels.md` before labeling issues or organizing E2E work. It defines the five triage statuses, E2E issue types and their parent-child relationships.
 
 ### Domain docs
 
