@@ -4,7 +4,8 @@ Issue #14 implements the QQ step after the SMS prerequisite and battery guidance
 Ordinary launch only restores local identity. A deliberate Sign in or Retry starts
 QQ Connect server-side authorization and sends its fresh one-use code with the
 automatic Sender name through the generated `postAuthQQ` client. Connection retries
-and redirects are disabled for this exchange; an uncertain result requires another
+and redirects are disabled, and the generated request body is marked one-shot to
+prevent HTTP follow-ups from replaying a consumed code. An uncertain result requires another
 explicit authorization. The service owns QQ AppKey, code exchange and provider tokens.
 
 ## Ownership and acceptance
@@ -26,6 +27,10 @@ explicit authorization. The service owns QQ AppKey, code exchange and provider t
   distinct, unexpired credentials and nonblank Account/Sender IDs are required
   before first acceptance. The fixed service release is `v1.0.2`; HTTP and WSS code
   remains generated under ignored `build/`.
+  Expected HTTP, transport and response-decoding failures become a safe domain
+  `LoginServiceException` without the original body, message or cause. Coroutine
+  cancellation continues to cancel the generated call. The adapter owns its
+  one-shot request integration; generated sources are unchanged.
 - `app/PinGlideApplication` owns the single store, provider callback registry and
   concrete service wiring. `LoginViewModel` coalesces user actions and cancels work
   when cleared. No login operation or credential is saved in Compose state.
@@ -76,7 +81,7 @@ and error screens are never restored. This slice supplies the first-device heade
 and explanation. Set up later/Back to Home belongs to #16, and scanner/first Pairing
 actions belong to #23 and the Pairing tickets.
 
-## Verification
+## Initial implementation verification
 
 Focused Kotlin compilation and the existing `GeneratedWireTest` ran during
 implementation. Eight local domain acceptance probes passed for explicit-only
@@ -116,3 +121,36 @@ Live QQ SSO and service enrollment require registered public build inputs and
 matching package/signing registration, unavailable in this checkout. Physical
 devices, older Android versions, provider-process interruption and TalkBack speech
 were not exercised. These checks do not establish live provider/service operation.
+
+## Review corrections and verification
+
+The review fixes address S1, R1 and R2. The service adapter now translates expected
+failures into the safe domain error and marks its generated POST body one-shot.
+The approved prototype penguin paths are reused in a 92dp QQ emblem on entry and
+inside the loading indicator. Loading keeps indeterminate progress semantics;
+disabling system animation renders a stationary ring around the emblem.
+
+Local ignored probes first reproduced two sends for one login after a `503` with
+`Retry-After: 0`, and a transport exception crossing the domain boundary. Both
+failed before their fixes and passed afterward. Four service probes cover that
+single-send behavior, safe transport/HTTP/decoding errors and cancellation of the
+underlying generated call. The eight existing local domain probes also passed,
+including fresh authorization after an uncertain result. No test harness or debug
+seed is added to the production change.
+
+Debug and Release Kotlin compilation, `qualityCheck`, Debug APK assembly and the
+final full `:app:test` run passed. The host run used the ignored
+`build/ticket-14/checks.gradle` init script and passed all 18 tests: six existing
+repository tests, eight local domain probes and four local service probes. On the
+API 37 emulator, QQ entry and loading passed accessibility checks in light and dark
+themes. Screen captures were inspected in both themes, and paired captures
+confirmed the loading graphic stays stationary with animation disabled.
+
+The review delta from `9139677` has one ripwire gating size warning:
+`LoginActionScreen` grows from 59 to 64 lines to supply the branded emblem. This
+is an accepted presentation integration trade-off, without a suppression ledger
+or unrelated extraction. Minor shared-screen parameter/churn warnings and four
+unresolved static call edges for OkHttp request-body overrides are also reported;
+the real HTTP probe exercises those overrides. The ripwire delta is not claimed
+as passing. Live QQ/service enrollment, physical devices and TalkBack speech
+remain unverified.

@@ -59,6 +59,8 @@ class IdentityStorageException : Exception("Protected identity is unavailable")
 
 class QqAuthorizationException : Exception("QQ authorization did not complete")
 
+class LoginServiceException : Exception("QQ login did not complete")
+
 class LoginAttempt {
     private var active = true
 

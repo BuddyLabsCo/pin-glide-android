@@ -6,7 +6,6 @@ import com.buddylabs.pinglide.data.service.QqLoginService
 import com.buddylabs.pinglide.data.storage.ProtectedIdentityStore
 import com.buddylabs.pinglide.domain.identity.ExplicitLogin
 import com.buddylabs.pinglide.domain.identity.QqAuthorization
-import com.buddylabs.pinglide.generated.http.api.IdentityApi
 import com.buddylabs.pinglide.platform.DeviceInfo
 import com.buddylabs.pinglide.platform.qq.QqConnectAuthorization
 import java.util.concurrent.TimeUnit
@@ -22,7 +21,7 @@ class PinGlideApplication : Application() {
             .followSslRedirects(false)
             .callTimeout(30, TimeUnit.SECONDS)
             .build()
-        QqLoginService(IdentityApi(BuildConfig.SERVICE_URL, client))
+        QqLoginService(BuildConfig.SERVICE_URL, client)
     }
 
     fun explicitLogin() = ExplicitLogin(
