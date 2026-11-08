@@ -1,10 +1,8 @@
-## Language
-
-Use Chinese in chat and English in local files.
-For issue tracker content, match existing items; if none exist, ask first.
-Explicit user language instructions override these defaults.
-
 ## Agent skills
+
+### Code architecture
+
+Before adding, moving, reviewing, or extracting runtime code, read `docs/code-architecture.md` for code placement, dependency direction, and ownership boundaries.
 
 ### Issue tracker
 

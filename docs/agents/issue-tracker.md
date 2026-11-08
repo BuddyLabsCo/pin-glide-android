@@ -24,3 +24,9 @@ PRs as a request surface: no.
 
 "Publish to the issue tracker" means create a GitHub issue.
 "Fetch the relevant ticket" means read the issue and its comments.
+
+## Pull requests
+
+- **Title** — follows the Conventional Commits spec in the form
+  `<type>: [issue-<issue-number>] <subject>`, for example `fix: [issue-42] correct retry backoff`.
+- **Description** — must end with `Closes #<issue-number>`
