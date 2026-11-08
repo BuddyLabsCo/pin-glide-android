@@ -39,7 +39,9 @@ jobs:
           repositories: ${{ steps.contracts.outputs.repository }}
           permission-contents: read
       - name: Install the pinned Android platform and build tools
-        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0"
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-37.0 build-tools;36.0.0"
       - name: Download the pinned service contracts
         env:
           GH_TOKEN: ${{ steps.service-token.outputs.token }}
