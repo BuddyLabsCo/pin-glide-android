@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -46,11 +45,7 @@ fun WelcomeScreen(onStartSetup: () -> Unit, onPrivacy: () -> Unit) {
                 .padding(top = 30.dp, bottom = 24.dp)
         ) {
             Brand()
-            Image(
-                painter = painterResource(R.drawable.welcome_push),
-                contentDescription = null,
-                modifier = Modifier.fillMaxWidth().aspectRatio(4f / 3f)
-            )
+            WelcomePushVisual()
             Column(
                 modifier = Modifier.padding(top = 26.dp).semantics(mergeDescendants = true) {
                     heading()

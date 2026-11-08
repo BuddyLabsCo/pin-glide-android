@@ -7,9 +7,15 @@ whose Welcome, privacy, icon and illustration assets match this checkout.
 ## Presentation
 
 - `PinGlideTheme` and the day/night color resources follow system appearance.
-- `welcome_push.xml` transcribes the approved SVG's reduced-motion still frame,
-  including the source notification and both delivered notifications. It stays
-  static for every motion setting and uses the source SVG's day/night palette.
+- `welcome_push.xml` contains the approved illustration's static devices, home
+  screen and routes. `WelcomePushVisual` draws the notifications with Compose,
+  using the source SVG's day/night palette, 6.4-second loop, cubic routes, easing
+  and keyframes: the notification slides into the source, copies travel to both
+  targets, expand into banners and display confirmations, then the cycle resets.
+- Compose's system motion-duration scale controls the loop. Disabling animations
+  selects the meaningful settled still with the source notification, both target
+  banners and confirmations. Changing the setting while Welcome is open switches
+  between motion and the still without restarting the Activity.
 - The app uses the supplied launcher icon and native versions of the review icons.
   It loads no HTML, JavaScript, browser state, review controls or fixture identity.
 - Default strings are Simplified Chinese, with English translations. Unsupported
@@ -63,6 +69,16 @@ English/Chinese and unsupported-locale fallback, both themes, 200% font scale,
 portrait/landscape, a 360dp compact viewport, privacy preservation through rotation,
 and setup-start persistence through force-stop/relaunch. Captures and local check
 logs are under ignored `build/ticket-12/`.
+
+The review fix also passed Debug/Release Kotlin compilation, qualityCheck, both
+APK builds and all six host tests. On the API 37 emulator, complete light/dark
+cycles were captured and inspected for notification arrival, both routes, banner
+expansion, confirmations and reset. Pixel assertions verified changing hero
+frames with normal motion, unchanged text/actions, and identical hero frames
+after switching the animator-duration scale to zero in each theme. The reduced
+light frame was compared against the original vector still (mean maximum RGB
+channel difference below 1/255 across the hero). Captures, assertion results and
+check logs are under ignored `build/ticket-12/fix-*`.
 
 Physical devices, TalkBack speech, older Android versions and signed Release
 installation were not exercised. Settings navigation is outside this slice.
