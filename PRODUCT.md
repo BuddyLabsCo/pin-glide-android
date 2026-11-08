@@ -29,13 +29,24 @@ Pin Glide is a deliberately narrow personal bridge between a phone's SMS inbox a
 - `RECEIVE_SMS` is an onboarding hard gate. Turning off battery optimization is a recommendation, not a gate; onboarding must not probe or persistently report that system state.
 - The user signs in with QQ Connect and pairs by scanning a Windows QR code.
 - Every incoming SMS is forwarded, including messages with no valid OTP.
-- There is no global forwarding switch, message history, notification surface, manual refresh, or manual retry.
+- There is no global forwarding switch, message history, or manual retry. Device lists support pull-to-refresh and refresh when the app returns to the foreground.
+- Forwarding failures are shown in the app; there are no app-generated system failure alerts, notification-permission requests, or notification settings.
 
 ## Capabilities and Constraints
 
-- A compact foreground service handles one SMS operation at a time. If the system prevents it from starting, that operation is not forwarded and there is no hidden retry.
+- Each Sender can pair with at most five distinct target devices. At five, Home hides Add device and shows an orange "已满5台" count label; removing a device restores the entry. Capacity does not have a separate full-screen page.
+- After onboarding, Add device opens the scanner directly once camera permission is available. Camera permission prompts, denial feedback, and the system-settings action belong to Home; standalone pairing has no connection-introduction page.
+- Scanning an already paired target returns to Home, shows "这台设备已添加", and highlights that target's card without changing its pairing or receive toggle. Keep the card outline for 3 seconds, then fade it out and restore the original card appearance, including removal of the temporary scan cue. The review demo keeps this feedback visible for inspection; it does not simulate the timed fade.
+- Standalone pairing has no dedicated login-expired page. Refresh ordinary access-token expiry automatically; only confirmed unrecoverable login loss exits pairing to Home's shared relogin flow. After login is restored, start with a fresh scan. QR-session expiry and transient network failures do not imply login loss.
+- Standalone pairing confirmation Back, Cancel, and system Back all exit to Home. Progress cannot be cancelled; process termination follows ordinary app startup without a special pairing resume flow.
+- Send test message acts inline from device details or pairing success. It uses the fixed simulated SMS and OTP `482913`, skips model extraction and model credentials, and goes directly through normal encryption and upload.
+- The device-details test targets only that device, including when its automatic receive toggle is off. The pairing-success test targets only the newly added device and stays on pairing success; failure does not undo pairing.
+- While a test is pending, remain on the entry page and disable its send control. Only confirmed `received` outcomes produce the Toast "测试消息已发送"; failed or mixed HTTP 207 results show the target and specific error, while uncertain results explicitly say delivery was not confirmed. There are no dedicated test preparation, processing, or result pages.
+- A compact foreground service handles one SMS operation at a time. Its required Android notification object and possible system Task Manager visibility remain accepted platform behavior; the app does not request `POST_NOTIFICATIONS`. If the system prevents it from starting, that operation is not forwarded and there is no hidden retry.
 - Per-Receiver lift-and-forward toggles default on.
 - Receiver presence and aliases come from the service; the UI never invents local presence.
+- Confirmed permanent revocation of the current Sender stops SMS intake and persists the revoked-registration screen across ordinary app restarts. Remote revocation is detected through authenticated service contact, not invented local presence or background polling.
+- Settings planning includes owner-authorized revocation of other Senders in the same QQ Account. Selecting those Senders requires account-level Sender inventory support from the service.
 - The app distinguishes per-target arrival outcomes and uncertainty, and never treats arrival as proof of Windows display or OTP copying.
 - SMS bodies, OTPs, ciphertext, credentials, Pairing keys, and provider keys never appear in UI diagnostics or logs.
 - The application supports Chinese and English; the default follows the Android system language.
