@@ -21,7 +21,23 @@
     <string name="privacy_backup_body">Local identity, credentials and Pairing keys are excluded from cloud backups and device transfers. Uninstalling or clearing app data loses them. Sign in and pair your target devices again; backups cannot restore them.</string>
     <string name="privacy_dismiss">Got it</string>
     <string name="close">Close</string>
-    <string name="setup_step">Step 1 of 4</string>
+    <string name="setup_title">Complete setup</string>
+    <string name="setup_step">Step %1$d of 4</string>
     <string name="setup_sms_title">Receive SMS</string>
     <string name="setup_sms_description">Allow Pin Glide to read new incoming SMS messages.</string>
+    <string name="setup_allow_sms">Allow incoming SMS</string>
+    <string name="setup_sms_denied_title">SMS permission is off</string>
+    <string name="setup_sms_denied_description">Allow SMS permission in system settings to continue. Forwarding stays paused while permission is off.</string>
+    <string name="setup_sms_denied_hint">Android may not show the permission dialog again. You may need to allow access in application settings.</string>
+    <string name="setup_open_application_settings">Open application settings</string>
+    <string name="setup_check_again">Check again</string>
+    <string name="setup_sms_still_denied">SMS permission is still off. Allow SMS permission in application settings.</string>
+    <string name="setup_battery_title">More reliable background processing</string>
+    <string name="setup_battery_description">We recommend finding Pin Glide in system settings and turning off battery optimization. Each new SMS starts only a brief processing task, which stops immediately on completion or failure.</string>
+    <string name="setup_open_battery_settings">Open battery optimization settings</string>
+    <string name="setup_next">Next</string>
+    <string name="setup_back">Back</string>
+    <string name="setup_settings_unavailable">Unable to open system settings. Find Pin Glide in your device settings, then try again.</string>
+    <string name="setup_qq_title">Connect your QQ</string>
+    <string name="setup_qq_description">Sign in with QQ to manage devices and authorize encrypted forwarding.</string>
 </resources>

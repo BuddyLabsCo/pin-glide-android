@@ -30,13 +30,14 @@ whose Welcome, privacy, icon and illustration assets match this checkout.
 ## Navigation and reuse
 
 `MainActivity` assembles `SetupPreferences` through the domain's `SetupProgress`
-boundary. Start setup writes only `setup_started=true` to the private `setup`
-preferences and opens `SetupEntryScreen`. Restart resumes that entry. Back on
-Welcome or the setup entry backgrounds the task and never completes setup.
+boundary. Start setup writes `setup_started=true` to the private `setup`
+preferences. Setup now resumes from durable checkpoints and the actual SMS grant;
+see [SMS and battery setup](sms-battery-setup.md). Back on Welcome or a stable
+setup step backgrounds the task and never completes setup.
 Existing backup exclusions also cover these separate setup preferences.
 
-The entry shows the Receive SMS prerequisite. Permission requests, denial
-recovery, further checkpoints and the battery recommendation belong to #13.
+Issue #13 implements the Receive SMS prerequisite, denial recovery and battery
+recommendation. QQ authentication belongs to its separate implementation slice.
 
 `PrivacyScreen(onDismiss)` is a shared read-only screen. Welcome opens it in a
 full-screen native dialog, preserving the underlying scroll position and focus.

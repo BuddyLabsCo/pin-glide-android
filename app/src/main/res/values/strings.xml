@@ -21,7 +21,23 @@
     <string name="privacy_backup_body">本机身份、凭据和配对密钥不参与云备份或设备迁移。卸载应用或清除应用数据会丢失这些数据，需要重新登录并重新配对目标设备，无法从备份恢复。</string>
     <string name="privacy_dismiss">知道了</string>
     <string name="close">关闭</string>
-    <string name="setup_step">第 1 步，共 4 步</string>
+    <string name="setup_title">完成准备</string>
+    <string name="setup_step">第 %1$d 步，共 4 步</string>
     <string name="setup_sms_title">接收短信</string>
     <string name="setup_sms_description">允许鹊信读取到达的新短信。</string>
+    <string name="setup_allow_sms">允许接收短信</string>
+    <string name="setup_sms_denied_title">短信权限未开启</string>
+    <string name="setup_sms_denied_description">在系统设置中允许“短信”权限后才能继续。权限关闭期间，转发会保持暂停。</string>
+    <string name="setup_sms_denied_hint">系统可能不会再次弹出权限窗口，需要从应用设置中手动开启。</string>
+    <string name="setup_open_application_settings">前往系统设置</string>
+    <string name="setup_check_again">重新检查</string>
+    <string name="setup_sms_still_denied">短信权限仍未开启。请在系统设置中允许短信权限。</string>
+    <string name="setup_battery_title">让后台处理更可靠</string>
+    <string name="setup_battery_description">建议在系统设置中找到鹊信并关闭电池优化。新短信到达时，鹊信只会启动一次短时处理，完成或失败后立即停止。</string>
+    <string name="setup_open_battery_settings">打开电池优化设置</string>
+    <string name="setup_next">下一步</string>
+    <string name="setup_back">返回</string>
+    <string name="setup_settings_unavailable">无法打开系统设置。请从设备设置中找到鹊信后重试。</string>
+    <string name="setup_qq_title">连接你的 QQ</string>
+    <string name="setup_qq_description">使用 QQ 登录账号、管理设备和授权加密转发。</string>
 </resources>
