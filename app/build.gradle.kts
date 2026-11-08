@@ -13,6 +13,16 @@ val releaseSigningInputs = listOf(
     "PINGLIDE_SIGNING_KEY_PASSWORD"
 ).associateWith { providers.environmentVariable(it).orNull }
 val missingReleaseSigningInputs = releaseSigningInputs.filterValues { it.isNullOrBlank() }.keys
+val qqAppId = providers.environmentVariable("PINGLIDE_QQ_APP_ID").orElse("").get()
+val serviceUrl = providers.environmentVariable("PINGLIDE_SERVICE_URL").orElse("").get()
+require(
+    qqAppId.isEmpty() || qqAppId.all {
+        it in '0'..'9'
+    }
+) { "QQ App ID must contain only digits" }
+require(serviceUrl.isEmpty() || serviceUrl.matches(Regex("https://[a-zA-Z0-9.:-]+"))) {
+    "Service URL must be an HTTPS origin without credentials, paths or query parameters"
+}
 
 android {
     namespace = "com.buddylabs.pinglide"
@@ -24,6 +34,9 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField("String", "QQ_APP_ID", "\"$qqAppId\"")
+        buildConfigField("String", "SERVICE_URL", "\"$serviceUrl\"")
+        manifestPlaceholders["qqAuthScheme"] = "tencent${qqAppId.ifEmpty { "unconfigured" }}"
     }
 
     signingConfigs {
@@ -43,6 +56,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     sourceSets["main"].kotlin {
@@ -89,6 +103,11 @@ kotlin {
 }
 
 dependencies {
+    implementation(
+        files(rootProject.layout.buildDirectory.file("dependencies/qq/open_sdk_3.5.19_lite.jar")) {
+            builtBy(rootProject.tasks.named("downloadQqSdk"))
+        }
+    )
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

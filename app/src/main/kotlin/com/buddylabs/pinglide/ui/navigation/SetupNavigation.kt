@@ -10,11 +10,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.buddylabs.pinglide.domain.identity.LoginState
 import com.buddylabs.pinglide.domain.settings.SetupProgress
 import com.buddylabs.pinglide.domain.settings.SetupState
 import com.buddylabs.pinglide.ui.components.PrivacyScreen
 import com.buddylabs.pinglide.ui.onboarding.BatterySetupScreen
-import com.buddylabs.pinglide.ui.onboarding.QqLoginEntryScreen
+import com.buddylabs.pinglide.ui.onboarding.QqLoginScreen
 import com.buddylabs.pinglide.ui.onboarding.SmsPermissionScreen
 import com.buddylabs.pinglide.ui.onboarding.WelcomeScreen
 
@@ -22,13 +23,14 @@ private enum class SetupDestination { Welcome, Sms, SmsDenied, Battery, QqLogin 
 
 private fun SetupState.destination(
     smsGranted: Boolean,
-    smsRequestPending: Boolean
+    smsRequestPending: Boolean,
+    identityAccepted: Boolean
 ): SetupDestination = when {
-    !started -> SetupDestination.Welcome
+    !started && !identityAccepted -> SetupDestination.Welcome
     !smsGranted && smsRequestPending -> SetupDestination.Sms
-    !smsGranted && (smsRequested || smsCompleted) -> SetupDestination.SmsDenied
+    !smsGranted && (smsRequested || smsCompleted || identityAccepted) -> SetupDestination.SmsDenied
     !smsGranted -> SetupDestination.Sms
-    !batteryAcknowledged -> SetupDestination.Battery
+    !batteryAcknowledged && !identityAccepted -> SetupDestination.Battery
     else -> SetupDestination.QqLogin
 }
 
@@ -41,6 +43,10 @@ fun SetupNavigation(
     onCheckSms: () -> Boolean,
     onApplicationSettings: () -> Boolean,
     onBatterySettings: () -> Boolean,
+    loginState: LoginState,
+    onLogin: () -> Unit,
+    onCancelLogin: () -> Unit,
+    onRetryIdentity: () -> Unit,
     onBackground: () -> Unit
 ) {
     var setup by remember { mutableStateOf(progress.state) }
@@ -51,8 +57,26 @@ fun SetupNavigation(
             setup = progress.state
         }
     }
-    BackHandler(onBack = onBackground)
-    val destination = setup.destination(smsGranted, smsRequestPending)
+    val destination = setup.destination(
+        smsGranted,
+        smsRequestPending,
+        loginState == LoginState.FirstDevice
+    )
+    val leaveLogin = {
+        if (loginState == LoginState.Loading || loginState == LoginState.Error) {
+            onCancelLogin()
+        } else {
+            onBackground()
+        }
+    }
+    LaunchedEffect(destination) {
+        if (destination != SetupDestination.QqLogin &&
+            loginState == LoginState.Loading
+        ) {
+            onCancelLogin()
+        }
+    }
+    BackHandler(onBack = if (destination == SetupDestination.QqLogin) leaveLogin else onBackground)
     when (destination) {
         SetupDestination.Welcome -> WelcomeScreen(
             onStartSetup = {
@@ -85,7 +109,13 @@ fun SetupNavigation(
             onBack = onBackground
         )
 
-        SetupDestination.QqLogin -> QqLoginEntryScreen(onBack = onBackground)
+        SetupDestination.QqLogin -> QqLoginScreen(
+            state = loginState,
+            onLogin = onLogin,
+            onCancel = onCancelLogin,
+            onRetryStorage = onRetryIdentity,
+            onBack = leaveLogin
+        )
     }
     if (privacyOpen) {
         Dialog(

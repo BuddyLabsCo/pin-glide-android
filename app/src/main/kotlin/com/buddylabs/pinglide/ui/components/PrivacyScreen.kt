@@ -83,6 +83,7 @@ fun PrivacyContent() {
         R.string.privacy_processing_body
     )
     PrivacySection(R.drawable.ic_key, R.string.privacy_keys_title, R.string.privacy_keys_body)
+    PrivacySection(R.drawable.ic_account, R.string.privacy_qq_title, R.string.setup_qq_privacy)
     PrivacySection(
         R.drawable.ic_devices,
         R.string.privacy_routing_title,

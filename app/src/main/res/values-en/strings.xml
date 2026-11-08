@@ -40,4 +40,17 @@
     <string name="setup_settings_unavailable">Unable to open system settings. Find Pin Glide in your device settings, then try again.</string>
     <string name="setup_qq_title">Connect your QQ</string>
     <string name="setup_qq_description">Sign in with QQ to manage devices and authorize encrypted forwarding.</string>
+    <string name="setup_qq_sign_in">Sign in with QQ</string>
+    <string name="privacy_qq_title">QQ Connect authorization</string>
+    <string name="setup_qq_privacy">By signing in, you authorize QQ Connect (Tencent) to use your device model and QQ/TIM installation information for authorization. Pin Glide sends a fresh one-use code to its service; QQ provider credentials stay with the service.</string>
+    <string name="setup_qq_loading">Signing in with QQ</string>
+    <string name="setup_qq_error_title">Sign-in did not complete</string>
+    <string name="setup_qq_error_description">QQ authorization was cancelled or sign-in could not be confirmed. Try signing in again.</string>
+    <string name="setup_qq_retry">Sign in again</string>
+    <string name="setup_cancel">Cancel</string>
+    <string name="setup_identity_loading">Opening protected identity</string>
+    <string name="setup_identity_unavailable_title">Protected identity is unavailable</string>
+    <string name="setup_identity_unavailable_description">The saved identity could not be opened or saved safely. Existing data is preserved. Check again; do not clear app data to retry.</string>
+    <string name="setup_first_device_title">Connect your first device</string>
+    <string name="setup_first_device_description">Open Pin Glide on the target device and display its QR code, then scan and confirm it. This device can then start forwarding SMS.</string>
 </resources>

@@ -143,17 +143,6 @@ fun BatterySetupScreen(onSettings: () -> Boolean, onNext: () -> Unit, onBack: ()
 }
 
 @Composable
-fun QqLoginEntryScreen(onBack: () -> Unit) {
-    SetupStepScreen(
-        step = 3,
-        icon = R.drawable.ic_account,
-        title = R.string.setup_qq_title,
-        description = R.string.setup_qq_description,
-        onBack = onBack
-    ) {}
-}
-
-@Composable
 private fun SettingsError(visible: Boolean) {
     if (visible) {
         Text(
@@ -165,7 +154,7 @@ private fun SettingsError(visible: Boolean) {
 }
 
 @Composable
-private fun SetupStepScreen(
+internal fun SetupStepScreen(
     step: Int,
     @DrawableRes icon: Int,
     @StringRes title: Int,
