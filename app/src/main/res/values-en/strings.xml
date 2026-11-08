@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Pin Glide</string>
+    <string name="brand_wordmark">PIN GLIDE</string>
+    <string name="welcome_headline">Across screens.</string>
+    <string name="welcome_headline_accent">Without limits.</string>
+    <string name="welcome_description">Messages arrive on your target devices, securely encrypted all the way.</string>
+    <string name="start_setup">Start setup</string>
+    <string name="privacy_title">Privacy and data processing</string>
+    <string name="privacy_heading">Zero data retention</string>
+    <string name="privacy_intro">Pin Glide keeps no SMS or OTP forwarding history and never uploads plaintext to the Pin Glide service.</string>
+    <string name="privacy_processing_title">SMS and OTP processing</string>
+    <string name="privacy_processing_body">SMS content and OTPs stay in memory only during processing and are released on completion or failure. When OTP extraction is needed, this device sends the SMS directly to the Bailian model service. The original SMS is still encrypted and forwarded if extraction fails.</string>
+    <string name="privacy_keys_title">Client-only keys</string>
+    <string name="privacy_keys_body">Only the paired clients hold Pairing keys. Android Keystore protects the local copies and model credentials. They never enter logs or URLs, and Pairing keys are never uploaded to the Pin Glide service. Model credentials are used only to authenticate to the model service.</string>
+    <string name="privacy_routing_title">The Pin Glide service routes ciphertext only</string>
+    <string name="privacy_routing_body">This device encrypts the SMS and OTP independently for each target device. The Pin Glide service cannot read the plaintext or client encryption keys.</string>
+    <string name="privacy_diagnostics_title">Safe local diagnostics</string>
+    <string name="privacy_diagnostics_body">Diagnostics contain only non-content metadata such as time, result category, status code, request ID and target count. They never record SMS content, OTPs, ciphertext, credentials or keys.</string>
+    <string name="privacy_backup_title">Backups and reinstallation</string>
+    <string name="privacy_backup_body">Local identity, credentials and Pairing keys are excluded from cloud backups and device transfers. Uninstalling or clearing app data loses them. Sign in and pair your target devices again; backups cannot restore them.</string>
+    <string name="privacy_dismiss">Got it</string>
+    <string name="close">Close</string>
+    <string name="setup_step">Step 1 of 4</string>
+    <string name="setup_sms_title">Receive SMS</string>
+    <string name="setup_sms_description">Allow Pin Glide to read new incoming SMS messages.</string>
+</resources>
