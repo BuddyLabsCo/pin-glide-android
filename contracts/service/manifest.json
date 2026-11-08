@@ -1,0 +1,10 @@
+{
+  "repository": "BuddyLabsCo/pin-glide-service",
+  "releaseTag": "v1.0.1",
+  "sourceCommit": "6da4c4fd0f091c58fda307d312fba0a2516821fc",
+  "contractVersion": "1.0.0",
+  "assets": {
+    "openapi.yaml": "42d097fac1ff01c96b9cf6831aec1c00471d1a1b0711927723a492ef43d551fb",
+    "asyncapi.yaml": "ce5ac6ddc9cdd8a8a76fafc9e04c20830fc914b6c77a7882c4f3d9ede162a5d3"
+  }
+}

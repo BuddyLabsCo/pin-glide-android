@@ -1,0 +1,25 @@
+{
+  "name": "pin-glide-android-build",
+  "version": "1.0.0",
+  "description": "Build-time service contract generation",
+  "scripts": {
+    "test": "node --test scripts/codegen/contracts.test.mjs scripts/quality/check-file-size.test.mjs"
+  },
+  "type": "module",
+  "license": "UNLICENSED",
+  "private": true,
+  "devDependencies": {
+    "@asyncapi/modelina": "5.10.1",
+    "@asyncapi/parser": "3.6.6",
+    "yaml": "2.9.1"
+  },
+  "overrides": {
+    "jsonpath-plus": "10.4.0",
+    "json-schema-migrate": {
+      "ajv": "6.15.0"
+    },
+    "webapi-parser": {
+      "ajv": "6.15.0"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+config:
+  validation: true
+  warningsAsErrors: true
+
+complexity:
+  active: true
+  CyclomaticComplexMethod:
+    active: true
+    allowedComplexity: 14
+  NestedBlockDepth:
+    active: true
+    allowedDepth: 4
+
+exceptions:
+  active: true
+  SwallowedException:
+    active: true
