@@ -38,6 +38,7 @@ jobs:
           owner: ${{ steps.contracts.outputs.owner }}
           repositories: ${{ steps.contracts.outputs.repository }}
           permission-contents: read
+      - uses: android-actions/setup-android@v4
       - name: Install the pinned Android platform and build tools
         run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0"
       - name: Download the pinned service contracts
