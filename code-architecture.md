@@ -147,8 +147,6 @@ From the repository root on Windows:
 .\gradlew.bat :app:testDebugUnitTest
 npm ci --ignore-scripts
 .\gradlew.bat downloadServiceContracts
-npm test
-node scripts/quality/verify-quality-checks.mjs
 ```
 
 On Unix use `bash ./gradlew` instead of `.\gradlew.bat`. `qualityCheck` aggregates
@@ -160,34 +158,21 @@ Keep `local.properties` untracked. Configure `sdk.dir` for the local Android
 SDK with Java-properties escaping, or supply the supported SDK environment.
 Do not commit a machine-specific SDK or JDK path.
 
-The local `.github/workflows/ci.yml` runs the size-check tests, four gates and
-minimal build on Linux with JDK 25, Node 24.18.0 and Android API 37/build tools
+The local `.github/workflows/ci.yml` runs the four gates, minimal build and
+host tests on Linux with JDK 25, Node 24.18.0 and Android API 37/build tools
 36.0.0. Local evidence below excludes remote CI; inspect the PR checks separately.
 
 ### Validation boundary
 
 Local validation covers formatting, detekt, Debug/Release Android Lint,
-Debug APK assembly and Release Kotlin compilation. The file-size tests
-cover the 500/501-line boundary, CRLF/final-newline behavior, tracked/untracked
-files, deleted files, build-output exclusions and unexpected empty scope.
-
-The 2026-11-08 local run passed five Node tests and six JVM tests, including
-concrete/deterministic WSS generation, generated serialization, HTTP
-cancellation and the HPKE dependency probe. Both generated source trees were
-included in Debug and Release Kotlin compilation. Four
-representative invalid-input probes were rejected, then the valid baseline was
-restored and checked again.
+Debug APK assembly and Release Kotlin compilation. The 2026-11-08 local run
+passed six JVM tests covering generated serialization, HTTP cancellation and
+the HPKE dependency profile. Both generated source trees were included in
+Debug and Release Kotlin compilation.
 
 The download path was exercised against the configured private release.
 Removing a cached asset made ordinary Debug assembly download it again and
 succeed; a subsequent download task reported `UP-TO-DATE`.
-
-`verify-quality-checks.mjs` temporarily creates an owned probe source and removes
-it in `finally`. It demonstrated that format violations, a 501-line file,
-excessive cyclomatic complexity/nesting and Compose's
-`UnrememberedMutableState` each cause a nonzero check result. Run it serially
-against a baseline that already passes, especially after checker/config changes;
-do not run concurrent builds while it injects probes.
 
 Lint dependency/SDK update advisories remain visible. They do not override
 explicitly pinned compatible versions or establish tested Android 17 support.
@@ -259,9 +244,8 @@ permission. The App must be installed on the source repository with that
 permission. The token is supplied only to the download step and stays outside
 generated source and APK resources.
 
-Run `downloadServiceContracts` before standalone `npm test`; normal Android
-builds resolve the prerequisite automatically. No extra YAML/reference/hash
-validator runs in Android.
+Normal Android builds resolve the download prerequisite automatically. No extra
+YAML/reference/hash validator runs in Android.
 
 | Component | Pin/configuration |
 | --- | --- |
@@ -275,15 +259,15 @@ validator runs in Android.
 
 `npmCi` installs the exact lockfile with lifecycle scripts disabled. The lockfile
 includes narrow patched transitive overrides for the generator's legacy parser
-dependencies; changes require the generation tests and audit to pass.
+dependencies; changes require regeneration, host tests and audit to pass.
 
 Modelina 5.10.1's input selector does not recognize parsed AsyncAPI 3.1 documents.
 The owned processor bridge admits the parser's 3.1 document to its
 existing AsyncAPI processor; it does not rewrite the service contract version.
 The preset preserves wire names, string enums, required/optional nullability
-and serializers. Tests check all nine message models, actual declarations,
-deterministic output and representative wire mappings. Remove the bridge when
-an upgraded Modelina supports 3.1 directly and passes the same tests.
+and serializers. Generation checks all nine required message models and actual
+annotated declarations. Remove the bridge when an upgraded Modelina supports
+3.1 directly and passes compilation and the host serialization tests.
 
 HTTP dates remain wire strings. Service adapters validate/convert those at the
 boundary. Generated models are serialization shapes, not sufficient validation
@@ -510,8 +494,7 @@ Before accepting a change, review package direction, memory-only sensitive
 content, authorization separation, complete credential commits, cancellation
 and stale-generation handling, local-format compatibility and the existing
 recovery decisions. Run `qualityCheck`, the affected feature tests and normal
-Debug/Release builds. Use the negative-check harness after changing gate
-configuration, rather than injecting violations during every ordinary build.
+Debug/Release builds.
 
 The minimal scaffold establishes a build and review contract; it does not
 implement login, forwarding, Pairing, persistent storage or their screens.

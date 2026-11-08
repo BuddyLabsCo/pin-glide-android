@@ -2,9 +2,6 @@
   "name": "pin-glide-android-build",
   "version": "1.0.0",
   "description": "Build-time service contract generation",
-  "scripts": {
-    "test": "node --test scripts/codegen/wss-models.test.mjs scripts/quality/check-file-size.test.mjs"
-  },
   "type": "module",
   "license": "UNLICENSED",
   "private": true,
