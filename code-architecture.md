@@ -146,6 +146,7 @@ From the repository root on Windows:
 .\gradlew.bat :app:assembleDebug :app:compileReleaseKotlin
 .\gradlew.bat :app:testDebugUnitTest
 npm ci --ignore-scripts
+.\gradlew.bat downloadServiceContracts
 npm test
 node scripts/quality/verify-quality-checks.mjs
 ```
@@ -170,12 +171,16 @@ Debug APK assembly and Release Kotlin compilation. The file-size tests
 cover the 500/501-line boundary, CRLF/final-newline behavior, tracked/untracked
 files, deleted files, build-output exclusions and unexpected empty scope.
 
-The 2026-11-08 local run passed nine Node tests and six JVM tests, including
-contract input failures, concrete/deterministic WSS generation, generated
-serialization, HTTP cancellation and the HPKE dependency probe. Both generated
-source trees were included in Debug and Release Kotlin compilation. Four
+The 2026-11-08 local run passed five Node tests and six JVM tests, including
+concrete/deterministic WSS generation, generated serialization, HTTP
+cancellation and the HPKE dependency probe. Both generated source trees were
+included in Debug and Release Kotlin compilation. Four
 representative invalid-input probes were rejected, then the valid baseline was
 restored and checked again.
+
+The download path was exercised against the configured private release.
+Removing a cached asset made ordinary Debug assembly download it again and
+succeed; a subsequent download task reported `UP-TO-DATE`.
 
 `verify-quality-checks.mjs` temporarily creates an owned probe source and removes
 it in `finally`. It demonstrated that format violations, a 501-line file,
@@ -204,9 +209,11 @@ Generated sources belong in the build directory and are not committed. Normal
 local and CI builds depend on generation. Declare inputs and outputs so
 unchanged valid output can be reused. No committed-output drift check is needed.
 
-The generation task validates the pinned input provenance/version/reference
-requirements, reports generation failure and rejects missing/empty expected
-output. Compile the generated output normally.
+Download the configured release assets before generation. The upstream service
+owns contract production and validation; the existing parsers/generators report
+unusable input. Reject missing/empty expected generated output and compile it
+normally. Do not duplicate upstream validation with a handwritten contract
+validator.
 
 ### Transport and serialization
 
@@ -228,18 +235,33 @@ runtime does not make that output trustworthy.
 
 ### Reproducible generation
 
-Commit the unmodified release inputs under `contracts/service/<releaseTag>/`
-and record repository, release tag, source commit, independent contract version
-and both SHA-256 hashes in `contracts/service/manifest.json`. Downloading a new
-release is a deliberate dependency update, never an implicit build-time
-"latest" lookup. Review the manifest and both assets together. Local/CI builds
-need no service-repository credentials after those inputs are committed.
+Configure only the source repository, release tag and two asset names in
+`config/codegen/service-contracts.json`. The current source is
+`BuddyLabsCo/pin-glide-service`, release `v1.0.1`, with `openapi.yaml` and
+`asyncapi.yaml`. Commit that configuration, not the downloaded YAML or a
+separate hash/provenance manifest. Changing the configured release is a
+deliberate dependency update; never resolve floating "latest" during builds.
 
-`verifyServiceContracts` verifies bytes, versions and all local references;
-external references are rejected rather than fetched. `generateServiceClients`
-runs both generators before Android `preBuild`. Dependencies and generator
-configuration are task inputs; unchanged generated outputs can be reused.
-Deleting the root `build/` directory causes regeneration on the next build.
+`downloadServiceContracts` invokes `gh release download` and stores the assets
+under `build/contracts/service/<owner>/<repo>/<releaseTag>/`.
+`generateServiceClients` depends on that download and runs both generators
+before Android `preBuild`. The source configuration is a download-task input;
+both files are declared outputs. Existing unchanged downloads and generated
+outputs can be reused locally. A clean CI workspace downloads the assets, and
+deleting the root `build/` directory makes the next local build do the same.
+Download failures stop the build.
+
+Local builds require GitHub CLI access to the configured private repository,
+using `gh auth login` or `GH_TOKEN`. CI reads the source repository from the
+same configuration and uses the existing `APP_ID`/`APP_PRIVATE_KEY` secrets to
+request an installation token scoped to that repository with contents-read
+permission. The App must be installed on the source repository with that
+permission. The token is supplied only to the download step and stays outside
+generated source and APK resources.
+
+Run `downloadServiceContracts` before standalone `npm test`; normal Android
+builds resolve the prerequisite automatically. No extra YAML/reference/hash
+validator runs in Android.
 
 | Component | Pin/configuration |
 | --- | --- |
@@ -256,7 +278,7 @@ includes narrow patched transitive overrides for the generator's legacy parser
 dependencies; changes require the generation tests and audit to pass.
 
 Modelina 5.10.1's input selector does not recognize parsed AsyncAPI 3.1 documents.
-The owned processor bridge admits an already validated 3.1 document to its
+The owned processor bridge admits the parser's 3.1 document to its
 existing AsyncAPI processor; it does not rewrite the service contract version.
 The preset preserves wire names, string enums, required/optional nullability
 and serializers. Tests check all nine message models, actual declarations,
@@ -289,9 +311,8 @@ encryption with the selected suite; it is not a protocol acceptance vector.
 
 The published release checked on 2026-11-01 and rechecked on 2026-11-08 is service
 `v1.0.1`, with contract version `1.0.0`. Its exact assets are recorded in
-`contracts/service/manifest.json` and retained under
-`contracts/service/v1.0.1/` as pinned inputs, not generated Android sources.
-They can validate the existing generation path but do not
+the service Release; Android downloads the configured filenames to its build
+directory. They exercise the existing generation path but do not
 contain the approved mandatory Sender name, Sender inventory or own-account
 profile operations. Those additions are tracked in service
 [Sender names/inventory](https://github.com/BuddyLabsCo/pin-glide-service/issues/109)
@@ -482,7 +503,7 @@ recovery rule in this document.
 | Request SMS/camera permission and observe revocation | `platform/permissions` plus the owning screen's UI action; domain receives capability state, never an Activity |
 | Add a Home target row or error presentation | `ui/home`; render approved UiState and delegate actions rather than renewing credentials from a composable |
 | Persist a receive toggle | `domain/pairing` owns the operation; `data/storage` atomically updates the snapshot; UI observes committed state |
-| Consume a new service field | Update pinned release inputs, regenerate, then map in `data/service`; keep generated DTOs out of UI and storage |
+| Consume a new service field | Update the configured service release, download/regenerate, then map in `data/service`; keep generated DTOs out of UI and storage |
 | Encrypt a forwarding payload | `platform/crypto` implements the required domain seam; no library-specific crypto objects in screens |
 
 Before accepting a change, review package direction, memory-only sensitive

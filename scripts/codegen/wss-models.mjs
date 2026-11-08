@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { Parser, isAsyncAPIDocument } from "@asyncapi/parser";
 import { AsyncAPIInputProcessor, InputProcessor, KotlinGenerator } from "@asyncapi/modelina";
-import { readContracts } from "./contracts.mjs";
+
+const source = JSON.parse(
+  readFileSync(new URL("../../config/codegen/service-contracts.json", import.meta.url), "utf8"),
+);
+const input = new URL(
+  `../../build/contracts/service/${source.repository}/${source.releaseTag}/${source.asyncapi}`,
+  import.meta.url,
+);
 
 // shortcut: Modelina 5.10.1 gates out parsed 3.1 documents; remove when upstream supports them.
 class ParsedAsyncAPI31 extends AsyncAPIInputProcessor {
@@ -38,9 +44,8 @@ const serializable = {
 };
 
 export async function wssModels() {
-  const { directory } = readContracts();
   const { document, diagnostics } = await new Parser().parse(
-    readFileSync(join(directory, "asyncapi.yaml"), "utf8"),
+    readFileSync(input, "utf8"),
   );
   assert.ok(document, JSON.stringify(diagnostics));
   assert.ok(!diagnostics.some((diagnostic) => diagnostic.severity === 0), JSON.stringify(diagnostics));

@@ -24,9 +24,32 @@ val npmCi = tasks.register<Exec>("npmCi") {
     }
 }
 
-val verifyServiceContracts = tasks.register<Exec>("verifyServiceContracts") {
-    dependsOn(npmCi)
-    commandLine("node", "scripts/codegen/contracts.mjs")
+val contractConfig = file("config/codegen/service-contracts.json")
+val contractSource = JsonSlurper().parse(contractConfig) as Map<*, *>
+val contractRepository = contractSource["repository"] as String
+val contractRelease = contractSource["releaseTag"] as String
+val openApiAsset = contractSource["openapi"] as String
+val asyncApiAsset = contractSource["asyncapi"] as String
+val contractDirectory = layout.buildDirectory.dir(
+    "contracts/service/$contractRepository/$contractRelease"
+)
+
+val downloadServiceContracts = tasks.register<Exec>("downloadServiceContracts") {
+    inputs.file(contractConfig)
+    outputs.files(
+        contractDirectory.map {
+            it.file(openApiAsset)
+        },
+        contractDirectory.map { it.file(asyncApiAsset) }
+    )
+    commandLine(
+        "gh", "release", "download", contractRelease,
+        "--repo", contractRepository,
+        "--pattern", openApiAsset,
+        "--pattern", asyncApiAsset,
+        "--dir", contractDirectory.get().asFile,
+        "--clobber"
+    )
 }
 
 val httpTemplates = layout.buildDirectory.dir("codegen/templates")
@@ -51,23 +74,19 @@ val prepareHttpTemplates = tasks.register("prepareHttpTemplates") {
 }
 
 val generateServiceHttp = tasks.register<JavaExec>("generateServiceHttp") {
-    dependsOn(verifyServiceContracts, prepareHttpTemplates)
+    dependsOn(downloadServiceContracts, prepareHttpTemplates)
     classpath = openApiGenerator
     mainClass.set("org.openapitools.codegen.OpenAPIGenerator")
-    inputs.dir("contracts/service")
+    inputs.file(contractConfig)
+    inputs.file(contractDirectory.map { it.file(openApiAsset) })
     inputs.file("config/codegen/openapi.json")
     inputs.dir(httpTemplates)
     inputs.property("generatorVersion", libs.versions.openapi.generator.get())
     val output = layout.buildDirectory.dir("generated/service/http")
     outputs.dir(output)
-    val release = (
-        JsonSlurper().parse(
-            file("contracts/service/manifest.json")
-        ) as Map<*, *>
-        )["releaseTag"] as String
     args(
         "generate", "-g", "kotlin",
-        "-i", file("contracts/service/$release/openapi.yaml"),
+        "-i", contractDirectory.get().file(openApiAsset).asFile,
         "-c", file("config/codegen/openapi.json"),
         "-t", httpTemplates.get().asFile,
         "-o", output.get().asFile
@@ -95,8 +114,9 @@ val generateServiceHttp = tasks.register<JavaExec>("generateServiceHttp") {
 }
 
 val generateServiceWss = tasks.register<Exec>("generateServiceWss") {
-    dependsOn(verifyServiceContracts)
-    inputs.dir("contracts/service")
+    dependsOn(downloadServiceContracts, npmCi)
+    inputs.file(contractConfig)
+    inputs.file(contractDirectory.map { it.file(asyncApiAsset) })
     inputs.dir("scripts/codegen")
     inputs.file("package-lock.json")
     outputs.dir(layout.buildDirectory.dir("generated/service/wss"))
