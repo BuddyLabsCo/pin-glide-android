@@ -1,0 +1,14 @@
+{
+  "library": "jvm-okhttp4",
+  "apiPackage": "com.buddylabs.pinglide.generated.http.api",
+  "modelPackage": "com.buddylabs.pinglide.generated.http.model",
+  "packageName": "com.buddylabs.pinglide.generated.http",
+  "additionalProperties": {
+    "serializationLibrary": "kotlinx_serialization",
+    "useCoroutines": true,
+    "dateLibrary": "string",
+    "enumUnknownDefaultCase": true,
+    "omitGradleWrapper": true,
+    "sourceFolder": "src/main/kotlin"
+  }
+}

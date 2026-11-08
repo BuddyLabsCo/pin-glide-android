@@ -1,0 +1,6 @@
+{
+  "repository": "BuddyLabsCo/pin-glide-service",
+  "releaseTag": "v1.0.1",
+  "openapi": "openapi.yaml",
+  "asyncapi": "asyncapi.yaml"
+}

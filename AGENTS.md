@@ -1,10 +1,8 @@
-## Language
-
-Use Chinese in chat and English in local files.
-For issue tracker content, match existing items; if none exist, ask first.
-Explicit user language instructions override these defaults.
-
 ## Agent skills
+
+### Code architecture
+
+Before adding, moving, reviewing, or extracting runtime code, read `docs/code-architecture.md` for code placement, dependency direction, and ownership boundaries.
 
 ### Issue tracker
 
@@ -12,7 +10,7 @@ Track issues in GitHub Issues. Read `docs/agents/issue-tracker.md` before issue 
 
 ### Triage labels
 
-Use the default five triage labels. Read `docs/agents/triage-labels.md` before applying labels.
+Read `docs/agents/triage-labels.md` before labeling issues or organizing E2E work. It defines the five triage statuses, E2E issue types and their parent-child relationships.
 
 ### Domain docs
 
