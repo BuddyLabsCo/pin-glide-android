@@ -6,6 +6,14 @@ plugins {
     alias(libs.plugins.serialization)
 }
 
+val releaseSigningInputs = listOf(
+    "PINGLIDE_SIGNING_STORE_FILE",
+    "PINGLIDE_SIGNING_STORE_PASSWORD",
+    "PINGLIDE_SIGNING_KEY_ALIAS",
+    "PINGLIDE_SIGNING_KEY_PASSWORD"
+).associateWith { providers.environmentVariable(it).orNull }
+val missingReleaseSigningInputs = releaseSigningInputs.filterValues { it.isNullOrBlank() }.keys
+
 android {
     namespace = "com.buddylabs.pinglide"
     compileSdk = 37
@@ -16,6 +24,21 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = releaseSigningInputs["PINGLIDE_SIGNING_STORE_FILE"]?.let { file(it) }
+            storePassword = releaseSigningInputs["PINGLIDE_SIGNING_STORE_PASSWORD"]
+            keyAlias = releaseSigningInputs["PINGLIDE_SIGNING_KEY_ALIAS"]
+            keyPassword = releaseSigningInputs["PINGLIDE_SIGNING_KEY_PASSWORD"]
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("release")
+        }
     }
 
     buildFeatures {
@@ -47,6 +70,15 @@ android {
 
 tasks.named("preBuild") {
     dependsOn(rootProject.tasks.named("generateServiceClients"))
+}
+
+tasks.matching { it.name == "packageRelease" || it.name == "signReleaseBundle" }.configureEach {
+    doFirst {
+        check(missingReleaseSigningInputs.isEmpty()) {
+            "Missing release signing inputs: ${missingReleaseSigningInputs.joinToString()}. " +
+                "See docs/release.md."
+        }
+    }
 }
 
 kotlin {
