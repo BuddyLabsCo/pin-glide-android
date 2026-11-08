@@ -1,4 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Pin Glide</string>
+    <string name="app_name">鹊信</string>
+    <string name="brand_wordmark">PIN GLIDE</string>
+    <string name="welcome_headline">消息跨屏，</string>
+    <string name="welcome_headline_accent">实时无界</string>
+    <string name="welcome_description">消息自动推送到目标设备，全程安全加密。</string>
+    <string name="start_setup">开始设置</string>
+    <string name="privacy_title">隐私与数据处理</string>
+    <string name="privacy_heading">零数据保留</string>
+    <string name="privacy_intro">鹊信不会创建短信或验证码的转发历史，也不会把明文上传到鹊信服务。</string>
+    <string name="privacy_processing_title">短信与验证码处理</string>
+    <string name="privacy_processing_body">短信正文和验证码只在当前处理过程中存在于内存，完成或失败后释放。需要提取验证码时，短信会从本机直接发送至百炼模型服务；即使提取失败，仍会加密转发原始短信。</string>
+    <string name="privacy_keys_title">仅客户端持有密钥</string>
+    <string name="privacy_keys_body">配对密钥只由配对的客户端持有，本机副本和模型凭据由 Android Keystore 保护。它们不会写入日志或 URL，配对密钥不会上传到鹊信服务。模型凭据仅用于向模型服务认证。</string>
+    <string name="privacy_routing_title">鹊信服务只路由密文</string>
+    <string name="privacy_routing_body">短信正文和验证码在本机为各目标设备独立加密，鹊信服务无法读取明文或客户端加密密钥。</string>
+    <string name="privacy_diagnostics_title">安全的本地诊断</string>
+    <string name="privacy_diagnostics_body">诊断只保留时间、结果类别、状态码、请求 ID 和目标数量等非内容元数据，不记录短信、验证码、密文、凭据或密钥。</string>
+    <string name="privacy_backup_title">备份与重新安装</string>
+    <string name="privacy_backup_body">本机身份、凭据和配对密钥不参与云备份或设备迁移。卸载应用或清除应用数据会丢失这些数据，需要重新登录并重新配对目标设备，无法从备份恢复。</string>
+    <string name="privacy_dismiss">知道了</string>
+    <string name="close">关闭</string>
+    <string name="setup_step">第 1 步，共 4 步</string>
+    <string name="setup_sms_title">接收短信</string>
+    <string name="setup_sms_description">允许鹊信读取到达的新短信。</string>
 </resources>
