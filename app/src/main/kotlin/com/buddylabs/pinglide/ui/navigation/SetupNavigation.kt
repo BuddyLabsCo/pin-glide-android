@@ -20,8 +20,12 @@ import com.buddylabs.pinglide.ui.onboarding.WelcomeScreen
 
 private enum class SetupDestination { Welcome, Sms, SmsDenied, Battery, QqLogin }
 
-private fun SetupState.destination(smsGranted: Boolean): SetupDestination = when {
+private fun SetupState.destination(
+    smsGranted: Boolean,
+    smsRequestPending: Boolean
+): SetupDestination = when {
     !started -> SetupDestination.Welcome
+    !smsGranted && smsRequestPending -> SetupDestination.Sms
     !smsGranted && (smsRequested || smsCompleted) -> SetupDestination.SmsDenied
     !smsGranted -> SetupDestination.Sms
     !batteryAcknowledged -> SetupDestination.Battery
@@ -48,7 +52,8 @@ fun SetupNavigation(
         }
     }
     BackHandler(onBack = onBackground)
-    when (setup.destination(smsGranted)) {
+    val destination = setup.destination(smsGranted, smsRequestPending)
+    when (destination) {
         SetupDestination.Welcome -> WelcomeScreen(
             onStartSetup = {
                 progress.start()
@@ -58,7 +63,7 @@ fun SetupNavigation(
         )
 
         SetupDestination.Sms, SetupDestination.SmsDenied -> SmsPermissionScreen(
-            denied = setup.destination(smsGranted) == SetupDestination.SmsDenied,
+            denied = destination == SetupDestination.SmsDenied,
             requestPending = smsRequestPending,
             onRequest = {
                 progress.recordSmsRequest()

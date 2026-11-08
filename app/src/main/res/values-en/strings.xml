@@ -21,6 +21,7 @@
     <string name="privacy_backup_body">Local identity, credentials and Pairing keys are excluded from cloud backups and device transfers. Uninstalling or clearing app data loses them. Sign in and pair your target devices again; backups cannot restore them.</string>
     <string name="privacy_dismiss">Got it</string>
     <string name="close">Close</string>
+    <string name="setup_title">Complete setup</string>
     <string name="setup_step">Step %1$d of 4</string>
     <string name="setup_sms_title">Receive SMS</string>
     <string name="setup_sms_description">Allow Pin Glide to read new incoming SMS messages.</string>
