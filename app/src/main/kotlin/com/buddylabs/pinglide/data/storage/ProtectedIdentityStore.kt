@@ -183,12 +183,15 @@ class ProtectedIdentityStore(context: Context) :
 
     override suspend fun updateRenewal(
         expected: IdentitySnapshot,
-        replacement: IdentitySnapshot
+        replacement: IdentitySnapshot,
+        attempt: LoginAttempt
     ): Boolean = withContext(Dispatchers.IO) {
         writer.withLock {
             storageOperation {
                 val (document, original, alias) = load()
                 if (original.generation != expected.generation ||
+                    original.identity?.accountId != expected.identity?.accountId ||
+                    original.identity?.senderId != expected.identity?.senderId ||
                     original.renewal != expected.renewal ||
                     original.refreshState != expected.refreshState
                 ) {
@@ -222,7 +225,13 @@ class ProtectedIdentityStore(context: Context) :
                         "refreshState" to json.encodeToJsonElement(replacement.refreshState)
                     )
                 )
-                persist(next, alias, LoginAttempt())
+                persist(
+                    next,
+                    alias,
+                    attempt,
+                    registrationRevoked =
+                        replacement.refreshState == RefreshState.RegistrationRevoked
+                )
             }
         }
     }
@@ -235,14 +244,25 @@ class ProtectedIdentityStore(context: Context) :
         writer.withLock {
             storageOperation {
                 val (document, original, alias) = load()
-                check(original.generation == expectedGeneration && original.identity == null)
-                check(original.generation == 0L)
+                if (original.generation != expectedGeneration) return@storageOperation false
+                val previous = original.identity
+                if (previous == null) {
+                    check(original.generation == 0L)
+                } else {
+                    check(original.refreshState != RefreshState.RegistrationRevoked)
+                    require(
+                        identity.accountId == previous.accountId &&
+                            identity.senderId == previous.senderId
+                    )
+                }
                 identity.validate(Instant.now(), requireFresh = true)
                 val next = JsonObject(
                     document + mapOf(
                         "version" to JsonPrimitive(1),
                         "generation" to JsonPrimitive(Math.addExact(original.generation, 1)),
-                        "identity" to json.encodeToJsonElement(identity)
+                        "identity" to json.encodeToJsonElement(identity),
+                        "renewal" to JsonNull,
+                        "refreshState" to json.encodeToJsonElement(RefreshState.Active)
                     )
                 )
                 persist(next, alias, attempt)
@@ -278,23 +298,36 @@ class ProtectedIdentityStore(context: Context) :
         )
     }
 
-    private fun persist(document: JsonObject, alias: String?, attempt: LoginAttempt): Boolean {
+    private fun persist(
+        document: JsonObject,
+        alias: String?,
+        attempt: LoginAttempt,
+        registrationRevoked: Boolean = false
+    ): Boolean {
         val plaintext = json.encodeToString(document).toByteArray(Charsets.UTF_8)
         val protected = try {
             protection.seal(plaintext, alias)
         } finally {
             plaintext.fill(0)
         }
-        return write(json.encodeToString(protected).toByteArray(Charsets.UTF_8), attempt)
+        return write(
+            json.encodeToString(protected).toByteArray(Charsets.UTF_8),
+            attempt,
+            registrationRevoked
+        )
     }
 
-    private fun write(bytes: ByteArray, attempt: LoginAttempt): Boolean {
+    private fun write(
+        bytes: ByteArray,
+        attempt: LoginAttempt,
+        registrationRevoked: Boolean
+    ): Boolean {
         val pending = File(file.parentFile, "identity.snapshot.new")
         FileOutputStream(pending).use { stream ->
             stream.write(bytes)
             stream.fd.sync()
         }
-        return attempt.commit {
+        return attempt.commit(registrationRevoked) {
             Files.move(
                 pending.toPath(),
                 file.toPath(),

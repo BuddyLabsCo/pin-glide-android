@@ -44,6 +44,16 @@ class OwnPairings(
     suspend fun refresh() {
         if (!refreshGate.tryLock()) return
         try {
+            refreshCurrent()
+        } finally {
+            refreshGate.unlock()
+        }
+    }
+
+    suspend fun synchronize() = refreshGate.withLock { refreshCurrent() }
+
+    private suspend fun refreshCurrent() {
+        try {
             stateGate.withLock {
                 presence = emptyMap()
                 publish(store.readPairings(), refreshing = true)
@@ -61,11 +71,7 @@ class OwnPairings(
             refreshFailed()
         } finally {
             withContext(NonCancellable) {
-                try {
-                    stateGate.withLock { mutableState.value = state.value.copy(refreshing = false) }
-                } finally {
-                    refreshGate.unlock()
-                }
+                stateGate.withLock { mutableState.value = state.value.copy(refreshing = false) }
             }
         }
     }

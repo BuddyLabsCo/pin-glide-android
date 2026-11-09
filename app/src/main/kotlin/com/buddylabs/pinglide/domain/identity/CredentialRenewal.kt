@@ -6,11 +6,13 @@ import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 class CredentialRenewal(
     private val store: IdentityStore,
@@ -41,6 +43,22 @@ class CredentialRenewal(
             )
             val updated = invalidate(current, failure)
             requireAuthority(updated)
+        }
+    }
+
+    suspend fun revokeRestoration(original: IdentitySnapshot, attempt: LoginAttempt) {
+        withContext(NonCancellable) {
+            gate.withLock {
+                val revoked = IdentitySnapshot(
+                    original.generation,
+                    original.identity,
+                    original.renewal,
+                    RefreshState.RegistrationRevoked
+                )
+                if (store.updateRenewal(original, revoked, attempt)) {
+                    mutableState.value = AuthorizationState.RegistrationRevoked
+                }
+            }
         }
     }
 

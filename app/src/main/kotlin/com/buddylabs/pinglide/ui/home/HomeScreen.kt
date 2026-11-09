@@ -56,6 +56,7 @@ fun HomeScreen(
 ) {
     val readiness = state.readiness(smsGranted)
     val action by home.action.collectAsState()
+    val restoration by home.loginRestoration.collectAsState()
     val listState = rememberLazyListState()
     var selectedId by rememberSaveable(state.owner) { mutableStateOf<String?>(null) }
     var lastSelectedId by rememberSaveable(state.owner) { mutableStateOf<String?>(null) }
@@ -108,8 +109,9 @@ fun HomeScreen(
             lastSelectedId = it
             selectedId = it
         },
-        onAdd, lastSelectedId, rowFocus, headingFocus, listState
+        onAdd, home::restoreLogin, lastSelectedId, rowFocus, headingFocus, listState
     )
+    LoginRestorationNotice(restoration, state.refreshing, home::dismissLoginNotice)
     SmsRecoveryNotice(state, smsGranted, smsRecovery, home::dismissSmsFeedback)
     if (selected != null) {
         TargetDetailsSheet(
@@ -139,11 +141,13 @@ private fun HomeContent(
     onSelect: (String, Boolean) -> Unit,
     onOpen: (String) -> Unit,
     onAdd: () -> Unit,
+    onRestoreLogin: () -> Unit,
     lastSelectedId: String?,
     rowFocus: FocusRequester,
     headingFocus: FocusRequester,
     listState: LazyListState
 ) {
+    LaunchedEffect(Unit) { headingFocus.requestFocus() }
     ScreenLayout {
         Text(
             stringResource(R.string.app_name),
@@ -165,12 +169,14 @@ private fun HomeContent(
                         smsGranted,
                         smsRecovery,
                         onRestoreSms,
-                        onAdd
+                        onAdd,
+                        onRestoreLogin
                     )
                 }
                 items(state.targets, key = { it.pairingId }) { target ->
                     TargetRow(
                         target,
+                        enabled = readiness != HomeReadiness.LoginRequired,
                         onOpen = {
                             onOpen(target.pairingId)
                         },
@@ -207,11 +213,21 @@ private fun HomeSummary(
     smsGranted: Boolean,
     smsRecovery: SmsRecovery,
     onRestoreSms: () -> Unit,
-    onAdd: () -> Unit
+    onAdd: () -> Unit,
+    onRestoreLogin: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         HomeHero(state, readiness)
-        if (!smsGranted) HomeSmsRecovery(smsRecovery == SmsRecovery.Pending, onRestoreSms)
+        if (readiness == HomeReadiness.LoginRequired) {
+            Button(
+                onClick = onRestoreLogin,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            ) {
+                Text(stringResource(R.string.home_login_action))
+            }
+        } else if (!smsGranted) {
+            HomeSmsRecovery(smsRecovery == SmsRecovery.Pending, onRestoreSms)
+        }
         if (action.result == PairingChange.Removed && action.owner == state.owner) {
             Text(
                 stringResource(R.string.home_removed),

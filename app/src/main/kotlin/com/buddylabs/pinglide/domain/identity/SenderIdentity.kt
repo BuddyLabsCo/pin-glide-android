@@ -45,7 +45,11 @@ class IdentitySnapshot(
 interface IdentityStore {
     suspend fun read(): IdentitySnapshot
 
-    suspend fun updateRenewal(expected: IdentitySnapshot, replacement: IdentitySnapshot): Boolean
+    suspend fun updateRenewal(
+        expected: IdentitySnapshot,
+        replacement: IdentitySnapshot,
+        attempt: LoginAttempt = LoginAttempt()
+    ): Boolean
 
     suspend fun accept(
         expectedGeneration: Long,
@@ -59,14 +63,16 @@ fun interface QqAuthorization {
 }
 
 fun interface LoginService {
-    suspend fun login(code: String, deviceName: String): SenderIdentity
+    suspend fun login(code: String, deviceName: String, senderId: String?): SenderIdentity
 }
 
 class IdentityStorageException : Exception("Protected identity is unavailable")
 
-class QqAuthorizationException : Exception("QQ authorization did not complete")
+class QqAuthorizationException(val cancelled: Boolean = false) :
+    Exception("QQ authorization did not complete")
 
-class LoginServiceException : Exception("QQ login did not complete")
+class LoginServiceException(val registrationRevoked: Boolean = false) :
+    Exception("QQ login did not complete")
 
 class LoginAttempt {
     private var active = true
@@ -75,15 +81,20 @@ class LoginAttempt {
     var accepted: Boolean = false
         private set
 
+    @Volatile
+    var registrationRevoked: Boolean = false
+        private set
+
     @Synchronized
     fun cancel() {
         active = false
     }
 
     @Synchronized
-    fun commit(write: () -> Unit): Boolean {
+    fun commit(registrationRevoked: Boolean = false, write: () -> Unit): Boolean {
         if (!active) return false
         write()
+        this.registrationRevoked = registrationRevoked
         accepted = true
         active = false
         return true

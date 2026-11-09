@@ -123,4 +123,14 @@
     <string name="home_gone_copy">配对可能已在其他位置被移除或撤销。当前操作没有继续执行，需要重新配对后才能向它转发。</string>
     <string name="home_return_list">返回设备列表</string>
     <string name="home_add_again">重新添加设备</string>
+    <string name="home_login_action">使用 QQ 重新登录</string>
+    <string name="home_login_loading">正在验证 QQ 授权</string>
+    <string name="home_login_loading_copy">请稍候，原有配对会保留。</string>
+    <string name="home_login_cancelled">登录未完成</string>
+    <string name="home_login_cancelled_copy">QQ 授权已取消，转发仍暂停。原有配对和名称未改变。</string>
+    <string name="home_login_error">暂时无法登录</string>
+    <string name="home_login_error_copy">暂时无法恢复当前设备的原注册。原有配对仍保留，请稍后重新登录。</string>
+    <string name="home_login_mismatch">请使用原 QQ 账号</string>
+    <string name="home_login_mismatch_copy">本次授权无法恢复当前设备的原注册。请确认使用原 QQ 账号重试；若要切换账号，请返回设置操作。</string>
+    <string name="home_login_restored">登录已恢复，原有配对已保留</string>
 </resources>
