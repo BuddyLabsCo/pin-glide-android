@@ -31,6 +31,19 @@ class CredentialRenewal(
         }
     }
 
+    suspend fun rejectAccess(identity: SenderIdentity, failure: RefreshState) {
+        gate.withLock {
+            val current = store.read()
+            if (current.identity?.management?.token != identity.management.token) return@withLock
+            if (current.refreshState == RefreshState.RegistrationRevoked) requireAuthority(current)
+            require(
+                failure == RefreshState.LoginRequired || failure == RefreshState.RegistrationRevoked
+            )
+            val updated = invalidate(current, failure)
+            requireAuthority(updated)
+        }
+    }
+
     suspend fun <Result> withAccess(
         access: CredentialAccess,
         work: suspend (SenderIdentity) -> Result

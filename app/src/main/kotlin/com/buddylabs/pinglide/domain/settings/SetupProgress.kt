@@ -10,11 +10,14 @@ interface SetupProgress {
     fun completeSmsPrerequisite()
 
     fun acknowledgeBattery()
+
+    fun complete()
 }
 
 data class SetupState(
     val started: Boolean = false,
     val smsRequested: Boolean = false,
     val smsCompleted: Boolean = false,
-    val batteryAcknowledged: Boolean = false
+    val batteryAcknowledged: Boolean = false,
+    val completed: Boolean = false
 )

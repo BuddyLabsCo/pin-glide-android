@@ -13,8 +13,11 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.buddylabs.pinglide.data.storage.SetupPreferences
+import com.buddylabs.pinglide.domain.identity.LoginState
 import com.buddylabs.pinglide.platform.permissions.SetupPermissions
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
+import com.buddylabs.pinglide.ui.home.HomeViewModel
+import com.buddylabs.pinglide.ui.navigation.AcceptedNavigation
 import com.buddylabs.pinglide.ui.navigation.SetupNavigation
 import com.buddylabs.pinglide.ui.onboarding.LoginViewModel
 
@@ -32,6 +35,17 @@ class MainActivity : ComponentActivity() {
         )[LoginViewModel::class.java]
     }
     private var smsGranted by mutableStateOf(false)
+    private val home by lazy {
+        ViewModelProvider(
+            this,
+            object : ViewModelProvider.Factory {
+                override fun <Model : ViewModel> create(modelClass: Class<Model>): Model =
+                    modelClass.cast(
+                        HomeViewModel((application as PinGlideApplication).ownPairings)
+                    )!!
+            }
+        )[HomeViewModel::class.java]
+    }
     private var smsRequestPending by mutableStateOf(false)
     private val smsPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -49,25 +63,34 @@ class MainActivity : ComponentActivity() {
         setContent {
             PinGlideTheme {
                 val loginState by login.state.collectAsState()
-                SetupNavigation(
+                AcceptedNavigation(
                     progress = progress,
                     smsGranted = smsGranted,
-                    smsRequestPending = smsRequestPending,
-                    onRequestSms = {
-                        if (!smsRequestPending) {
-                            smsRequestPending = true
-                            smsPermissionRequest.launch(Manifest.permission.RECEIVE_SMS)
-                        }
-                    },
                     onCheckSms = ::checkSmsPermission,
-                    onApplicationSettings = permissions::openApplicationSettings,
-                    onBatterySettings = permissions::openBatterySettings,
                     loginState = loginState,
-                    onLogin = login::signIn,
-                    onCancelLogin = login::cancel,
-                    onRetryIdentity = login::restore,
+                    home = home,
                     onBackground = { moveTaskToBack(true) }
-                )
+                ) {
+                    SetupNavigation(
+                        progress = progress,
+                        smsGranted = smsGranted,
+                        smsRequestPending = smsRequestPending,
+                        onRequestSms = {
+                            if (!smsRequestPending) {
+                                smsRequestPending = true
+                                smsPermissionRequest.launch(Manifest.permission.RECEIVE_SMS)
+                            }
+                        },
+                        onCheckSms = ::checkSmsPermission,
+                        onApplicationSettings = permissions::openApplicationSettings,
+                        onBatterySettings = permissions::openBatterySettings,
+                        loginState = loginState,
+                        onLogin = login::signIn,
+                        onCancelLogin = login::cancel,
+                        onRetryIdentity = login::restore,
+                        onBackground = { moveTaskToBack(true) }
+                    )
+                }
             }
         }
     }
@@ -75,6 +98,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         checkSmsPermission()
+        if (login.state.value == LoginState.FirstDevice) home.refresh()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
