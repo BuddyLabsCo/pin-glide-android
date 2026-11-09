@@ -48,7 +48,7 @@ class ExplicitLogin(
             val code = authorization.authorize()
             if (attempt !== current) return
             require(code.isNotBlank())
-            val identity = service.login(code, name)
+            val identity = service.login(code, name, senderId = null)
             if (attempt !== current) return
             identity.validate(clock.instant(), requireFresh = true)
             check(store.accept(snapshot.generation, identity, current))

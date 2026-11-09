@@ -235,14 +235,25 @@ class ProtectedIdentityStore(context: Context) :
         writer.withLock {
             storageOperation {
                 val (document, original, alias) = load()
-                check(original.generation == expectedGeneration && original.identity == null)
-                check(original.generation == 0L)
+                if (original.generation != expectedGeneration) return@storageOperation false
+                val previous = original.identity
+                if (previous == null) {
+                    check(original.generation == 0L)
+                } else {
+                    check(original.refreshState != RefreshState.RegistrationRevoked)
+                    require(
+                        identity.accountId == previous.accountId &&
+                            identity.senderId == previous.senderId
+                    )
+                }
                 identity.validate(Instant.now(), requireFresh = true)
                 val next = JsonObject(
                     document + mapOf(
                         "version" to JsonPrimitive(1),
                         "generation" to JsonPrimitive(Math.addExact(original.generation, 1)),
-                        "identity" to json.encodeToJsonElement(identity)
+                        "identity" to json.encodeToJsonElement(identity),
+                        "renewal" to JsonNull,
+                        "refreshState" to json.encodeToJsonElement(RefreshState.Active)
                     )
                 )
                 persist(next, alias, attempt)

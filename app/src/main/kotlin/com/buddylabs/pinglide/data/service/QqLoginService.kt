@@ -16,9 +16,15 @@ import okhttp3.Call
 class QqLoginService(baseUrl: String, client: Call.Factory) : LoginService {
     private val api = IdentityApi(baseUrl, identityCalls(client))
 
-    override suspend fun login(code: String, deviceName: String): SenderIdentity {
+    override suspend fun login(
+        code: String,
+        deviceName: String,
+        senderId: String?
+    ): SenderIdentity {
         val response = try {
-            api.postAuthQQWithHttpInfo(QQLoginRequest(deviceName = deviceName, qqCode = code))
+            api.postAuthQQWithHttpInfo(
+                QQLoginRequest(deviceName = deviceName, qqCode = code, senderId = senderId)
+            )
         } catch (failure: Exception) {
             when (failure) {
                 is IOException, is SerializationException ->

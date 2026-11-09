@@ -29,7 +29,7 @@ class QqAuthorizationActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
-                override fun handleOnBackPressed() = finishAuthorization()
+                override fun handleOnBackPressed() = finishAuthorization(cancelled = true)
             }
         )
         if (savedInstanceState == null) startAuthorization()
@@ -58,11 +58,11 @@ class QqAuthorizationActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        if (isFinishing) authorization.complete(requestId, null)
+        if (isFinishing) authorization.complete(requestId, null, cancelled = true)
         super.onDestroy()
     }
 
-    private fun finishAuthorization() {
-        main.post { authorization.complete(requestId, null) }
+    private fun finishAuthorization(cancelled: Boolean = false) {
+        main.post { authorization.complete(requestId, null, cancelled) }
     }
 }

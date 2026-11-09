@@ -29,6 +29,7 @@ import java.time.format.FormatStyle
 @Composable
 internal fun TargetRow(
     target: TargetDevice,
+    enabled: Boolean,
     onOpen: () -> Unit,
     onSelect: (Boolean) -> Unit,
     modifier: Modifier = Modifier
@@ -42,6 +43,7 @@ internal fun TargetRow(
             modifier.weight(
                 1f
             ).clickable(
+                enabled = enabled,
                 role = Role.Button,
                 onClickLabel = stringResource(R.string.home_details),
                 onClick = onOpen
@@ -62,7 +64,7 @@ internal fun TargetRow(
         Switch(
             checked = target.enabled,
             onCheckedChange = onSelect,
-            enabled = target.keyUsable,
+            enabled = enabled && target.keyUsable,
             modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = switchLabel }
         )
     }

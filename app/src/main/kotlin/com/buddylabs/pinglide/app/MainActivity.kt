@@ -41,7 +41,9 @@ class MainActivity : ComponentActivity() {
             object : ViewModelProvider.Factory {
                 override fun <Model : ViewModel> create(modelClass: Class<Model>): Model =
                     modelClass.cast(
-                        HomeViewModel((application as PinGlideApplication).ownPairings)
+                        (application as PinGlideApplication).let {
+                            HomeViewModel(it.ownPairings, it.senderRestoration())
+                        }
                     )!!
             }
         )[HomeViewModel::class.java]
