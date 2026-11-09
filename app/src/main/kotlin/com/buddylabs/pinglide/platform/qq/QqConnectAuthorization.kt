@@ -49,12 +49,12 @@ class QqConnectAuthorization(private val context: Context) : QqAuthorization {
         return request.listener
     }
 
-    fun complete(requestId: String, code: String?) {
+    fun complete(requestId: String, code: String?, cancelled: Boolean = false) {
         val request = pending?.takeIf { it.id == requestId } ?: return
         pending = null
         if (request.continuation.isActive) {
             if (code.isNullOrBlank()) {
-                request.continuation.resumeWithException(QqAuthorizationException())
+                request.continuation.resumeWithException(QqAuthorizationException(cancelled))
             } else {
                 request.continuation.resume(code)
             }
@@ -85,7 +85,7 @@ class QqConnectAuthorization(private val context: Context) : QqAuthorization {
             }
 
             override fun onCancel() {
-                main.post { complete(id, null) }
+                main.post { complete(id, null, cancelled = true) }
             }
 
             override fun onWarning(code: Int) = Unit

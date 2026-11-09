@@ -8,8 +8,10 @@ Sender's revocation do not establish this fact.
 
 ## Authority and persistence
 
-`CredentialRenewal.withAccess` applies the common consequence to own operations
-and Refresh. A short non-cancellable transaction records the closed Sender ID,
+`CredentialRenewal` applies the common consequence to own operations, Refresh
+and QQ restoration of the original Sender. Restoration retains definitive proof
+even after cancellation or credential replacement; a different current Sender
+is unaffected. A short non-cancellable transaction records the closed Sender ID,
 advances the identity generation and atomically replaces the protected document
 with a credential-free terminal snapshot. Reconstructing that document removes
 M/U/F, pending renewal, Pairing keys/selections and any other identity-owned

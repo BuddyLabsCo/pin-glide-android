@@ -327,11 +327,13 @@ class OwnPairingsTest {
 
         override suspend fun updateRenewal(
             expected: IdentitySnapshot,
-            replacement: IdentitySnapshot
+            replacement: IdentitySnapshot,
+            attempt: LoginAttempt
         ): Boolean {
             if (authority !== expected) return false
-            authority = replacement
-            return true
+            return attempt.commit(
+                registrationRevoked = replacement.refreshState == RefreshState.RegistrationRevoked
+            ) { authority = replacement }
         }
 
         override suspend fun accept(

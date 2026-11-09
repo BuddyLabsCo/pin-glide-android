@@ -76,7 +76,7 @@ class ExplicitLogin(
             if (attempt !== current) return
             require(code.isNotBlank())
             check(store.read().generation == snapshot.generation)
-            val identity = service.login(code, name)
+            val identity = service.login(code, name, senderId = null)
             if (attempt !== current) return
             identity.validate(clock.instant(), requireFresh = true)
             require(identity.senderId !in snapshot.closedSenderIds)

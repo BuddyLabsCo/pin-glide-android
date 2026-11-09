@@ -2,17 +2,25 @@ package com.buddylabs.pinglide.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.buddylabs.pinglide.domain.identity.RestorationState
+import com.buddylabs.pinglide.domain.identity.SenderRestoration
 import com.buddylabs.pinglide.domain.pairing.HomeState
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
 import com.buddylabs.pinglide.domain.pairing.PairingChange
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class SmsRecovery { Idle, Pending, Denied, Granted, SettingsUnavailable }
 
-class HomeViewModel(private val pairings: OwnPairings) : ViewModel() {
+class HomeViewModel(private val pairings: OwnPairings, private val restoration: SenderRestoration) :
+    ViewModel() {
     val state = pairings.state
+    val loginRestoration = restoration.state
+    private var loginOperation: Job? = null
     private val mutableAction = MutableStateFlow(TargetAction())
     val action = mutableAction.asStateFlow()
     private val mutableSmsRecovery = MutableStateFlow(SmsRecovery.Idle)
@@ -20,6 +28,37 @@ class HomeViewModel(private val pairings: OwnPairings) : ViewModel() {
     private val mutablePairingEntryOpen = MutableStateFlow(false)
     val pairingEntryOpen = mutablePairingEntryOpen.asStateFlow()
     private var recoveryGeneration = 0L
+
+    fun restoreLogin() {
+        if (loginOperation?.isActive == true) return
+        loginOperation = viewModelScope.launch {
+            try {
+                restoration.restore()
+            } finally {
+                if (loginRestoration.value == RestorationState.Restored ||
+                    loginRestoration.value == RestorationState.Idle
+                ) {
+                    withContext(NonCancellable) { pairings.synchronize() }
+                }
+            }
+        }
+    }
+
+    fun cancelLogin() {
+        restoration.cancel()
+        loginOperation?.cancel()
+    }
+
+    fun leaveLogin() {
+        restoration.leave()
+        loginOperation?.cancel()
+    }
+
+    fun dismissLoginNotice() = restoration.dismissNotice()
+
+    override fun onCleared() {
+        restoration.cancel()
+    }
 
     fun openPairingEntry() {
         recoveryGeneration++

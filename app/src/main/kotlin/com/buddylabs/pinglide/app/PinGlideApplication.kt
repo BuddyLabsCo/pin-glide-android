@@ -11,6 +11,7 @@ import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.CurrentSenderAuthorization
 import com.buddylabs.pinglide.domain.identity.ExplicitLogin
 import com.buddylabs.pinglide.domain.identity.QqAuthorization
+import com.buddylabs.pinglide.domain.identity.SenderRestoration
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
 import com.buddylabs.pinglide.platform.DeviceInfo
 import com.buddylabs.pinglide.platform.qq.QqConnectAuthorization
@@ -34,6 +35,10 @@ class PinGlideApplication : Application() {
             .build()
     }
     private val loginService by lazy { QqLoginService(BuildConfig.SERVICE_URL, identityClient) }
+    private val authorization = QqAuthorization {
+        check(BuildConfig.SERVICE_URL.isNotBlank())
+        qqAuthorization.authorize()
+    }
     val credentialRenewal by lazy {
         CredentialRenewal(
             identityStore,
@@ -72,10 +77,15 @@ class PinGlideApplication : Application() {
 
     fun explicitLogin() = ExplicitLogin(
         store = identityStore,
-        authorization = QqAuthorization {
-            check(BuildConfig.SERVICE_URL.isNotBlank())
-            qqAuthorization.authorize()
-        },
+        authorization = authorization,
+        service = loginService,
+        renewal = credentialRenewal,
+        deviceName = DeviceInfo(this)::senderName
+    )
+
+    fun senderRestoration() = SenderRestoration(
+        store = identityStore,
+        authorization = authorization,
         service = loginService,
         renewal = credentialRenewal,
         deviceName = DeviceInfo(this)::senderName

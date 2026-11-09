@@ -10,10 +10,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.buddylabs.pinglide.domain.identity.AuthorizationState
 import com.buddylabs.pinglide.domain.identity.LoginState
+import com.buddylabs.pinglide.domain.identity.RestorationState
+import com.buddylabs.pinglide.domain.pairing.HomeState
 import com.buddylabs.pinglide.domain.settings.SetupProgress
+import com.buddylabs.pinglide.ui.home.HomeLoginScreen
 import com.buddylabs.pinglide.ui.home.HomeScreen
 import com.buddylabs.pinglide.ui.home.HomeViewModel
 import com.buddylabs.pinglide.ui.home.RegistrationRevokedScreen
+import com.buddylabs.pinglide.ui.home.SmsRecovery
 import com.buddylabs.pinglide.ui.onboarding.FirstDeviceScreen
 
 @Composable
@@ -63,7 +67,29 @@ internal fun AcceptedNavigation(
         FirstDeviceScreen(onLeave = leaveEntry)
     } else {
         BackHandler(onBack = onBackground)
-        HomeScreen(
+        HomeDestination(state, smsGranted, smsRecovery, home, onRestoreSms)
+    }
+}
+
+@Composable
+private fun HomeDestination(
+    state: HomeState,
+    smsGranted: Boolean,
+    smsRecovery: SmsRecovery,
+    home: HomeViewModel,
+    onRestoreSms: () -> Unit
+) {
+    val restoration by home.loginRestoration.collectAsState()
+    when (restoration) {
+        RestorationState.Loading, RestorationState.Cancelled,
+        RestorationState.Error, RestorationState.AccountMismatch -> HomeLoginScreen(
+            restoration,
+            onRetry = home::restoreLogin,
+            onCancel = home::cancelLogin,
+            onBack = home::leaveLogin
+        )
+
+        RestorationState.Idle, RestorationState.Restored -> HomeScreen(
             state,
             smsGranted,
             smsRecovery,
