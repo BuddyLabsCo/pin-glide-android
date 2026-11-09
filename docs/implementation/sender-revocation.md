@@ -15,10 +15,12 @@ with a credential-free terminal snapshot. Reconstructing that document removes
 M/U/F, pending renewal, Pairing keys/selections and any other identity-owned
 metadata. Language and setup preferences use separate storage.
 
-The workflow blocks authorization and forwarding immediately after observing
-closure, including when persistence fails. A failed disk write cannot guarantee
-durability across process death; the explicit new-registration action retries
-closure persistence before proceeding. Old requests cannot publish success,
+The workflow retains proof for the originating Account/Sender before reading
+storage and blocks its authorization and forwarding immediately, even while the
+read is pending or after storage fails. Authorization and explicit registration
+retry closure persistence once storage recovers. Self-revocation retains its
+Welcome destination. Failed storage access cannot guarantee durability across
+process death until closure is persisted. Old requests cannot publish success,
 replace credentials or write Pairing state after closure. A delayed response
 for a different current Sender cannot close the new registration.
 
@@ -38,7 +40,13 @@ the approved revoked screen surviving offline restart.
 Every foreground return checks the generated `GET /v1/self/account` operation
 with U through shared renewal. This check does not depend on Pairing count,
 selection or local key health. It also runs after successful login/restoration.
-Concurrent foreground checks coalesce; network failures do not infer closure.
+The domain-owned `CurrentSenderAuthorization` workflow coalesces foreground
+checks, selects U authority and handles expected failures. Its narrow check
+interface keeps concrete HTTP and decoding details in the adapter, which returns
+safe domain errors and preserves cancellation. A second credential-expiry
+rejection after renewal is recoverable; it does not close the registration or
+escape the foreground coroutine. Application only assembles and invokes this
+workflow. Network failures do not infer closure.
 
 The revoked screen uses the approved lock, copy and explicit sign-in action,
 Chinese/English resources, light/dark colors, safe insets, scalable text and an
@@ -66,3 +74,19 @@ Debug/Release compilation, repository quality checks, Debug APK assembly and
 the full host test suite pass. No automated test harness or debug seed is added
 to production sources. Real QQ/service/SMS delivery and physical-device
 TalkBack interaction remain outside this verification.
+
+## Review corrections
+
+SPEC-1 probes reproduce operation and Refresh revocation followed by a failed
+storage read. Intake stays blocked before a pending read completes; subsequent
+authorization commits closure without another Refresh. Delayed proof for another
+Account or Sender preserves the current registration. A confirmed self-revocation
+with a failed read retains Welcome when persistence is retried.
+
+SPEC-2 reproduces two generated HTTP `401 credential_expired` replies around a
+successful renewal. The check completes without an uncaught failure and leaves
+the registration Active. STD-1 checks exercise coalescing, later foreground
+checks, recoverable domain errors, safe transport/decoding error mapping and
+propagated cancellation. Storage-read and retry-exhaustion regressions fail
+before their fixes and pass afterward. These disposable probes remain under
+ignored `build/ticket-20/`, alongside the existing acceptance probes.

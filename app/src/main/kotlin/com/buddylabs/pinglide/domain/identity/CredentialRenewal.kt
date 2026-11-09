@@ -22,7 +22,9 @@ class CredentialRenewal(
 ) {
     private val gate = Mutex()
     private var flight: Deferred<IdentitySnapshot>? = null
-    private val closedSenders = mutableSetOf<String>()
+
+    @Volatile
+    private var closedSenders = emptyMap<Pair<String, String>, RefreshState>()
     private val mutableState = MutableStateFlow(AuthorizationState.Checking)
     val state = mutableState.asStateFlow()
 
@@ -37,9 +39,12 @@ class CredentialRenewal(
     suspend fun rejectAccess(identity: SenderIdentity, failure: RefreshState) {
         withContext(NonCancellable) {
             gate.withLock {
+                if (failure == RefreshState.RegistrationRevoked) {
+                    retainRevocation(identity, failure)
+                }
                 val current = store.read()
                 if (failure == RefreshState.RegistrationRevoked) {
-                    closeRegistration(current, identity, selfInitiated = false)
+                    closeRegistration(current, identity)
                     requireAuthority(store.read())
                     return@withLock
                 }
@@ -98,6 +103,7 @@ class CredentialRenewal(
         if (revokedSenderId != identity.senderId) return
         withContext(NonCancellable) {
             gate.withLock {
+                retainRevocation(identity, RefreshState.RegistrationClosed)
                 val current = store.read()
                 if (current.refreshState == RefreshState.RegistrationRevoked &&
                     current.closedSenderIds == expected.closedSenderIds + revokedSenderId
@@ -109,18 +115,14 @@ class CredentialRenewal(
                     if (!store.updateRenewal(current, next)) throw IdentityStorageException()
                     mutableState.value = AuthorizationState.RegistrationClosed
                 } else {
-                    closeRegistration(current, identity, selfInitiated = true)
+                    closeRegistration(current, identity)
                 }
             }
         }
     }
 
     suspend fun beginRegistration(): IdentitySnapshot = gate.withLock {
-        var current = store.read()
-        current.identity?.takeIf { it.senderId in closedSenders }?.let {
-            closeRegistration(current, it, selfInitiated = false)
-            current = store.read()
-        }
+        val current = readAuthority()
         if (!current.refreshState.closesRegistration) throw IdentityStorageException()
         val next = current.copy(
             generation = Math.addExact(current.generation, 1),
@@ -131,23 +133,32 @@ class CredentialRenewal(
         next
     }
 
-    private suspend fun closeRegistration(
-        current: IdentitySnapshot,
-        expected: SenderIdentity,
-        selfInitiated: Boolean
-    ) {
+    fun isRegistrationClosed(identity: SenderIdentity): Boolean =
+        (identity.accountId to identity.senderId) in closedSenders
+
+    private fun retainRevocation(identity: SenderIdentity, destination: RefreshState) {
+        val owner = identity.accountId to identity.senderId
+        if (closedSenders[owner] != RefreshState.RegistrationClosed) {
+            closedSenders = closedSenders + (owner to destination)
+        }
+    }
+
+    private suspend fun readAuthority(): IdentitySnapshot {
+        val current = store.read()
+        val identity = current.identity ?: return current
+        if (!isRegistrationClosed(identity)) return current
+        withContext(NonCancellable) { closeRegistration(current, identity) }
+        return store.read()
+    }
+
+    private suspend fun closeRegistration(current: IdentitySnapshot, expected: SenderIdentity) {
         if (current.identity?.senderId != expected.senderId ||
             current.identity.accountId != expected.accountId
         ) {
             return
         }
-        closedSenders.add(expected.senderId)
         mutableState.value = AuthorizationState.RegistrationRevoked
-        val destination = if (selfInitiated) {
-            RefreshState.RegistrationClosed
-        } else {
-            RefreshState.RegistrationRevoked
-        }
+        val destination = checkNotNull(closedSenders[expected.accountId to expected.senderId])
         val next = IdentitySnapshot(
             generation = Math.addExact(current.generation, 1),
             refreshState = destination,
@@ -157,7 +168,7 @@ class CredentialRenewal(
             requireAuthority(store.read())
             throw AuthorizationException(AuthorizationState.StorageUnavailable)
         }
-        mutableState.value = if (selfInitiated) {
+        mutableState.value = if (destination == RefreshState.RegistrationClosed) {
             AuthorizationState.RegistrationClosed
         } else {
             AuthorizationState.RegistrationRevoked
@@ -171,7 +182,7 @@ class CredentialRenewal(
         try {
             while (true) {
                 val pending = gate.withLock {
-                    val current = store.read()
+                    val current = readAuthority()
                     requireAuthority(current)
                     if (current.renewal == null &&
                         !needsRenewal(current, access, rejectedGeneration)
@@ -213,7 +224,7 @@ class CredentialRenewal(
             snapshot.refreshState == RefreshState.RegistrationRevoked ->
                 unavailable(AuthorizationState.RegistrationRevoked)
 
-            snapshot.identity?.senderId in closedSenders ->
+            snapshot.identity?.let(::isRegistrationClosed) == true ->
                 unavailable(AuthorizationState.RegistrationRevoked)
 
             snapshot.refreshState == RefreshState.RecoveryRequired ->
@@ -337,14 +348,13 @@ class CredentialRenewal(
         pending: IdentitySnapshot,
         failure: RenewalFailure
     ): IdentitySnapshot {
-        val current = store.read()
-        if (failure != RenewalFailure.Revoked &&
-            (
-                current.generation != pending.generation || current.renewal != pending.renewal ||
-                    current.refreshState != pending.refreshState
-                )
-        ) {
-            return current
+        if (failure != RenewalFailure.Revoked) {
+            val current = store.read()
+            if (current.generation != pending.generation || current.renewal != pending.renewal ||
+                current.refreshState != pending.refreshState
+            ) {
+                return current
+            }
         }
         return when (failure) {
             RenewalFailure.Uncertain -> {

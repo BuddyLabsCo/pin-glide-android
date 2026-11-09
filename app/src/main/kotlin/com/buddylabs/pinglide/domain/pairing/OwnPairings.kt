@@ -314,6 +314,7 @@ class OwnPairings(
 
     private fun PairingSnapshot.canSend(initial: PairingSnapshot?): Boolean =
         authority.identity != null && authority.refreshState == RefreshState.Active &&
+            !renewal.isRegistrationClosed(authority.identity) &&
             renewal.state.value !in setOf(
                 AuthorizationState.RegistrationRevoked,
                 AuthorizationState.RegistrationClosed,
