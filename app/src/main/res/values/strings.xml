@@ -102,4 +102,25 @@
     <string name="home_login_copy">当前登录无法自动恢复，转发已暂停。使用原 QQ 账号重新登录，可保留当前设备已有的配对。</string>
     <string name="home_revoked_title">当前设备已被撤销</string>
     <string name="home_revoked_copy">当前发送端注册已永久关闭，转发已停止。</string>
+    <string name="home_details">打开设备详情</string>
+    <string name="home_receiving">接收短信</string>
+    <string name="home_receiving_copy">关闭后仍保留这台设备的配对。</string>
+    <string name="home_key_recovery">密钥丢失或损坏，已关闭此设备转发。请移除此设备的配对，然后重新添加设备。其他设备不受影响。</string>
+    <string name="home_rename">重命名设备</string>
+    <string name="home_alias_help">请输入 1–40 个字符的设备名称，不能与其他已配对设备重名。</string>
+    <string name="home_save">保存</string>
+    <string name="home_remove">移除这台设备的配对</string>
+    <string name="home_remove_title">移除“%1$s”？</string>
+    <string name="home_remove_copy">当前设备会停止向目标设备发送短信。目标设备和其他设备的配对不会被关闭。</string>
+    <string name="home_remove_confirm">移除配对</string>
+    <string name="home_target_pending">正在提交，请稍候</string>
+    <string name="home_target_busy">操作未完成，接收设置未改变。请等待当前操作结束后重试。</string>
+    <string name="home_rename_error">名称保存结果未确认，输入已保留。请检查网络后重试；下次刷新会核对实际结果。</string>
+    <string name="home_remove_error">移除结果未确认，请检查网络后重试。已关闭此设备转发并保留配对密钥，下次刷新会核对实际结果。</string>
+    <string name="home_renamed">设备名称已更新</string>
+    <string name="home_removed">配对已移除</string>
+    <string name="home_gone_title">这台设备的配对已不存在</string>
+    <string name="home_gone_copy">配对可能已在其他位置被移除或撤销。当前操作没有继续执行，需要重新配对后才能向它转发。</string>
+    <string name="home_return_list">返回设备列表</string>
+    <string name="home_add_again">重新添加设备</string>
 </resources>

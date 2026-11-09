@@ -27,10 +27,11 @@ data class HomeState(
     val listed: Boolean = false,
     val refreshing: Boolean = false,
     val failed: Boolean = false,
-    val authorization: AuthorizationState = AuthorizationState.Checking
+    val authorization: AuthorizationState = AuthorizationState.Checking,
+    val owner: Pair<String, String>? = null
 ) {
     fun readiness(smsGranted: Boolean): HomeReadiness {
-        val enabled = targets.filter { it.enabled }
+        val enabled = targets.filter { it.enabled && it.keyUsable }
         return when {
             authorization == AuthorizationState.RegistrationRevoked -> HomeReadiness.Revoked
 

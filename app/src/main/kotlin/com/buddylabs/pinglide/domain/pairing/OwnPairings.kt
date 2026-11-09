@@ -6,6 +6,7 @@ import com.buddylabs.pinglide.domain.identity.CredentialAccess
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.IdentityStorageException
 import com.buddylabs.pinglide.domain.identity.RefreshState
+import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
@@ -92,7 +93,7 @@ class OwnPairings(
                         RefreshState.LoginRequired
                     )
 
-                    PairingFailure.Unavailable -> Unit
+                    PairingFailure.Unavailable, PairingFailure.Gone -> Unit
                 }
                 throw failure
             }
@@ -129,6 +130,200 @@ class OwnPairings(
                 mutableState.value = state.value.copy(failed = true)
             }
         }
+
+    suspend fun rename(expected: HomeState, pairingId: String, alias: String): PairingChange =
+        change(expected, pairingId, alias.trim())
+
+    suspend fun remove(expected: HomeState, pairingId: String): PairingChange =
+        change(expected, pairingId, null)
+
+    private suspend fun change(
+        expected: HomeState,
+        pairingId: String,
+        alias: String?
+    ): PairingChange {
+        try {
+            val starting = beginChange(expected, pairingId, removing = alias == null)
+                ?: return PairingChange.Unavailable
+            val target = starting.items.find { it.pairingId == pairingId }
+                ?: return PairingChange.Gone
+            return refreshGate.withLock { performChange(starting, target, alias) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: PairingServiceException) {
+            return PairingChange.Unavailable
+        } catch (_: AccessExpiredException) {
+            return PairingChange.Unavailable
+        } catch (_: AuthorizationException) {
+            return PairingChange.Unavailable
+        } catch (_: IdentityStorageException) {
+            return PairingChange.Unavailable
+        }
+    }
+
+    private suspend fun beginChange(
+        expected: HomeState,
+        pairingId: String,
+        removing: Boolean
+    ): PairingSnapshot? = stateGate.withLock {
+        if (state.value !== expected) return@withLock null
+        val current = store.readPairings()
+        if (current.authority.identity?.let { it.accountId to it.senderId } != expected.owner) {
+            return@withLock null
+        }
+        if (removing && !store.select(current, pairingId, false)) return@withLock null
+        readCurrent()
+    }
+
+    private suspend fun performChange(
+        starting: PairingSnapshot,
+        target: OwnPairing,
+        alias: String?
+    ): PairingChange = renewal.withAccess(CredentialAccess.Management) { identity ->
+        val requested = store.readPairings()
+        if (requested.authority.identity?.management?.token != identity.management.token ||
+            !requested.sameOwner(starting) || !requested.contains(target)
+        ) {
+            return@withAccess PairingChange.Unavailable
+        }
+        if (alias != null && !validAlias(requested, target.pairingId, alias)) {
+            return@withAccess PairingChange.InvalidAlias
+        }
+        val updated = submitChange(identity, requested, target.pairingId, alias)
+        finishChange(requested, target, updated, alias == null)
+    }
+
+    private suspend fun submitChange(
+        identity: SenderIdentity,
+        requested: PairingSnapshot,
+        pairingId: String,
+        alias: String?
+    ): RemotePairing? = try {
+        if (alias == null) {
+            service.remove(identity.management.token, pairingId)
+            null
+        } else {
+            service.rename(identity.management.token, pairingId, alias)
+        }
+    } catch (failure: PairingServiceException) {
+        if (failure.failure != PairingFailure.Gone) {
+            if (store.readPairings().authority.generation == requested.authority.generation) {
+                when (failure.failure) {
+                    PairingFailure.Revoked -> renewal.rejectAccess(
+                        identity,
+                        RefreshState.RegistrationRevoked
+                    )
+
+                    PairingFailure.LoginRequired -> renewal.rejectAccess(
+                        identity,
+                        RefreshState.LoginRequired
+                    )
+
+                    else -> Unit
+                }
+            }
+            throw failure
+        }
+        null
+    }
+
+    private fun PairingSnapshot.contains(target: OwnPairing): Boolean =
+        items.any { it.pairingId == target.pairingId && it.receiverId == target.receiverId }
+
+    private suspend fun finishChange(
+        requested: PairingSnapshot,
+        target: OwnPairing,
+        updated: RemotePairing?,
+        removing: Boolean
+    ): PairingChange = stateGate.withLock {
+        val current = store.readPairings()
+        if (!current.sameOwner(requested) ||
+            current.authority.generation != requested.authority.generation ||
+            current.authority.refreshState != requested.authority.refreshState ||
+            !current.contains(target)
+        ) {
+            return@withLock PairingChange.Unavailable
+        }
+        if (updated != null &&
+            (updated.pairingId != target.pairingId || updated.receiverId != target.receiverId)
+        ) {
+            return@withLock PairingChange.Unavailable
+        }
+        val items = current.items.mapNotNull {
+            if (it.pairingId == target.pairingId) {
+                updated
+            } else {
+                RemotePairing(it.pairingId, it.receiverId, it.alias, Presence.Unknown, "")
+            }
+        }
+        if (!store.reconcile(current, items)) return@withLock PairingChange.Unavailable
+        presence =
+            if (updated ==
+                null
+            ) {
+                presence - target.pairingId
+            } else {
+                presence + (target.pairingId to updated)
+            }
+        readCurrent()
+        when {
+            removing -> PairingChange.Removed
+            updated == null -> PairingChange.Gone
+            else -> PairingChange.Renamed
+        }
+    }
+
+    private fun validAlias(current: PairingSnapshot, pairingId: String, alias: String): Boolean =
+        validPairingAlias(
+            alias,
+            current.items.filter {
+                it.pairingId != pairingId
+            }.map { it.alias }
+        )
+
+    private fun PairingSnapshot.sameOwner(other: PairingSnapshot): Boolean =
+        authority.identity?.accountId == other.authority.identity?.accountId &&
+            authority.identity?.senderId == other.authority.identity?.senderId
+
+    suspend fun forwardingTargets(initial: PairingSnapshot? = null): PairingSnapshot =
+        stateGate.withLock {
+            val current = readCurrent()
+            val eligible = current.items.filter { target ->
+                target.enabled && target.keyUsable &&
+                    (initial == null || initial.items.any { it.sameKey(target) })
+            }
+            PairingSnapshot(
+                current.authority,
+                current.revision,
+                current.listed,
+                eligible.takeIf { current.canSend(initial) }.orEmpty()
+            )
+        }
+
+    suspend fun testTarget(expected: HomeState, pairingId: String): OwnPairing? =
+        stateGate.withLock {
+            if (state.value !== expected) return@withLock null
+            val initial = snapshot ?: return@withLock null
+            val current = readCurrent()
+            current.items.find { target ->
+                current.canSend(initial) && target.pairingId == pairingId && target.keyUsable &&
+                    initial.items.any { it.sameKey(target) }
+            }
+        }
+
+    private suspend fun readCurrent(): PairingSnapshot {
+        val current = store.readPairings()
+        publish(current, refreshing = state.value.refreshing, failed = state.value.failed)
+        return current
+    }
+
+    private fun OwnPairing.sameKey(other: OwnPairing): Boolean =
+        pairingId == other.pairingId && receiverId == other.receiverId &&
+            keyUsable && key.contentEquals(other.key)
+
+    private fun PairingSnapshot.canSend(initial: PairingSnapshot?): Boolean =
+        authority.identity != null && authority.refreshState == RefreshState.Active &&
+            (initial == null || sameOwner(initial))
 
     private suspend fun refreshFailed() = stateGate.withLock {
         presence = emptyMap()
@@ -169,7 +364,8 @@ class OwnPairings(
             listed = current.listed,
             refreshing = refreshing,
             failed = failed,
-            authorization = renewal.state.value
+            authorization = renewal.state.value,
+            owner = current.authority.identity?.let { it.accountId to it.senderId }
         )
     }
 }

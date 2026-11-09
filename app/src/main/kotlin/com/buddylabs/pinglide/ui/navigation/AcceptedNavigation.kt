@@ -57,10 +57,8 @@ internal fun AcceptedNavigation(
             state,
             smsGranted,
             smsRecovery,
+            home = home,
             onRestoreSms = onRestoreSms,
-            onSmsFeedbackDismiss = home::dismissSmsFeedback,
-            onRefresh = home::refresh,
-            onSelect = { pairingId, enabled -> home.select(state, pairingId, enabled) },
             onAdd = home::openPairingEntry
         )
     }

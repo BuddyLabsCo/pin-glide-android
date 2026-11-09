@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -26,16 +27,25 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 @Composable
-internal fun TargetRow(target: TargetDevice, onOpen: () -> Unit, onSelect: (Boolean) -> Unit) {
+internal fun TargetRow(
+    target: TargetDevice,
+    onOpen: () -> Unit,
+    onSelect: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val name = target.alias.ifBlank { stringResource(R.string.home_target_device) }
     Row(
         Modifier.fillMaxWidth().heightIn(min = 80.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(
-            Modifier.weight(
+            modifier.weight(
                 1f
-            ).clickable(onClick = onOpen).padding(vertical = 16.dp, horizontal = 8.dp),
+            ).clickable(
+                role = Role.Button,
+                onClickLabel = stringResource(R.string.home_details),
+                onClick = onOpen
+            ).padding(vertical = 16.dp, horizontal = 8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(name, style = MaterialTheme.typography.titleMedium)
@@ -53,7 +63,7 @@ internal fun TargetRow(target: TargetDevice, onOpen: () -> Unit, onSelect: (Bool
             checked = target.enabled,
             onCheckedChange = onSelect,
             enabled = target.keyUsable,
-            modifier = Modifier.semantics { contentDescription = switchLabel }
+            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = switchLabel }
         )
     }
 }

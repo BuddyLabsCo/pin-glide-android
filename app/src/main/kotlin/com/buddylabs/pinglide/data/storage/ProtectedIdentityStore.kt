@@ -55,9 +55,9 @@ class ProtectedIdentityStore(context: Context) :
             storageOperation {
                 val (document, authority, alias) = load()
                 val current = pairings(document, authority)
-                if (current.items.any { it.enabled && !it.keyUsable }) {
+                if (current.items.any { !it.keyUsable && (it.enabled || !it.keyFailed) }) {
                     val items = current.items.map {
-                        if (it.keyUsable) it else it.copy(enabled = false)
+                        if (it.keyUsable) it else it.copy(enabled = false, keyFailed = true)
                     }
                     val next = pairingDocument(document, current, items, current.listed)
                     persist(next, alias, LoginAttempt())
@@ -116,9 +116,18 @@ class ProtectedIdentityStore(context: Context) :
     }
 
     private fun pairings(document: JsonObject, authority: IdentitySnapshot): PairingSnapshot {
-        val items =
-            document["pairings"]?.let { json.decodeFromJsonElement<List<OwnPairing>>(it) }
-                ?: emptyList()
+        val items = document["pairings"]?.jsonArray?.map { entry ->
+            val fields = entry.jsonObject
+            val metadata = json.decodeFromJsonElement<OwnPairing>(
+                JsonObject(fields + ("key" to JsonNull))
+            )
+            val key = try {
+                fields["key"]?.let { json.decodeFromJsonElement<ByteArray?>(it) }
+            } catch (_: IllegalArgumentException) {
+                null
+            }
+            metadata.copy(key = key)
+        }.orEmpty()
         if (items.isNotEmpty()) {
             require(
                 document["pairingsAccountId"]?.jsonPrimitive?.content ==
@@ -156,7 +165,9 @@ class ProtectedIdentityStore(context: Context) :
                     items.map {
                         JsonObject(
                             originals[it.pairingId]?.jsonObject.orEmpty() +
-                                json.encodeToJsonElement(it).jsonObject
+                                json.encodeToJsonElement(it).jsonObject.let { fields ->
+                                    if (it.key == null) fields - "key" else fields
+                                }
                         )
                     }
                 )

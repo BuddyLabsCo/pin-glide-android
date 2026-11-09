@@ -17,7 +17,9 @@ import java.time.Instant
 import java.time.ZoneOffset
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -128,6 +130,147 @@ class OwnPairingsTest {
 
         assertTrue(store.readPairings().items.single().enabled)
         assertTrue(home.state.value.failed)
+    }
+
+    @Test
+    fun renameWaitsForRefreshAndUsesCurrentState() {
+        for (refreshFails in listOf(false, true)) {
+            withPendingRefresh { home, store, service ->
+                val change = async(start = CoroutineStart.UNDISPATCHED) {
+                    home.rename(home.state.value, "pairing", "Office")
+                }
+
+                assertFalse(change.isCompleted)
+                assertEquals(0, service.changes)
+                service.finishRefresh(refreshFails)
+
+                assertEquals(PairingChange.Renamed, change.await())
+                assertEquals(1, service.changes)
+                assertEquals("Office", store.readPairings().items.single().alias)
+            }
+        }
+    }
+
+    @Test
+    fun removalTurnsOffPromptlyAndWaitsForRefresh() {
+        for (refreshFails in listOf(false, true)) {
+            withPendingRefresh { home, store, service ->
+                val change = async(start = CoroutineStart.UNDISPATCHED) {
+                    home.remove(home.state.value, "pairing")
+                }
+
+                assertFalse(store.readPairings().items.single().enabled)
+                assertTrue(store.readPairings().items.single().keyUsable)
+                assertFalse(home.state.value.targets.single().enabled)
+                assertFalse(change.isCompleted)
+                assertEquals(0, service.changes)
+                service.finishRefresh(refreshFails)
+
+                assertEquals(PairingChange.Removed, change.await())
+                assertEquals(1, service.changes)
+                assertTrue(store.readPairings().items.isEmpty())
+            }
+        }
+    }
+
+    @Test
+    fun queuedManagementDoesNotSubmitForAnAbsentPairing() {
+        for (removing in listOf(false, true)) {
+            withPendingRefresh { home, store, service ->
+                val change = async(start = CoroutineStart.UNDISPATCHED) {
+                    if (removing) {
+                        home.remove(home.state.value, "pairing")
+                    } else {
+                        home.rename(home.state.value, "pairing", "Office")
+                    }
+                }
+
+                assertFalse(change.isCompleted)
+                service.response.complete(emptyList())
+
+                assertEquals(PairingChange.Unavailable, change.await())
+                assertEquals(0, service.changes)
+                assertTrue(store.readPairings().items.isEmpty())
+            }
+        }
+    }
+
+    @Test
+    fun queuedManagementDoesNotSubmitForAnotherAccountOrSender() {
+        for ((accountId, senderId) in listOf("other" to "sender", "account" to "other")) {
+            withPendingRefresh { home, store, service ->
+                val change = async(start = CoroutineStart.UNDISPATCHED) {
+                    home.rename(home.state.value, "pairing", "Office")
+                }
+
+                assertFalse(change.isCompleted)
+                assertTrue(
+                    store.accept(
+                        store.read().generation,
+                        identity("replacement", now.plusSeconds(3_600), accountId, senderId),
+                        LoginAttempt()
+                    )
+                )
+                service.finishRefresh(false)
+
+                assertEquals(PairingChange.Unavailable, change.await())
+                assertEquals(0, service.changes)
+            }
+        }
+    }
+
+    private fun withPendingRefresh(
+        action: suspend CoroutineScope.(OwnPairings, MemoryStore, PendingService) -> Unit
+    ) = runBlocking {
+        withTimeout(5_000) {
+            val scope = CoroutineScope(coroutineContext + Job())
+            try {
+                val store = MemoryStore(identity("initial", now.plusSeconds(3_600)))
+                val service = PendingService()
+                val home = OwnPairings(store, service, renewal(store, scope), scope)
+                val refresh = launch { home.refresh() }
+                service.requested.await()
+                home.state.first { it.authorization == AuthorizationState.Ready && it.refreshing }
+                action(home, store, service)
+                refresh.join()
+            } finally {
+                scope.cancel()
+            }
+        }
+    }
+
+    private class PendingService : PairingService {
+        val requested = CompletableDeferred<Unit>()
+        val response = CompletableDeferred<List<RemotePairing>>()
+        var changes = 0
+
+        override suspend fun list(managementToken: String): List<RemotePairing> {
+            requested.complete(Unit)
+            return response.await()
+        }
+
+        override suspend fun rename(
+            managementToken: String,
+            pairingId: String,
+            alias: String
+        ): RemotePairing {
+            changes++
+            return RemotePairing(pairingId, "receiver", alias, Presence.Unknown, "")
+        }
+
+        override suspend fun remove(managementToken: String, pairingId: String) {
+            changes++
+        }
+
+        fun finishRefresh(failed: Boolean) {
+            if (failed) {
+                response.completeExceptionally(PairingServiceException(PairingFailure.Unavailable))
+            } else {
+                response.complete(
+                    listOf(RemotePairing("pairing", "receiver", "Refreshed", Presence.Unknown, ""))
+                )
+            }
+        }
     }
 
     private fun withHome(action: suspend (OwnPairings, MemoryStore) -> Unit) = runBlocking {
