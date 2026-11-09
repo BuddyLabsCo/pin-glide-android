@@ -142,13 +142,12 @@ class OwnPairings(
         pairingId: String,
         alias: String?
     ): PairingChange {
-        if (!refreshGate.tryLock()) return PairingChange.Unavailable
         try {
             val starting = beginChange(expected, pairingId, removing = alias == null)
                 ?: return PairingChange.Unavailable
             val target = starting.items.find { it.pairingId == pairingId }
                 ?: return PairingChange.Gone
-            return performChange(starting, target, alias)
+            return refreshGate.withLock { performChange(starting, target, alias) }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: PairingServiceException) {
@@ -159,8 +158,6 @@ class OwnPairings(
             return PairingChange.Unavailable
         } catch (_: IdentityStorageException) {
             return PairingChange.Unavailable
-        } finally {
-            refreshGate.unlock()
         }
     }
 
