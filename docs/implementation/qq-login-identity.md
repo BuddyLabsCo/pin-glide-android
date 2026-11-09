@@ -3,8 +3,8 @@
 Issue #14 implements the QQ step after the SMS prerequisite and battery guidance.
 Ordinary launch only restores local identity. A deliberate Sign in or Retry starts
 QQ Connect server-side authorization and sends its fresh one-use code with the
-automatic Sender name through the generated `postAuthQQ` client. Connection retries
-and redirects are disabled, and the generated request body is marked one-shot to
+automatic Sender name through the generated `postAuthQQWithHttpInfo` client.
+Connection retries and redirects are disabled, and the generated request body is marked one-shot to
 prevent HTTP follow-ups from replaying a consumed code. An uncertain result requires another
 explicit authorization. The service owns QQ AppKey, code exchange and provider tokens.
 
@@ -154,3 +154,31 @@ unresolved static call edges for OkHttp request-body overrides are also reported
 the real HTTP probe exercises those overrides. The ripwire delta is not claimed
 as passing. Live QQ/service enrollment, physical devices and TalkBack speech
 remain unverified.
+
+## Follow-up service-response verification
+
+The remaining S1 finding is resolved at `QqLoginService`. The adapter uses the
+generated response metadata to reject unexpected HTTP outcomes and missing
+credential bundles. Its callback rejects unsupported success media types before
+the generated decoder runs, closes those responses and reports a safe domain
+error. The media check matches the pinned decoder, including its support for an
+absent Content-Type and application JSON suffixes. Cancellation and unrelated
+programmer errors still propagate; generated sources remain unchanged.
+
+Local HTTP probes first reproduced the redirect and HTML failures, then passed
+after the fixes. Six new ignored probes cover redirects, HTML/plain/binary or
+unsupported media types, empty 200/204 responses, malformed/null JSON, successful
+credential mapping, cancellation and programmer-error propagation. Existing
+one-shot replay and underlying-call cancellation probes also pass.
+
+Debug and Release Kotlin compilation and `qualityCheck` pass. The final full
+`:app:test` run with the ignored `build/ticket-14/checks.gradle` init script passes
+all 24 tests: six repository tests, eight local domain probes and ten local service
+probes. The probes remain under ignored `build/ticket-14/`, consistent with the
+ticket scope excluding committed automated tests or harnesses.
+
+The ripwire delta from `a9ec936` reports zero gating warnings and two new
+dead-code warnings for OkHttp `enqueue` and `onResponse` overrides. These are
+external callback edges exercised by the real HTTP probes, without suppression.
+No runtime changes outside the service adapter were needed. Live QQ/service
+enrollment and device/UI checks were not rerun for this service-only correction.
