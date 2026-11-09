@@ -1,22 +1,19 @@
 package com.buddylabs.pinglide.ui.home
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -66,12 +63,11 @@ internal fun SmsRecoveryNotice(
         SmsRecovery.Idle, SmsRecovery.Pending -> return
     }
     val message = stringResource(messageId)
-    val host = remember { SnackbarHostState() }
+    val context = LocalContext.current
     LaunchedEffect(recovery, message, state.refreshing) {
         if (recovery != SmsRecovery.Granted || !state.refreshing) {
-            host.showSnackbar(message, duration = SnackbarDuration.Long)
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
             onDismiss(recovery)
         }
     }
-    SnackbarHost(host, modifier = Modifier.fillMaxWidth().imePadding())
 }

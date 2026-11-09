@@ -14,6 +14,19 @@ class HomeViewModel(private val pairings: OwnPairings) : ViewModel() {
     val state = pairings.state
     private val mutableSmsRecovery = MutableStateFlow(SmsRecovery.Idle)
     val smsRecovery = mutableSmsRecovery.asStateFlow()
+    private val mutablePairingEntryOpen = MutableStateFlow(false)
+    val pairingEntryOpen = mutablePairingEntryOpen.asStateFlow()
+    private var recoveryGeneration = 0L
+
+    fun openPairingEntry() {
+        recoveryGeneration++
+        mutableSmsRecovery.value = SmsRecovery.Idle
+        mutablePairingEntryOpen.value = true
+    }
+
+    fun closePairingEntry() {
+        mutablePairingEntryOpen.value = false
+    }
 
     fun beginSmsRecovery(): Boolean {
         if (smsRecovery.value == SmsRecovery.Pending) return false
@@ -24,9 +37,12 @@ class HomeViewModel(private val pairings: OwnPairings) : ViewModel() {
     fun finishSmsRecovery(granted: Boolean) {
         if (smsRecovery.value != SmsRecovery.Pending) return
         if (granted) {
+            val expectedGeneration = recoveryGeneration
             viewModelScope.launch {
                 pairings.refresh()
-                mutableSmsRecovery.value = SmsRecovery.Granted
+                if (recoveryGeneration == expectedGeneration) {
+                    mutableSmsRecovery.value = SmsRecovery.Granted
+                }
             }
         } else {
             mutableSmsRecovery.value = SmsRecovery.Denied
