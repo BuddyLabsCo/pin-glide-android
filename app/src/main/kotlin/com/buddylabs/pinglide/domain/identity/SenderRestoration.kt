@@ -53,7 +53,13 @@ class SenderRestoration(
         val code = authorization.authorize()
         if (!isCurrent(original, current)) return RestorationState.Idle
         require(code.isNotBlank())
-        val identity = service.login(code, name, saved.senderId)
+        val identity = try {
+            service.login(code, name, saved.senderId)
+        } catch (failure: LoginServiceException) {
+            if (!failure.registrationRevoked) throw failure
+            if (isCurrent(original, current)) renewal.revokeRestoration(original, current)
+            return RestorationState.Idle
+        }
         if (!isCurrent(original, current)) return RestorationState.Idle
         identity.validate(clock.instant(), requireFresh = true)
         if (identity.accountId != saved.accountId) return RestorationState.AccountMismatch
@@ -108,8 +114,11 @@ class SenderRestoration(
 
     private fun finish(current: LoginAttempt, result: RestorationState) {
         if (attempt === current) {
-            mutableState.value =
-                if (current.accepted) RestorationState.Restored else result
+            mutableState.value = when {
+                current.registrationRevoked -> RestorationState.Idle
+                current.accepted -> RestorationState.Restored
+                else -> result
+            }
         }
     }
 }

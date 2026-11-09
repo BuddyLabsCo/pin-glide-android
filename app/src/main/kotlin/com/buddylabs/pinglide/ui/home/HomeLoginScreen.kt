@@ -74,7 +74,7 @@ internal fun HomeLoginScreen(
             Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge)
         }
         Column(
-            Modifier.weight(1f).fillMaxWidth().imePadding().verticalScroll(rememberScrollState())
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                 .padding(vertical = 24.dp).semantics {
                     paneTitle = title
                     liveRegion = LiveRegionMode.Polite
@@ -95,6 +95,8 @@ internal fun HomeLoginScreen(
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center
             )
+        }
+        Column(Modifier.fillMaxWidth().imePadding().padding(vertical = 16.dp)) {
             if (state == RestorationState.Loading) {
                 TextButton(
                     onClick = onCancel,
