@@ -13,11 +13,21 @@ enum class AuthorizationState {
     RecoveryRequired,
     TemporarilyUnavailable,
     StorageUnavailable,
-    RegistrationRevoked
+    RegistrationRevoked,
+    RegistrationClosed
 }
 
 @Serializable
-enum class RefreshState { Active, LoginRequired, RecoveryRequired, RegistrationRevoked }
+enum class RefreshState {
+    Active,
+    LoginRequired,
+    RecoveryRequired,
+    RegistrationRevoked,
+    RegistrationClosed;
+
+    val closesRegistration: Boolean
+        get() = this == RegistrationRevoked || this == RegistrationClosed
+}
 
 @Serializable
 data class RenewalOperation(
@@ -57,3 +67,5 @@ class AuthorizationException(val outcome: AuthorizationState) :
     Exception("Authorization unavailable")
 
 class AccessExpiredException : Exception("Required access expired")
+
+class CurrentSenderRevokedException : Exception("Current Sender registration is closed")

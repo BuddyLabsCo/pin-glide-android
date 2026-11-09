@@ -35,11 +35,12 @@ class SenderIdentity(
     }
 }
 
-class IdentitySnapshot(
+data class IdentitySnapshot(
     val generation: Long = 0,
     val identity: SenderIdentity? = null,
     val renewal: RenewalOperation? = null,
-    val refreshState: RefreshState = RefreshState.Active
+    val refreshState: RefreshState = RefreshState.Active,
+    val closedSenderIds: Set<String> = emptySet()
 )
 
 interface IdentityStore {

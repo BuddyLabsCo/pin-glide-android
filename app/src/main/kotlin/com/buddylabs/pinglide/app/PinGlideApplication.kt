@@ -3,10 +3,12 @@ package com.buddylabs.pinglide.app
 import android.app.Application
 import com.buddylabs.pinglide.BuildConfig
 import com.buddylabs.pinglide.data.service.CredentialRenewalService
+import com.buddylabs.pinglide.data.service.CurrentSenderAuthorizationService
 import com.buddylabs.pinglide.data.service.OwnPairingService
 import com.buddylabs.pinglide.data.service.QqLoginService
 import com.buddylabs.pinglide.data.storage.ProtectedIdentityStore
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
+import com.buddylabs.pinglide.domain.identity.CurrentSenderAuthorization
 import com.buddylabs.pinglide.domain.identity.ExplicitLogin
 import com.buddylabs.pinglide.domain.identity.QqAuthorization
 import com.buddylabs.pinglide.domain.identity.SenderRestoration
@@ -57,9 +59,20 @@ class PinGlideApplication : Application() {
         )
     }
 
+    private val currentSenderAuthorization by lazy {
+        CurrentSenderAuthorization(
+            credentialRenewal,
+            CurrentSenderAuthorizationService(BuildConfig.SERVICE_URL, identityClient)
+        )
+    }
+
     override fun onCreate() {
         super.onCreate()
         processScope.launch { credentialRenewal.recover() }
+    }
+
+    fun checkCurrentSenderAuthorization() {
+        processScope.launch { currentSenderAuthorization.check() }
     }
 
     fun explicitLogin() = ExplicitLogin(

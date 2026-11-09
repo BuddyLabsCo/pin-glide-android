@@ -50,7 +50,7 @@ fun interface PairingService {
         throw PairingServiceException(PairingFailure.Unavailable)
 }
 
-enum class PairingFailure { Unavailable, LoginRequired, Revoked, Gone }
+enum class PairingFailure { Unavailable, LoginRequired, Gone }
 
 enum class PairingChange { Renamed, Removed, Gone, InvalidAlias, Unavailable }
 

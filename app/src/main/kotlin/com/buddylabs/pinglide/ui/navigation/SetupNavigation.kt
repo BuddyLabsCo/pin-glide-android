@@ -24,8 +24,10 @@ private enum class SetupDestination { Welcome, Sms, SmsDenied, Battery, QqLogin 
 private fun SetupState.destination(
     smsGranted: Boolean,
     smsRequestPending: Boolean,
-    identityAccepted: Boolean
+    identityAccepted: Boolean,
+    registrationClosed: Boolean
 ): SetupDestination = when {
+    registrationClosed -> SetupDestination.Welcome
     !started && !identityAccepted -> SetupDestination.Welcome
     !smsGranted && smsRequestPending -> SetupDestination.Sms
     !smsGranted && (smsRequested || smsCompleted || identityAccepted) -> SetupDestination.SmsDenied
@@ -47,6 +49,7 @@ fun SetupNavigation(
     onLogin: () -> Unit,
     onCancelLogin: () -> Unit,
     onRetryIdentity: () -> Unit,
+    onNewRegistration: () -> Unit,
     onBackground: () -> Unit
 ) {
     var setup by remember { mutableStateOf(progress.state) }
@@ -60,7 +63,8 @@ fun SetupNavigation(
     val destination = setup.destination(
         smsGranted,
         smsRequestPending,
-        loginState == LoginState.FirstDevice
+        loginState == LoginState.FirstDevice,
+        loginState == LoginState.Welcome
     )
     val leaveLogin = {
         if (loginState == LoginState.Loading || loginState == LoginState.Error) {
@@ -80,6 +84,7 @@ fun SetupNavigation(
     when (destination) {
         SetupDestination.Welcome -> WelcomeScreen(
             onStartSetup = {
+                onNewRegistration()
                 progress.start()
                 setup = progress.state
             },

@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,6 +75,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             PinGlideTheme {
                 val loginState by login.state.collectAsState()
+                LaunchedEffect(loginState) {
+                    if (loginState == LoginState.FirstDevice) {
+                        (application as PinGlideApplication).checkCurrentSenderAuthorization()
+                    }
+                }
                 AcceptedNavigation(
                     progress = progress,
                     smsGranted = smsGranted,
@@ -81,7 +87,8 @@ class MainActivity : ComponentActivity() {
                     loginState = loginState,
                     home = home,
                     onRestoreSms = ::restoreSmsPermission,
-                    onBackground = { moveTaskToBack(true) }
+                    onBackground = { moveTaskToBack(true) },
+                    onNewRegistration = login::beginRegistration
                 ) {
                     SetupNavigation(
                         progress = progress,
@@ -100,6 +107,7 @@ class MainActivity : ComponentActivity() {
                         onLogin = login::signIn,
                         onCancelLogin = login::cancel,
                         onRetryIdentity = login::restore,
+                        onNewRegistration = login::beginRegistration,
                         onBackground = { moveTaskToBack(true) }
                     )
                 }
@@ -110,6 +118,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         checkSmsPermission()
+        (application as PinGlideApplication).checkCurrentSenderAuthorization()
         if (login.state.value == LoginState.FirstDevice) home.refresh()
     }
 

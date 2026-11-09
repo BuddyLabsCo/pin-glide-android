@@ -5,7 +5,16 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class LoginState { Restoring, Entry, Loading, Error, StorageError, FirstDevice }
+enum class LoginState {
+    Restoring,
+    Entry,
+    Loading,
+    Error,
+    StorageError,
+    FirstDevice,
+    Revoked,
+    Welcome
+}
 
 class ExplicitLogin(
     private val store: IdentityStore,
@@ -17,6 +26,7 @@ class ExplicitLogin(
 ) {
     private val mutableState = MutableStateFlow(LoginState.Restoring)
     val state = mutableState.asStateFlow()
+    val authorizationState = renewal.state
     private var snapshot = IdentitySnapshot()
     private var attempt: LoginAttempt? = null
 
@@ -25,10 +35,27 @@ class ExplicitLogin(
         try {
             snapshot = store.read()
             mutableState.value = when {
+                snapshot.refreshState == RefreshState.RegistrationRevoked -> LoginState.Revoked
+
+                snapshot.refreshState == RefreshState.RegistrationClosed -> LoginState.Welcome
+
                 snapshot.identity != null -> LoginState.FirstDevice
-                snapshot.generation == 0L -> LoginState.Entry
+
+                snapshot.generation == 0L || snapshot.closedSenderIds.isNotEmpty() ->
+                    LoginState.Entry
+
                 else -> LoginState.StorageError
             }
+        } catch (_: IdentityStorageException) {
+            mutableState.value = LoginState.StorageError
+        }
+    }
+
+    suspend fun beginRegistration() {
+        cancel()
+        try {
+            snapshot = renewal.beginRegistration()
+            mutableState.value = LoginState.Entry
         } catch (_: IdentityStorageException) {
             mutableState.value = LoginState.StorageError
         }
@@ -48,9 +75,11 @@ class ExplicitLogin(
             val code = authorization.authorize()
             if (attempt !== current) return
             require(code.isNotBlank())
+            check(store.read().generation == snapshot.generation)
             val identity = service.login(code, name, senderId = null)
             if (attempt !== current) return
             identity.validate(clock.instant(), requireFresh = true)
+            require(identity.senderId !in snapshot.closedSenderIds)
             check(store.accept(snapshot.generation, identity, current))
             renewal.recover()
             if (attempt === current) mutableState.value = LoginState.FirstDevice

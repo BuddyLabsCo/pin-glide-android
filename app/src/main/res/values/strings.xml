@@ -100,7 +100,7 @@
     <string name="home_sms_restored">短信权限已开启，转发已恢复</string>
     <string name="home_login_title">需要重新登录</string>
     <string name="home_login_copy">当前登录无法自动恢复，转发已暂停。使用原 QQ 账号重新登录，可保留当前设备已有的配对。</string>
-    <string name="home_revoked_title">当前设备已被撤销</string>
+    <string name="home_revoked_title">设备注册已撤销</string>
     <string name="home_revoked_copy">当前发送端注册已永久关闭，转发已停止。</string>
     <string name="home_details">打开设备详情</string>
     <string name="home_receiving">接收短信</string>
@@ -123,6 +123,8 @@
     <string name="home_gone_copy">配对可能已在其他位置被移除或撤销。当前操作没有继续执行，需要重新配对后才能向它转发。</string>
     <string name="home_return_list">返回设备列表</string>
     <string name="home_add_again">重新添加设备</string>
+    <string name="registration_revoked_description">当前设备的旧注册已被安全撤销，不能恢复。重新登录会创建新的设备注册，之后需要重新配对设备。</string>
+    <string name="registration_start_again">退出并重新登录</string>
     <string name="home_login_action">使用 QQ 重新登录</string>
     <string name="home_login_loading">正在验证 QQ 授权</string>
     <string name="home_login_loading_copy">请稍候，原有配对会保留。</string>

@@ -29,6 +29,17 @@ class SenderRestoration(
         } catch (cancelled: CancellationException) {
             finish(current, RestorationState.Cancelled)
             throw cancelled
+        } catch (failure: AuthorizationException) {
+            finish(
+                current,
+                if (failure.outcome == AuthorizationState.RegistrationRevoked ||
+                    failure.outcome == AuthorizationState.RegistrationClosed
+                ) {
+                    RestorationState.Idle
+                } else {
+                    RestorationState.Error
+                }
+            )
         } catch (failure: QqAuthorizationException) {
             finish(
                 current,
@@ -57,7 +68,7 @@ class SenderRestoration(
             service.login(code, name, saved.senderId)
         } catch (failure: LoginServiceException) {
             if (!failure.registrationRevoked) throw failure
-            if (isCurrent(original, current)) renewal.revokeRestoration(original, current)
+            renewal.rejectAccess(saved, RefreshState.RegistrationRevoked)
             return RestorationState.Idle
         }
         if (!isCurrent(original, current)) return RestorationState.Idle
@@ -75,7 +86,7 @@ class SenderRestoration(
         return attempt === current && latest.generation == expected.generation &&
             latest.identity?.accountId == expected.identity?.accountId &&
             latest.identity?.senderId == expected.identity?.senderId &&
-            latest.refreshState != RefreshState.RegistrationRevoked
+            !latest.refreshState.closesRegistration
     }
 
     private suspend fun restorationSnapshot(): IdentitySnapshot? {
@@ -89,7 +100,7 @@ class SenderRestoration(
             )
         }
         return store.read().also {
-            check(it.identity != null && it.refreshState != RefreshState.RegistrationRevoked)
+            check(it.identity != null && !it.refreshState.closesRegistration)
         }
     }
 

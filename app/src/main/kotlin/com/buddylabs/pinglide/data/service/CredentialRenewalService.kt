@@ -1,6 +1,7 @@
 package com.buddylabs.pinglide.data.service
 
 import com.buddylabs.pinglide.domain.identity.AccessExpiredException
+import com.buddylabs.pinglide.domain.identity.CurrentSenderRevokedException
 import com.buddylabs.pinglide.domain.identity.ManagementCredential
 import com.buddylabs.pinglide.domain.identity.RefreshCredential
 import com.buddylabs.pinglide.domain.identity.RenewalFailure
@@ -67,8 +68,12 @@ class CredentialRenewalService(baseUrl: String, client: Call.Factory) : RenewalS
     }
 }
 
-fun requireUnexpiredAccess(status: Int, body: Any?) {
-    if (status == 401 && serviceProblem(status, body)?.code == "credential_expired") {
+internal fun requireCurrentSenderAccess(status: Int, body: Any?) {
+    val code = serviceProblem(status, body)?.code
+    if (status == 409 && code == "device_registration_revoked") {
+        throw CurrentSenderRevokedException()
+    }
+    if (status == 401 && code == "credential_expired") {
         throw AccessExpiredException()
     }
 }
