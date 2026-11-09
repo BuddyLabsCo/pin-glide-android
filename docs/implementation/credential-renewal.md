@@ -16,7 +16,9 @@ not trigger that retry.
 - `domain/identity/CredentialRenewal` owns single-flight coordination, operation
   ordering, expiry policy and safe authorization outcomes. Caller cancellation
   does not cancel the shared process operation. Outcomes also settle when the
-  only waiting screen goes away.
+  only waiting screen goes away. If the final reconciliation read fails, the
+  process operation publishes `StorageUnavailable` itself. A successful read
+  still checks the current generation and authority before publishing a failure.
 - `data/service/CredentialRenewalService` maps the generated refresh request and
   complete reply, including operation ID and attempt. The shared identity-call
   adapter preserves one-shot POST bodies, coroutine cancellation and success
@@ -116,3 +118,21 @@ warnings are recorded without a suppression or unrelated extraction; ripwire
 is not claimed as passing. Its static test gate does not account for the ignored
 acceptance probes. Live QQ/service renewal, physical devices and real network
 latency remain unverified.
+
+## Review correction
+
+The review identified a persistent-storage-failure path that could leave the
+observable authorization state at `Renewing` after the last waiter was cancelled.
+An ignored local regression probe reproduces that sequence by waiting for the
+service request, cancelling the sole waiter, failing storage reads/writes, then
+completing the service response. Before the fix it observes `Renewing`; with the
+reconciliation read guarded it observes `StorageUnavailable` after the shared
+operation completes, with no new caller or additional request. All twenty domain
+probes pass, including stale-generation and authority checks.
+
+The review-fix validation passes Debug/Release Kotlin compilation, `qualityCheck`,
+Debug APK assembly and the full host suite (32 tests) using the existing ignored
+init script. The ripwire delta against the reviewed commit has no gating
+regressions and one minor class-size increase for the added handler. Its static
+test gate still reports uncovered callers because it excludes the local probes.
+Emulator checks and live QQ/service renewal were not repeated for this fix.

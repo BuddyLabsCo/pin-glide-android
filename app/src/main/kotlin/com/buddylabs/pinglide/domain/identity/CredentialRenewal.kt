@@ -113,7 +113,11 @@ class CredentialRenewal(
             AuthorizationState.StorageUnavailable
         }
         return gate.withLock {
-            val current = store.read()
+            val current = try {
+                store.read()
+            } catch (_: IdentityStorageException) {
+                unavailable(AuthorizationState.StorageUnavailable)
+            }
             if (current.generation != original.generation) return@withLock current
             requireAuthority(current)
             unavailable(failure)
