@@ -46,7 +46,14 @@ import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
-fun HomeScreen(state: HomeState, smsGranted: Boolean, home: HomeViewModel, onAdd: () -> Unit) {
+fun HomeScreen(
+    state: HomeState,
+    smsGranted: Boolean,
+    smsRecovery: SmsRecovery,
+    home: HomeViewModel,
+    onRestoreSms: () -> Unit,
+    onAdd: () -> Unit
+) {
     val readiness = state.readiness(smsGranted)
     val action by home.action.collectAsState()
     val listState = rememberLazyListState()
@@ -92,7 +99,8 @@ fun HomeScreen(state: HomeState, smsGranted: Boolean, home: HomeViewModel, onAdd
         return
     }
     HomeContent(
-        state, readiness, action, home::refresh, { pairingId, enabled ->
+        state, readiness, action, smsGranted, smsRecovery, onRestoreSms,
+        home::refresh, { pairingId, enabled ->
             home.select(state, pairingId, enabled)
         },
         onOpen = {
@@ -102,6 +110,7 @@ fun HomeScreen(state: HomeState, smsGranted: Boolean, home: HomeViewModel, onAdd
         },
         onAdd, lastSelectedId, rowFocus, headingFocus, listState
     )
+    SmsRecoveryNotice(state, smsGranted, smsRecovery, home::dismissSmsFeedback)
     if (selected != null) {
         TargetDetailsSheet(
             selected,
@@ -123,6 +132,9 @@ private fun HomeContent(
     state: HomeState,
     readiness: HomeReadiness,
     action: TargetAction,
+    smsGranted: Boolean,
+    smsRecovery: SmsRecovery,
+    onRestoreSms: () -> Unit,
     onRefresh: () -> Unit,
     onSelect: (String, Boolean) -> Unit,
     onOpen: (String) -> Unit,
@@ -146,7 +158,15 @@ private fun HomeContent(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item(key = "home-summary") {
-                    HomeSummary(state, readiness, action, onAdd)
+                    HomeSummary(
+                        state,
+                        readiness,
+                        action,
+                        smsGranted,
+                        smsRecovery,
+                        onRestoreSms,
+                        onAdd
+                    )
                 }
                 items(state.targets, key = { it.pairingId }) { target ->
                     TargetRow(
@@ -184,10 +204,14 @@ private fun HomeSummary(
     state: HomeState,
     readiness: HomeReadiness,
     action: TargetAction,
+    smsGranted: Boolean,
+    smsRecovery: SmsRecovery,
+    onRestoreSms: () -> Unit,
     onAdd: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         HomeHero(state, readiness)
+        if (!smsGranted) HomeSmsRecovery(smsRecovery == SmsRecovery.Pending, onRestoreSms)
         if (action.result == PairingChange.Removed && action.owner == state.owner) {
             Text(
                 stringResource(R.string.home_removed),
