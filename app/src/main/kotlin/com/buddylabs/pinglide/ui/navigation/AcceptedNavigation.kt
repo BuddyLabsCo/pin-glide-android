@@ -7,6 +7,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.buddylabs.pinglide.domain.identity.AuthorizationState
 import com.buddylabs.pinglide.domain.identity.LoginState
@@ -22,6 +23,7 @@ internal fun AcceptedNavigation(
     onCheckSms: () -> Boolean,
     loginState: LoginState,
     home: HomeViewModel,
+    onRestoreSms: () -> Unit,
     onBackground: () -> Unit,
     setup: @Composable () -> Unit
 ) {
@@ -30,8 +32,9 @@ internal fun AcceptedNavigation(
         return
     }
     val state by home.state.collectAsState()
+    val smsRecovery by home.smsRecovery.collectAsState()
     var completed by remember { mutableStateOf(progress.state.completed) }
-    var pairingEntryOpen by remember { mutableStateOf(false) }
+    var pairingEntryOpen by rememberSaveable { mutableStateOf(false) }
     val revoked = state.authorization == AuthorizationState.RegistrationRevoked
     LaunchedEffect(Unit) { home.refresh() }
     if (!completed && !smsGranted && !revoked) {
@@ -54,6 +57,9 @@ internal fun AcceptedNavigation(
         HomeScreen(
             state,
             smsGranted,
+            smsRecovery,
+            onRestoreSms = onRestoreSms,
+            onSmsFeedbackDismiss = home::dismissSmsFeedback,
             onRefresh = home::refresh,
             onSelect = { pairingId, enabled -> home.select(state, pairingId, enabled) },
             onAdd = { pairingEntryOpen = true }

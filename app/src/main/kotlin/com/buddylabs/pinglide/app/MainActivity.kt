@@ -51,7 +51,16 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) {
         smsRequestPending = false
-        checkSmsPermission()
+        val granted = checkSmsPermission()
+        permissions.recordSmsRequestResult(
+            !granted && !shouldShowRequestPermissionRationale(Manifest.permission.RECEIVE_SMS)
+        )
+        home.finishSmsRecovery(granted)
+    }
+    private val smsSettingsRequest = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        home.finishSmsRecovery(checkSmsPermission())
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,6 +78,7 @@ class MainActivity : ComponentActivity() {
                     onCheckSms = ::checkSmsPermission,
                     loginState = loginState,
                     home = home,
+                    onRestoreSms = ::restoreSmsPermission,
                     onBackground = { moveTaskToBack(true) }
                 ) {
                     SetupNavigation(
@@ -82,7 +92,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onCheckSms = ::checkSmsPermission,
-                        onApplicationSettings = permissions::openApplicationSettings,
+                        onApplicationSettings = { permissions.openApplicationSettings() },
                         onBatterySettings = permissions::openBatterySettings,
                         loginState = loginState,
                         onLogin = login::signIn,
@@ -108,6 +118,21 @@ class MainActivity : ComponentActivity() {
 
     private fun checkSmsPermission(): Boolean {
         smsGranted = permissions.smsGranted
+        if (smsGranted && permissions.smsRequestBlocked) permissions.recordSmsRequestResult(false)
         return smsGranted
+    }
+
+    private fun restoreSmsPermission() {
+        if (smsRequestPending || !home.beginSmsRecovery()) return
+        if (checkSmsPermission()) {
+            home.finishSmsRecovery(true)
+        } else if (!permissions.smsRequestBlocked ||
+            shouldShowRequestPermissionRationale(Manifest.permission.RECEIVE_SMS)
+        ) {
+            smsRequestPending = true
+            smsPermissionRequest.launch(Manifest.permission.RECEIVE_SMS)
+        } else if (!permissions.openApplicationSettings { smsSettingsRequest.launch(it) }) {
+            home.smsSettingsUnavailable()
+        }
     }
 }

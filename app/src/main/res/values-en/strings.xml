@@ -92,6 +92,12 @@
     <string name="home_cached_notice">Existing Pairings are retained. Device presence is currently unconfirmed.</string>
     <string name="home_sms_title">Forwarding paused</string>
     <string name="home_sms_copy">SMS permission is off. New messages cannot enter processing.</string>
+    <string name="home_sms_hint">Allow SMS permission to resume forwarding when its other requirements are met. Existing Pairings are retained.</string>
+    <string name="home_sms_restore">Allow SMS permission again</string>
+    <string name="home_sms_denied">SMS permission is off</string>
+    <string name="home_sms_settings_error">Open Pin Glide application settings manually and allow SMS permission.</string>
+    <string name="home_sms_enabled">SMS permission is on</string>
+    <string name="home_sms_restored">SMS permission is on. Forwarding has resumed.</string>
     <string name="home_login_title">Sign in again</string>
     <string name="home_login_copy">Your credentials cannot be renewed. Signing in with the original QQ account preserves this Sender’s Pairings.</string>
     <string name="home_revoked_title">This Sender was revoked</string>
