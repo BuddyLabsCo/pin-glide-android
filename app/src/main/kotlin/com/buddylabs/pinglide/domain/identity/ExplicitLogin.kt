@@ -11,6 +11,7 @@ class ExplicitLogin(
     private val store: IdentityStore,
     private val authorization: QqAuthorization,
     private val service: LoginService,
+    private val renewal: CredentialRenewal,
     private val deviceName: () -> String,
     private val clock: Clock = Clock.systemUTC()
 ) {
@@ -51,6 +52,7 @@ class ExplicitLogin(
             if (attempt !== current) return
             identity.validate(clock.instant(), requireFresh = true)
             check(store.accept(snapshot.generation, identity, current))
+            renewal.recover()
             if (attempt === current) mutableState.value = LoginState.FirstDevice
         } catch (cancelled: CancellationException) {
             current.cancel()

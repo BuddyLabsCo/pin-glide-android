@@ -5,6 +5,8 @@ import com.buddylabs.pinglide.domain.identity.IdentitySnapshot
 import com.buddylabs.pinglide.domain.identity.IdentityStorageException
 import com.buddylabs.pinglide.domain.identity.IdentityStore
 import com.buddylabs.pinglide.domain.identity.LoginAttempt
+import com.buddylabs.pinglide.domain.identity.RefreshState
+import com.buddylabs.pinglide.domain.identity.RenewalOperation
 import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import com.buddylabs.pinglide.platform.crypto.ProtectedSnapshot
 import com.buddylabs.pinglide.platform.crypto.SnapshotProtection
@@ -41,6 +43,52 @@ class ProtectedIdentityStore(context: Context) : IdentityStore {
         }
     }
 
+    override suspend fun updateRenewal(
+        expected: IdentitySnapshot,
+        replacement: IdentitySnapshot
+    ): Boolean = withContext(Dispatchers.IO) {
+        writer.withLock {
+            storageOperation {
+                val (document, original, alias) = load()
+                if (original.generation != expected.generation ||
+                    original.renewal != expected.renewal ||
+                    original.refreshState != expected.refreshState
+                ) {
+                    return@storageOperation false
+                }
+                val identity = checkNotNull(replacement.identity)
+                val originalIdentity = checkNotNull(original.identity)
+                require(
+                    identity.accountId == originalIdentity.accountId &&
+                        identity.senderId == originalIdentity.senderId
+                )
+                val replacingBundle = identity !== expected.identity
+                val nextGeneration = Math.addExact(
+                    original.generation,
+                    if (replacingBundle) 1L else 0L
+                )
+                require(replacement.generation == nextGeneration)
+                identity.validate(Instant.now(), requireFresh = replacingBundle)
+                if (replacingBundle) {
+                    require(
+                        original.renewal != null && replacement.renewal == null &&
+                            replacement.refreshState == RefreshState.Active
+                    )
+                }
+                replacement.renewal?.validate(identity, replacement.generation)
+                val next = JsonObject(
+                    document + mapOf(
+                        "generation" to JsonPrimitive(replacement.generation),
+                        "identity" to json.encodeToJsonElement(identity),
+                        "renewal" to json.encodeToJsonElement(replacement.renewal),
+                        "refreshState" to json.encodeToJsonElement(replacement.refreshState)
+                    )
+                )
+                persist(next, alias, LoginAttempt())
+            }
+        }
+    }
+
     override suspend fun accept(
         expectedGeneration: Long,
         identity: SenderIdentity,
@@ -59,13 +107,7 @@ class ProtectedIdentityStore(context: Context) : IdentityStore {
                         "identity" to json.encodeToJsonElement(identity)
                     )
                 )
-                val plaintext = json.encodeToString(next).toByteArray(Charsets.UTF_8)
-                val protected = try {
-                    protection.seal(plaintext, alias)
-                } finally {
-                    plaintext.fill(0)
-                }
-                write(json.encodeToString(protected).toByteArray(Charsets.UTF_8), attempt)
+                persist(next, alias, attempt)
             }
         }
     }
@@ -86,7 +128,26 @@ class ProtectedIdentityStore(context: Context) : IdentityStore {
             if (it == JsonNull) null else json.decodeFromJsonElement<SenderIdentity>(it)
         }
         identity?.validate(Instant.now(), requireFresh = false)
-        return Triple(document, IdentitySnapshot(generation, identity), envelope.keyAlias)
+        val renewal = document["renewal"]?.let { json.decodeFromJsonElement<RenewalOperation?>(it) }
+        val refreshState = document["refreshState"]?.let {
+            json.decodeFromJsonElement<RefreshState>(it)
+        } ?: RefreshState.Active
+        renewal?.validate(checkNotNull(identity), generation)
+        return Triple(
+            document,
+            IdentitySnapshot(generation, identity, renewal, refreshState),
+            envelope.keyAlias
+        )
+    }
+
+    private fun persist(document: JsonObject, alias: String?, attempt: LoginAttempt): Boolean {
+        val plaintext = json.encodeToString(document).toByteArray(Charsets.UTF_8)
+        val protected = try {
+            protection.seal(plaintext, alias)
+        } finally {
+            plaintext.fill(0)
+        }
+        return write(json.encodeToString(protected).toByteArray(Charsets.UTF_8), attempt)
     }
 
     private fun write(bytes: ByteArray, attempt: LoginAttempt): Boolean {

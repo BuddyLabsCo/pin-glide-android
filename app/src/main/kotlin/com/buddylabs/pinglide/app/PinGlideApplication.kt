@@ -2,26 +2,48 @@ package com.buddylabs.pinglide.app
 
 import android.app.Application
 import com.buddylabs.pinglide.BuildConfig
+import com.buddylabs.pinglide.data.service.CredentialRenewalService
 import com.buddylabs.pinglide.data.service.QqLoginService
 import com.buddylabs.pinglide.data.storage.ProtectedIdentityStore
+import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.ExplicitLogin
 import com.buddylabs.pinglide.domain.identity.QqAuthorization
 import com.buddylabs.pinglide.platform.DeviceInfo
 import com.buddylabs.pinglide.platform.qq.QqConnectAuthorization
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
 class PinGlideApplication : Application() {
     val qqAuthorization by lazy { QqConnectAuthorization(this) }
     private val identityStore by lazy { ProtectedIdentityStore(this) }
-    private val loginService by lazy {
-        val client = OkHttpClient.Builder()
+    private val processScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val identityClient by lazy {
+        OkHttpClient.Builder()
             .retryOnConnectionFailure(false)
             .followRedirects(false)
             .followSslRedirects(false)
             .callTimeout(30, TimeUnit.SECONDS)
             .build()
-        QqLoginService(BuildConfig.SERVICE_URL, client)
+    }
+    private val loginService by lazy { QqLoginService(BuildConfig.SERVICE_URL, identityClient) }
+    val credentialRenewal by lazy {
+        CredentialRenewal(
+            identityStore,
+            CredentialRenewalService(
+                BuildConfig.SERVICE_URL,
+                identityClient.newBuilder().callTimeout(10, TimeUnit.SECONDS).build()
+            ),
+            processScope
+        )
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        processScope.launch { credentialRenewal.recover() }
     }
 
     fun explicitLogin() = ExplicitLogin(
@@ -31,6 +53,7 @@ class PinGlideApplication : Application() {
             qqAuthorization.authorize()
         },
         service = loginService,
+        renewal = credentialRenewal,
         deviceName = DeviceInfo(this)::senderName
     )
 }

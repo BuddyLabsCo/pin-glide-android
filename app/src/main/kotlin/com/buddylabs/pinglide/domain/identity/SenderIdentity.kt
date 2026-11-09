@@ -35,10 +35,17 @@ class SenderIdentity(
     }
 }
 
-class IdentitySnapshot(val generation: Long = 0, val identity: SenderIdentity? = null)
+class IdentitySnapshot(
+    val generation: Long = 0,
+    val identity: SenderIdentity? = null,
+    val renewal: RenewalOperation? = null,
+    val refreshState: RefreshState = RefreshState.Active
+)
 
 interface IdentityStore {
     suspend fun read(): IdentitySnapshot
+
+    suspend fun updateRenewal(expected: IdentitySnapshot, replacement: IdentitySnapshot): Boolean
 
     suspend fun accept(
         expectedGeneration: Long,
