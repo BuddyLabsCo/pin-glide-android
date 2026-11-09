@@ -40,4 +40,17 @@
     <string name="setup_settings_unavailable">无法打开系统设置。请从设备设置中找到鹊信后重试。</string>
     <string name="setup_qq_title">连接你的 QQ</string>
     <string name="setup_qq_description">使用 QQ 登录账号、管理设备和授权加密转发。</string>
+    <string name="setup_qq_sign_in">使用 QQ 登录</string>
+    <string name="privacy_qq_title">QQ 互联授权</string>
+    <string name="setup_qq_privacy">点击登录即授权腾讯 QQ 互联使用设备型号及 QQ/TIM 安装信息完成授权。鹊信只向服务发送新的一次性授权码，QQ 平台凭据由服务持有。</string>
+    <string name="setup_qq_loading">正在登录 QQ</string>
+    <string name="setup_qq_error_title">登录未完成</string>
+    <string name="setup_qq_error_description">QQ 授权已取消或登录结果未确认。请重新登录。</string>
+    <string name="setup_qq_retry">重新登录</string>
+    <string name="setup_cancel">取消</string>
+    <string name="setup_identity_loading">正在读取受保护的身份</string>
+    <string name="setup_identity_unavailable_title">受保护的身份暂时不可用</string>
+    <string name="setup_identity_unavailable_description">无法安全读取或保存身份，原有数据已保留。请再次检查，不要通过清除应用数据重试。</string>
+    <string name="setup_first_device_title">连接第一台设备</string>
+    <string name="setup_first_device_description">在目标设备打开鹊信并显示二维码，然后扫描并确认。完成后，当前设备就可以开始转发短信。</string>
 </resources>

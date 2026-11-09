@@ -1,5 +1,17 @@
 import groovy.json.JsonSlurper
+import java.io.InputStream
+import java.io.OutputStream
+import java.net.URI
+import java.security.MessageDigest
+import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.ClassVisitor
+import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.MethodVisitor
+import org.objectweb.asm.Opcodes
 
 plugins {
     alias(libs.plugins.android.application) apply false
@@ -10,6 +22,90 @@ plugins {
 }
 
 val openApiGenerator = configurations.create("openApiGenerator")
+val qqSdk = layout.buildDirectory.file("dependencies/qq/open_sdk_3.5.19_lite.jar")
+tasks.register("downloadQqSdk") {
+    val sdkUrl = "https://tangram-1251316161.file.myqcloud.com/files/20260414/" +
+        "143310b667ece8922594fbe866dabdef.zip"
+    inputs.property("url", sdkUrl)
+    outputs.file(qqSdk)
+    doLast {
+        val archive = layout.buildDirectory.file("dependencies/qq/sdk.zip").get().asFile
+        archive.parentFile.mkdirs()
+        URI(sdkUrl).toURL().openStream().use { input ->
+            archive.outputStream().use { input.copyTo(it) }
+        }
+        val digest = MessageDigest.getInstance("SHA-256").digest(archive.readBytes())
+            .joinToString("") { "%02x".format(it) }
+        check(digest == "6272d4123d8327400a655c48f1fb7eb24b83fd5beeb527951ed100b219192b9b") {
+            "QQ SDK archive checksum mismatch"
+        }
+        ZipFile(archive).use { zip ->
+            zip.getInputStream(zip.getEntry("open_sdk_3.5.19_r9483ffc7_lite.jar")).use { input ->
+                qqSdk.get().asFile.outputStream().use { prepareQqSdk(input, it) }
+            }
+        }
+    }
+}
+fun prepareQqSdk(input: InputStream, output: OutputStream) {
+    ZipInputStream(input).use { source ->
+        ZipOutputStream(output).use { target ->
+            var entry = source.nextEntry
+            while (entry != null) {
+                target.putNextEntry(ZipEntry(entry.name))
+                val bytes = source.readBytes()
+                target.write(
+                    when (entry.name) {
+                        "com/tencent/open/log/SLog.class" -> prepareQqClass(bytes, session = false)
+
+                        "com/tencent/connect/auth/QQToken.class" -> prepareQqClass(
+                            bytes,
+                            session = true
+                        )
+
+                        else -> bytes
+                    }
+                )
+                target.closeEntry()
+                entry = source.nextEntry
+            }
+        }
+    }
+}
+
+fun prepareQqClass(bytes: ByteArray, session: Boolean): ByteArray {
+    val output = ClassWriter(ClassWriter.COMPUTE_MAXS)
+    var removed = 0
+    ClassReader(bytes).accept(
+        object : ClassVisitor(Opcodes.ASM9, output) {
+            override fun visitMethod(
+                access: Int,
+                name: String,
+                descriptor: String,
+                signature: String?,
+                exceptions: Array<out String>?
+            ): MethodVisitor? {
+                val method = super.visitMethod(access, name, descriptor, signature, exceptions)
+                if (session) {
+                    if (name != "saveSession") return method
+                    check(descriptor == "(Lorg/json/JSONObject;)Z")
+                } else {
+                    if (name !in listOf("v", "d", "i", "w", "e", "u")) return method
+                    check(access and Opcodes.ACC_STATIC != 0 && descriptor.endsWith(")V"))
+                }
+                method.visitCode()
+                if (session) method.visitInsn(Opcodes.ICONST_1)
+                method.visitInsn(if (session) Opcodes.IRETURN else Opcodes.RETURN)
+                method.visitMaxs(0, 0)
+                method.visitEnd()
+                removed++
+                return null
+            }
+        },
+        0
+    )
+    check(removed == if (session) 1 else 12) { "QQ SDK API changed; review privacy preparation" }
+    return output.toByteArray()
+}
 dependencies {
     add(openApiGenerator.name, libs.openapi.generator)
 }

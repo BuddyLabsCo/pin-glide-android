@@ -18,9 +18,28 @@ Authenticate GitHub CLI with read access to the service repository, locally thro
 `gh auth login` or through a protected `GH_TOKEN` in CI. The existing build downloads
 `openapi.yaml` and `asyncapi.yaml` from the fixed release in
 `config/codegen/service-contracts.json` (currently
-`BuddyLabsCo/pin-glide-service`, `v1.0.1`). It generates and compiles the HTTP client
+`BuddyLabsCo/pin-glide-service`, `v1.0.2`). It generates and compiles the HTTP client
 and WSS models under `build/`; do not copy contracts or generated code into source.
 `npmCi` installs the locked generator dependencies automatically.
+
+For QQ login, set the public build inputs `PINGLIDE_QQ_APP_ID` (the QQ Connect
+mobile application's numeric App ID) and `PINGLIDE_SERVICE_URL` (the deployed
+HTTPS origin, without a path or trailing slash). The QQ registration must match
+`com.buddylabs.pinglide` and the signing certificate used for the installed APK.
+The callback scheme is derived from the App ID. These public values ship in the
+APK; never supply the QQ AppKey, provider tokens, signing passwords or GitHub
+credentials as either value. Unconfigured builds can compile and run setup but
+fail an explicit login locally before opening QQ. Supply both values for a usable
+login build.
+
+The build downloads the official QQ Connect Android SDK 3.5.19 archive and verifies
+its pinned SHA-256 before extracting the JAR into ignored `build/dependencies/qq/`.
+SDK preparation replaces its twelve static logging method bodies with no-ops,
+including callback URI diagnostics, before either variant compiles. It also makes
+`QQToken.saveSession` acknowledge without writing: the SDK's native login listener
+otherwise caches its callback before delivering the one-use code. Changed method
+signatures or counts fail preparation for review. This preserves ordinary debug
+behavior and keeps authorization content out of SDK logs and session files.
 
 ## Protected signing inputs
 
