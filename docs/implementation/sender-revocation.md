@@ -32,6 +32,11 @@ Closed IDs survive explicit registration and cannot be accepted again.
 Confirmed self-revocation enters durable `RegistrationClosed` authority and
 Welcome directly. The domain entry point checks the confirmed Sender ID and
 also handles an own-authorization check discovering closure concurrently.
+Retained proof includes the credential-free terminal snapshot produced by
+closure. If self-confirmation then encounters a storage failure, authorization
+retries promotion of that exact snapshot to `RegistrationClosed`, even after
+identity removal. Matching its generation and closed Sender IDs prevents stale
+self-confirmation from changing a later registration or terminal destination.
 Remote discovery instead enters durable `RegistrationRevoked` authority, with
 the approved revoked screen surviving offline restart.
 
@@ -90,3 +95,10 @@ checks, recoverable domain errors, safe transport/decoding error mapping and
 propagated cancellation. Storage-read and retry-exhaustion regressions fail
 before their fixes and pass afterward. These disposable probes remain under
 ignored `build/ticket-20/`, alongside the existing acceptance probes.
+
+SPEC-3 combines persisted remote closure with confirmed self-revocation and a
+failed storage read or write. The regression reproduces the revoked destination
+before the fix; retry now persists Welcome and offline workflow restart restores
+it without service or QQ requests. Additional probes cover intervening credential
+renewal, a different terminal generation, and stale self-confirmation after a
+new Sender registration.
