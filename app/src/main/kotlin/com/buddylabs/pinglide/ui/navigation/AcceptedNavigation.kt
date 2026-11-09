@@ -54,8 +54,7 @@ internal fun AcceptedNavigation(
         HomeScreen(
             state,
             smsGranted,
-            onRefresh = home::refresh,
-            onSelect = { pairingId, enabled -> home.select(state, pairingId, enabled) },
+            home = home,
             onAdd = { pairingEntryOpen = true }
         )
     }

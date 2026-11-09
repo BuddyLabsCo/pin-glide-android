@@ -1,5 +1,7 @@
 package com.buddylabs.pinglide.ui.home
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,20 +10,28 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -32,51 +42,125 @@ import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.HomeReadiness
 import com.buddylabs.pinglide.domain.pairing.HomeState
+import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
-fun HomeScreen(
+fun HomeScreen(state: HomeState, smsGranted: Boolean, home: HomeViewModel, onAdd: () -> Unit) {
+    val readiness = state.readiness(smsGranted)
+    val action by home.action.collectAsState()
+    val listState = rememberLazyListState()
+    var selectedId by rememberSaveable(state.owner) { mutableStateOf<String?>(null) }
+    var lastSelectedId by rememberSaveable(state.owner) { mutableStateOf<String?>(null) }
+    var restoreFocus by remember { mutableStateOf(false) }
+    val rowFocus = remember { FocusRequester() }
+    val headingFocus = remember { FocusRequester() }
+    val selected = state.targets.find { it.pairingId == selectedId }
+    val selectedAction = action.takeIf { it.pairingId == selectedId && it.owner == state.owner }
+        ?: TargetAction()
+    val dismiss = {
+        selectedId = null
+        restoreFocus = true
+    }
+    LaunchedEffect(restoreFocus) {
+        if (restoreFocus) {
+            listState.revealTarget(
+                state.targets.indexOfFirst {
+                    it.pairingId == lastSelectedId
+                },
+                lastSelectedId
+            )
+            withFrameNanos { }
+            val restored = try {
+                rowFocus.requestFocus()
+            } catch (_: IllegalStateException) {
+                false
+            }
+            if (!restored) headingFocus.requestFocus()
+            restoreFocus = false
+        }
+    }
+    LaunchedEffect(selectedAction.result) {
+        if (selectedAction.result == PairingChange.Removed) dismiss()
+    }
+    if (selectedId != null && selected == null && state.listed && !selectedAction.pending) {
+        BackHandler(onBack = dismiss)
+        TargetGone(onDismiss = dismiss, onAdd = {
+            dismiss()
+            onAdd()
+        })
+        return
+    }
+    HomeContent(
+        state, readiness, action, home::refresh, { pairingId, enabled ->
+            home.select(state, pairingId, enabled)
+        },
+        onOpen = {
+            home.clearAction()
+            lastSelectedId = it
+            selectedId = it
+        },
+        onAdd, lastSelectedId, rowFocus, headingFocus, listState
+    )
+    if (selected != null) {
+        TargetDetailsSheet(
+            selected,
+            otherAliases = state.targets.filter {
+                it.pairingId != selected.pairingId
+            }.map { it.alias },
+            action = selectedAction,
+            onSelect = { home.select(state, selected.pairingId, it) },
+            onRename = { home.rename(state, selected.pairingId, it) },
+            onRemove = { home.remove(state, selected.pairingId) },
+            onClearAction = home::clearAction,
+            onDismiss = dismiss
+        )
+    }
+}
+
+@Composable
+private fun HomeContent(
     state: HomeState,
-    smsGranted: Boolean,
+    readiness: HomeReadiness,
+    action: TargetAction,
     onRefresh: () -> Unit,
     onSelect: (String, Boolean) -> Unit,
-    onAdd: () -> Unit
+    onOpen: (String) -> Unit,
+    onAdd: () -> Unit,
+    lastSelectedId: String?,
+    rowFocus: FocusRequester,
+    headingFocus: FocusRequester,
+    listState: LazyListState
 ) {
-    val readiness = state.readiness(smsGranted)
-    var selectedId by remember { mutableStateOf<String?>(null) }
-    val selected = state.targets.find { it.pairingId == selectedId }
     ScreenLayout {
         Text(
             stringResource(R.string.app_name),
             style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(vertical = 20.dp).semantics { heading() }
+            modifier = Modifier.padding(vertical = 20.dp).focusRequester(headingFocus)
+                .focusable().semantics { heading() }
         )
         HomeRefreshContainer(state, onRefresh, Modifier.weight(1f)) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                item { HomeHero(state, readiness) }
-                if (state.failed && state.targets.isNotEmpty()) {
-                    item {
-                        Text(
-                            stringResource(R.string.home_cached_notice),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-                if (state.listed) {
-                    item { DeviceCount(state.targets.size) }
-                }
-                if (state.targets.isEmpty()) {
-                    item {
-                        EmptyRegion(state, readiness, onAdd)
-                    }
+                item(key = "home-summary") {
+                    HomeSummary(state, readiness, action, onAdd)
                 }
                 items(state.targets, key = { it.pairingId }) { target ->
-                    TargetRow(target, { selectedId = target.pairingId }) {
-                        onSelect(target.pairingId, it)
-                    }
+                    TargetRow(
+                        target,
+                        onOpen = {
+                            onOpen(target.pairingId)
+                        },
+                        onSelect = { onSelect(target.pairingId, it) },
+                        modifier = if (target.pairingId == lastSelectedId) {
+                            Modifier.focusRequester(rowFocus)
+                        } else {
+                            Modifier
+                        }
+                    )
                 }
             }
         }
@@ -93,22 +177,64 @@ fun HomeScreen(
             }
         }
     }
-    if (selected != null) {
-        AlertDialog(
-            onDismissRequest = { selectedId = null },
-            title = {
-                Text(selected.alias.ifBlank { stringResource(R.string.home_target_device) })
-            },
-            text = { Text(targetPresence(selected)) },
-            confirmButton = {
-                TextButton(
-                    onClick = { selectedId = null },
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) {
-                    Text(stringResource(R.string.close))
+}
+
+@Composable
+private fun HomeSummary(
+    state: HomeState,
+    readiness: HomeReadiness,
+    action: TargetAction,
+    onAdd: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        HomeHero(state, readiness)
+        if (action.result == PairingChange.Removed && action.owner == state.owner) {
+            Text(
+                stringResource(R.string.home_removed),
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            )
+        }
+        if (state.failed && state.targets.isNotEmpty()) {
+            Text(
+                stringResource(R.string.home_cached_notice),
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+        if (state.listed) DeviceCount(state.targets.size)
+        if (state.targets.isEmpty()) EmptyRegion(state, readiness, onAdd)
+    }
+}
+
+private suspend fun LazyListState.revealTarget(index: Int, pairingId: String?) {
+    if (index >= 0 && layoutInfo.visibleItemsInfo.none { it.key == pairingId }) {
+        scrollToItem(index + 1)
+    }
+}
+
+@Composable
+private fun TargetGone(onDismiss: () -> Unit, onAdd: () -> Unit) {
+    ScreenLayout {
+        Column(
+            Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+                .padding(vertical = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            Text(
+                stringResource(R.string.home_gone_title),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.semantics {
+                    heading()
+                    liveRegion = LiveRegionMode.Polite
                 }
+            )
+            Text(stringResource(R.string.home_gone_copy))
+            Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.home_return_list))
             }
-        )
+            Button(onClick = onAdd, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.home_add_again))
+            }
+        }
     }
 }
 

@@ -96,4 +96,25 @@
     <string name="home_login_copy">Your credentials cannot be renewed. Signing in with the original QQ account preserves this Sender’s Pairings.</string>
     <string name="home_revoked_title">This Sender was revoked</string>
     <string name="home_revoked_copy">This Sender registration is permanently closed. Forwarding has stopped.</string>
+    <string name="home_details">Open target details</string>
+    <string name="home_receiving">Receive SMS</string>
+    <string name="home_receiving_copy">Turning this off keeps this target paired.</string>
+    <string name="home_key_recovery">The local key is missing or damaged. Forwarding to this target is off. Remove its Pairing, then add the target again. Other targets are unaffected.</string>
+    <string name="home_rename">Rename target</string>
+    <string name="home_alias_help">Enter a unique target name of 1–40 characters.</string>
+    <string name="home_save">Save</string>
+    <string name="home_remove">Remove this target’s Pairing</string>
+    <string name="home_remove_title">Remove “%1$s”?</string>
+    <string name="home_remove_copy">This Sender will stop forwarding SMS to this target. The target and its Pairings with other Senders will stay active.</string>
+    <string name="home_remove_confirm">Remove Pairing</string>
+    <string name="home_target_pending">Submitting, please wait</string>
+    <string name="home_target_busy">The operation did not complete and receiving is unchanged. Wait for the current operation to finish and retry.</string>
+    <string name="home_rename_error">The saved name is unconfirmed. Your input is kept. Check your connection and retry; the next refresh will reconcile the result.</string>
+    <string name="home_remove_error">Removal is unconfirmed. Check your connection and retry. Forwarding to this target is off and its key is kept; the next refresh will reconcile the result.</string>
+    <string name="home_renamed">Target name updated</string>
+    <string name="home_removed">Pairing removed</string>
+    <string name="home_gone_title">This target’s Pairing no longer exists</string>
+    <string name="home_gone_copy">The Pairing may have been removed or revoked elsewhere. This operation did not continue. Pair again to forward to this target.</string>
+    <string name="home_return_list">Return to target list</string>
+    <string name="home_add_again">Add target again</string>
 </resources>

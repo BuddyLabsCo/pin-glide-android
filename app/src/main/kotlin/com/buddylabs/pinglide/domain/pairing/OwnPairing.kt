@@ -18,10 +18,11 @@ data class OwnPairing(
     val pairingId: String,
     val receiverId: String,
     val alias: String,
-    val enabled: Boolean = false,
-    val key: ByteArray? = null
+    val enabled: Boolean = true,
+    val key: ByteArray? = null,
+    val keyFailed: Boolean = false
 ) {
-    val keyUsable: Boolean get() = key?.size == 32
+    val keyUsable: Boolean get() = !keyFailed && key?.size == 32
 }
 
 class PairingSnapshot(
@@ -41,8 +42,24 @@ interface PairingStore {
 
 fun interface PairingService {
     suspend fun list(managementToken: String): List<RemotePairing>
+
+    suspend fun rename(managementToken: String, pairingId: String, alias: String): RemotePairing =
+        throw PairingServiceException(PairingFailure.Unavailable)
+
+    suspend fun remove(managementToken: String, pairingId: String): Unit =
+        throw PairingServiceException(PairingFailure.Unavailable)
 }
 
-enum class PairingFailure { Unavailable, LoginRequired, Revoked }
+enum class PairingFailure { Unavailable, LoginRequired, Revoked, Gone }
 
-class PairingServiceException(val failure: PairingFailure) : Exception("Pairing list unavailable")
+enum class PairingChange { Renamed, Removed, Gone, InvalidAlias, Unavailable }
+
+class PairingServiceException(val failure: PairingFailure) :
+    Exception("Pairing operation unavailable")
+
+fun validPairingAlias(alias: String, otherAliases: List<String>): Boolean {
+    val trimmed = alias.trim()
+    return trimmed.isNotBlank() && trimmed.codePointCount(0, trimmed.length) in 1..40 &&
+        trimmed.codePoints().noneMatch { it in 0xD800..0xDFFF } &&
+        otherAliases.none { it.equals(trimmed, ignoreCase = true) }
+}
