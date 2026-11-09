@@ -12,7 +12,8 @@ class SetupPreferences(context: Context) : SetupProgress {
             started = preferences.getBoolean("setup_started", false),
             smsRequested = preferences.getBoolean("sms_requested", false),
             smsCompleted = preferences.getBoolean("sms_completed", false),
-            batteryAcknowledged = preferences.getBoolean("battery_acknowledged", false)
+            batteryAcknowledged = preferences.getBoolean("battery_acknowledged", false),
+            completed = preferences.getBoolean("setup_completed", false)
         )
 
     override fun start() {
@@ -29,5 +30,9 @@ class SetupPreferences(context: Context) : SetupProgress {
 
     override fun acknowledgeBattery() {
         preferences.edit().putBoolean("battery_acknowledged", true).apply()
+    }
+
+    override fun complete() {
+        preferences.edit().putBoolean("setup_completed", true).apply()
     }
 }

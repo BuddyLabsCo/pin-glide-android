@@ -92,7 +92,7 @@ private fun renewalFailure(status: Int, body: Any?): RenewalFailure {
     }
 }
 
-private fun serviceProblem(status: Int, body: Any?): Problem? = try {
+internal fun serviceProblem(status: Int, body: Any?): Problem? = try {
     (body as? String)?.let { problemJson.decodeFromString<Problem>(it) }?.takeIf {
         it.status ==
             status.toLong()

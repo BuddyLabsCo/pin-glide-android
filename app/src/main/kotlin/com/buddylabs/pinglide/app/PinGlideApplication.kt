@@ -3,11 +3,13 @@ package com.buddylabs.pinglide.app
 import android.app.Application
 import com.buddylabs.pinglide.BuildConfig
 import com.buddylabs.pinglide.data.service.CredentialRenewalService
+import com.buddylabs.pinglide.data.service.OwnPairingService
 import com.buddylabs.pinglide.data.service.QqLoginService
 import com.buddylabs.pinglide.data.storage.ProtectedIdentityStore
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.ExplicitLogin
 import com.buddylabs.pinglide.domain.identity.QqAuthorization
+import com.buddylabs.pinglide.domain.pairing.OwnPairings
 import com.buddylabs.pinglide.platform.DeviceInfo
 import com.buddylabs.pinglide.platform.qq.QqConnectAuthorization
 import java.util.concurrent.TimeUnit
@@ -37,6 +39,15 @@ class PinGlideApplication : Application() {
                 BuildConfig.SERVICE_URL,
                 identityClient.newBuilder().callTimeout(10, TimeUnit.SECONDS).build()
             ),
+            processScope
+        )
+    }
+
+    val ownPairings by lazy {
+        OwnPairings(
+            identityStore,
+            OwnPairingService(BuildConfig.SERVICE_URL, identityClient),
+            credentialRenewal,
             processScope
         )
     }

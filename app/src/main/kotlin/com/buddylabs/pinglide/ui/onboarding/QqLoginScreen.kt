@@ -56,15 +56,7 @@ fun QqLoginScreen(
 ) {
     when (state) {
         LoginState.Restoring, LoginState.Loading -> LoginBusyScreen(state, onCancel, onBack)
-
-        LoginState.FirstDevice -> SetupStepScreen(
-            step = 4,
-            icon = R.drawable.ic_devices,
-            title = R.string.setup_first_device_title,
-            description = R.string.setup_first_device_description,
-            onBack = onBack
-        ) {}
-
+        LoginState.FirstDevice -> FirstDeviceScreen(onLeave = onBack)
         else -> LoginActionScreen(state, onLogin, onCancel, onRetryStorage, onBack)
     }
 }

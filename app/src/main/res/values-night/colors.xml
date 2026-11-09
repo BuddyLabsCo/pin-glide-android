@@ -23,4 +23,7 @@
     <color name="hero_route">#3D6259</color>
     <color name="hero_wing">#8ECDF7</color>
     <color name="hero_white">#003832</color>
+    <color name="home_warning_container">#40330E</color>
+    <color name="home_on_warning">#FFE5A0</color>
+    <color name="home_capacity">#FFB77B</color>
 </resources>
