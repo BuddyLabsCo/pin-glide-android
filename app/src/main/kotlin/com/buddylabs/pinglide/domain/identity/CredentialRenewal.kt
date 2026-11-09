@@ -6,11 +6,13 @@ import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 class CredentialRenewal(
     private val store: IdentityStore,
@@ -20,6 +22,7 @@ class CredentialRenewal(
 ) {
     private val gate = Mutex()
     private var flight: Deferred<IdentitySnapshot>? = null
+    private val closedSenders = mutableSetOf<String>()
     private val mutableState = MutableStateFlow(AuthorizationState.Checking)
     val state = mutableState.asStateFlow()
 
@@ -32,15 +35,25 @@ class CredentialRenewal(
     }
 
     suspend fun rejectAccess(identity: SenderIdentity, failure: RefreshState) {
-        gate.withLock {
-            val current = store.read()
-            if (current.identity?.management?.token != identity.management.token) return@withLock
-            if (current.refreshState == RefreshState.RegistrationRevoked) requireAuthority(current)
-            require(
-                failure == RefreshState.LoginRequired || failure == RefreshState.RegistrationRevoked
-            )
-            val updated = invalidate(current, failure)
-            requireAuthority(updated)
+        withContext(NonCancellable) {
+            gate.withLock {
+                val current = store.read()
+                if (failure == RefreshState.RegistrationRevoked) {
+                    closeRegistration(current, identity, selfInitiated = false)
+                    requireAuthority(store.read())
+                    return@withLock
+                }
+                if (current.identity?.management?.token !=
+                    identity.management.token
+                ) {
+                    return@withLock
+                }
+                requireAuthority(current)
+                require(failure == RefreshState.LoginRequired)
+                val replacement = current.copy(refreshState = failure)
+                val saved = store.updateRenewal(current, replacement)
+                requireAuthority(if (saved) replacement else store.read())
+            }
         }
     }
 
@@ -50,10 +63,104 @@ class CredentialRenewal(
     ): Result {
         val authorized = authorize(access)
         return try {
-            work(checkNotNull(authorized.identity))
+            execute(authorized, work)
         } catch (_: AccessExpiredException) {
             val renewed = authorize(access, authorized.generation)
-            work(checkNotNull(renewed.identity))
+            execute(renewed, work)
+        }
+    }
+
+    private suspend fun <Result> execute(
+        authorized: IdentitySnapshot,
+        work: suspend (SenderIdentity) -> Result
+    ): Result {
+        val identity = checkNotNull(authorized.identity)
+        val result = try {
+            work(identity)
+        } catch (_: CurrentSenderRevokedException) {
+            rejectAccess(identity, RefreshState.RegistrationRevoked)
+            throw AuthorizationException(AuthorizationState.TemporarilyUnavailable)
+        }
+        gate.withLock {
+            val current = store.read()
+            requireAuthority(current)
+            if (current.identity?.senderId != identity.senderId ||
+                current.identity.accountId != identity.accountId
+            ) {
+                throw AuthorizationException(AuthorizationState.TemporarilyUnavailable)
+            }
+        }
+        return result
+    }
+
+    suspend fun confirmSelfRevocation(expected: IdentitySnapshot, revokedSenderId: String) {
+        val identity = checkNotNull(expected.identity)
+        if (revokedSenderId != identity.senderId) return
+        withContext(NonCancellable) {
+            gate.withLock {
+                val current = store.read()
+                if (current.refreshState == RefreshState.RegistrationRevoked &&
+                    current.closedSenderIds == expected.closedSenderIds + revokedSenderId
+                ) {
+                    val next = current.copy(
+                        generation = Math.addExact(current.generation, 1),
+                        refreshState = RefreshState.RegistrationClosed
+                    )
+                    if (!store.updateRenewal(current, next)) throw IdentityStorageException()
+                    mutableState.value = AuthorizationState.RegistrationClosed
+                } else {
+                    closeRegistration(current, identity, selfInitiated = true)
+                }
+            }
+        }
+    }
+
+    suspend fun beginRegistration(): IdentitySnapshot = gate.withLock {
+        var current = store.read()
+        current.identity?.takeIf { it.senderId in closedSenders }?.let {
+            closeRegistration(current, it, selfInitiated = false)
+            current = store.read()
+        }
+        if (!current.refreshState.closesRegistration) throw IdentityStorageException()
+        val next = current.copy(
+            generation = Math.addExact(current.generation, 1),
+            refreshState = RefreshState.Active
+        )
+        if (!store.updateRenewal(current, next)) throw IdentityStorageException()
+        mutableState.value = AuthorizationState.LoginRequired
+        next
+    }
+
+    private suspend fun closeRegistration(
+        current: IdentitySnapshot,
+        expected: SenderIdentity,
+        selfInitiated: Boolean
+    ) {
+        if (current.identity?.senderId != expected.senderId ||
+            current.identity.accountId != expected.accountId
+        ) {
+            return
+        }
+        closedSenders.add(expected.senderId)
+        mutableState.value = AuthorizationState.RegistrationRevoked
+        val destination = if (selfInitiated) {
+            RefreshState.RegistrationClosed
+        } else {
+            RefreshState.RegistrationRevoked
+        }
+        val next = IdentitySnapshot(
+            generation = Math.addExact(current.generation, 1),
+            refreshState = destination,
+            closedSenderIds = current.closedSenderIds + expected.senderId
+        )
+        if (!store.updateRenewal(current, next)) {
+            requireAuthority(store.read())
+            throw AuthorizationException(AuthorizationState.StorageUnavailable)
+        }
+        mutableState.value = if (selfInitiated) {
+            AuthorizationState.RegistrationClosed
+        } else {
+            AuthorizationState.RegistrationRevoked
         }
     }
 
@@ -100,7 +207,13 @@ class CredentialRenewal(
 
     private fun requireAuthority(snapshot: IdentitySnapshot) {
         when {
+            snapshot.refreshState == RefreshState.RegistrationClosed ->
+                unavailable(AuthorizationState.RegistrationClosed)
+
             snapshot.refreshState == RefreshState.RegistrationRevoked ->
+                unavailable(AuthorizationState.RegistrationRevoked)
+
+            snapshot.identity?.senderId in closedSenders ->
                 unavailable(AuthorizationState.RegistrationRevoked)
 
             snapshot.refreshState == RefreshState.RecoveryRequired ->
@@ -154,14 +267,25 @@ class CredentialRenewal(
             clock.instant().toString(),
             identity.refresh.expiresAt
         )
-        val pending = IdentitySnapshot(original.generation, identity, operation)
-        if (!store.updateRenewal(original, pending)) return store.read()
+        val pending = original.copy(renewal = operation)
+        val saved = gate.withLock {
+            requireAuthority(store.read())
+            store.updateRenewal(original, pending)
+        }
+        if (!saved) return store.read()
         return send(pending)
     }
 
     private suspend fun send(pending: IdentitySnapshot): IdentitySnapshot {
         val operation = checkNotNull(pending.renewal)
         val identity = checkNotNull(pending.identity)
+        gate.withLock {
+            val current = store.read()
+            requireAuthority(current)
+            if (current.generation != pending.generation || current.renewal != operation) {
+                return current
+            }
+        }
         val now = clock.instant()
         if (!Instant.parse(operation.originalExpiresAt).isAfter(now)) {
             return invalidate(pending, RefreshState.LoginRequired)
@@ -172,8 +296,15 @@ class CredentialRenewal(
         return try {
             val reply = service.renew(identity.refresh, operation)
             validateReply(reply, operation, identity)
-            val accepted = IdentitySnapshot(Math.addExact(pending.generation, 1), reply.identity)
-            if (store.updateRenewal(pending, accepted)) accepted else store.read()
+            val accepted = pending.copy(
+                generation = Math.addExact(pending.generation, 1),
+                identity = reply.identity,
+                renewal = null
+            )
+            gate.withLock {
+                requireAuthority(store.read())
+                if (store.updateRenewal(pending, accepted)) accepted else store.read()
+            }
         } catch (failure: RenewalServiceException) {
             handleFailure(pending, failure.failure)
         }
@@ -207,8 +338,11 @@ class CredentialRenewal(
         failure: RenewalFailure
     ): IdentitySnapshot {
         val current = store.read()
-        if (current.generation != pending.generation || current.renewal != pending.renewal ||
-            current.refreshState != pending.refreshState
+        if (failure != RenewalFailure.Revoked &&
+            (
+                current.generation != pending.generation || current.renewal != pending.renewal ||
+                    current.refreshState != pending.refreshState
+                )
         ) {
             return current
         }
@@ -227,18 +361,20 @@ class CredentialRenewal(
 
             RenewalFailure.LoginRequired -> invalidate(pending, RefreshState.LoginRequired)
 
-            RenewalFailure.Revoked -> invalidate(pending, RefreshState.RegistrationRevoked)
+            RenewalFailure.Revoked -> {
+                rejectAccess(checkNotNull(pending.identity), RefreshState.RegistrationRevoked)
+                store.read()
+            }
         }
     }
 
     private suspend fun invalidate(
         original: IdentitySnapshot,
         refreshState: RefreshState
-    ): IdentitySnapshot {
-        val replacement =
-            IdentitySnapshot(original.generation, original.identity, original.renewal, refreshState)
-        if (!store.updateRenewal(original, replacement)) return store.read()
-        return replacement
+    ): IdentitySnapshot = gate.withLock {
+        requireAuthority(store.read())
+        val replacement = original.copy(refreshState = refreshState)
+        if (store.updateRenewal(original, replacement)) replacement else store.read()
     }
 
     private fun unavailable(outcome: AuthorizationState): Nothing {

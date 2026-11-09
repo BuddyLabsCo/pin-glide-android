@@ -13,6 +13,7 @@ import com.buddylabs.pinglide.domain.identity.LoginState
 import com.buddylabs.pinglide.domain.settings.SetupProgress
 import com.buddylabs.pinglide.ui.home.HomeScreen
 import com.buddylabs.pinglide.ui.home.HomeViewModel
+import com.buddylabs.pinglide.ui.home.RegistrationRevokedScreen
 import com.buddylabs.pinglide.ui.onboarding.FirstDeviceScreen
 
 @Composable
@@ -24,8 +25,17 @@ internal fun AcceptedNavigation(
     home: HomeViewModel,
     onRestoreSms: () -> Unit,
     onBackground: () -> Unit,
+    onNewRegistration: () -> Unit,
     setup: @Composable () -> Unit
 ) {
+    if (loginState == LoginState.Revoked) {
+        BackHandler(onBack = onBackground)
+        RegistrationRevokedScreen {
+            progress.start()
+            onNewRegistration()
+        }
+        return
+    }
     if (loginState != LoginState.FirstDevice) {
         setup()
         return

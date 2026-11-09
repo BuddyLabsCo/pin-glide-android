@@ -99,9 +99,10 @@ class ProtectedIdentityStore(context: Context) :
                 val (document, authority, alias) = load()
                 val current = pairings(document, authority)
                 if (authority.generation != expected.authority.generation ||
+                    authority.identity == null || authority.refreshState.closesRegistration ||
                     authority.refreshState != expected.authority.refreshState ||
-                    authority.identity?.accountId != expected.authority.identity?.accountId ||
-                    authority.identity?.senderId != expected.authority.identity?.senderId ||
+                    authority.identity.accountId != expected.authority.identity?.accountId ||
+                    authority.identity.senderId != expected.authority.identity.senderId ||
                     current.revision != expected.revision
                 ) {
                     return@storageOperation false
@@ -190,10 +191,21 @@ class ProtectedIdentityStore(context: Context) :
                 val (document, original, alias) = load()
                 if (original.generation != expected.generation ||
                     original.renewal != expected.renewal ||
-                    original.refreshState != expected.refreshState
+                    original.refreshState != expected.refreshState ||
+                    original.closedSenderIds != expected.closedSenderIds
                 ) {
                     return@storageOperation false
                 }
+                if (replacement.refreshState.closesRegistration || original.identity == null) {
+                    validateRegistrationTransition(original, replacement)
+                    return@storageOperation persist(
+                        registrationDocument(replacement),
+                        alias,
+                        LoginAttempt()
+                    )
+                }
+                check(!original.refreshState.closesRegistration)
+                require(replacement.closedSenderIds == original.closedSenderIds)
                 val identity = checkNotNull(replacement.identity)
                 val originalIdentity = checkNotNull(original.identity)
                 require(
@@ -236,13 +248,16 @@ class ProtectedIdentityStore(context: Context) :
             storageOperation {
                 val (document, original, alias) = load()
                 check(original.generation == expectedGeneration && original.identity == null)
-                check(original.generation == 0L)
+                check(original.refreshState == RefreshState.Active)
+                check(identity.senderId !in original.closedSenderIds)
                 identity.validate(Instant.now(), requireFresh = true)
                 val next = JsonObject(
                     document + mapOf(
                         "version" to JsonPrimitive(1),
                         "generation" to JsonPrimitive(Math.addExact(original.generation, 1)),
-                        "identity" to json.encodeToJsonElement(identity)
+                        "identity" to json.encodeToJsonElement(identity),
+                        "renewal" to JsonNull,
+                        "refreshState" to json.encodeToJsonElement(RefreshState.Active)
                     )
                 )
                 persist(next, alias, attempt)
@@ -270,13 +285,68 @@ class ProtectedIdentityStore(context: Context) :
         val refreshState = document["refreshState"]?.let {
             json.decodeFromJsonElement<RefreshState>(it)
         } ?: RefreshState.Active
+        val closedSenderIds = document["closedSenderIds"]?.let {
+            json.decodeFromJsonElement<Set<String>>(it)
+        }.orEmpty()
+        require(closedSenderIds.none { it.isBlank() })
         renewal?.validate(checkNotNull(identity), generation)
+        val snapshot =
+            IdentitySnapshot(generation, identity, renewal, refreshState, closedSenderIds)
+        if (refreshState.closesRegistration && identity != null) {
+            val closed = snapshot.copy(
+                generation = Math.addExact(generation, 1),
+                identity = null,
+                renewal = null,
+                closedSenderIds = closedSenderIds + identity.senderId
+            )
+            val migrated = registrationDocument(closed)
+            check(persist(migrated, envelope.keyAlias, LoginAttempt()))
+            return Triple(migrated, closed, envelope.keyAlias)
+        }
+        require(identity == null || identity.senderId !in closedSenderIds)
+        require(!refreshState.closesRegistration || closedSenderIds.isNotEmpty())
         return Triple(
             document,
-            IdentitySnapshot(generation, identity, renewal, refreshState),
+            snapshot,
             envelope.keyAlias
         )
     }
+
+    private fun validateRegistrationTransition(
+        original: IdentitySnapshot,
+        replacement: IdentitySnapshot
+    ) {
+        require(replacement.generation == Math.addExact(original.generation, 1))
+        require(replacement.identity == null && replacement.renewal == null)
+        if (original.identity != null) {
+            require(replacement.refreshState.closesRegistration)
+            require(
+                replacement.closedSenderIds ==
+                    original.closedSenderIds + original.identity.senderId
+            )
+        } else {
+            require(original.refreshState.closesRegistration)
+            require(
+                replacement.refreshState == RefreshState.Active ||
+                    (
+                        original.refreshState == RefreshState.RegistrationRevoked &&
+                            replacement.refreshState == RefreshState.RegistrationClosed
+                        )
+            )
+            require(replacement.closedSenderIds == original.closedSenderIds)
+        }
+    }
+
+    private fun registrationDocument(snapshot: IdentitySnapshot) = JsonObject(
+        mapOf(
+            "version" to JsonPrimitive(1),
+            "generation" to JsonPrimitive(snapshot.generation),
+            "identity" to JsonNull,
+            "renewal" to JsonNull,
+            "refreshState" to json.encodeToJsonElement(snapshot.refreshState),
+            "closedSenderIds" to json.encodeToJsonElement(snapshot.closedSenderIds)
+        )
+    )
 
     private fun persist(document: JsonObject, alias: String?, attempt: LoginAttempt): Boolean {
         val plaintext = json.encodeToString(document).toByteArray(Charsets.UTF_8)

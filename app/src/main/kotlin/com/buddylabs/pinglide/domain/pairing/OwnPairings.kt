@@ -2,6 +2,7 @@ package com.buddylabs.pinglide.domain.pairing
 
 import com.buddylabs.pinglide.domain.identity.AccessExpiredException
 import com.buddylabs.pinglide.domain.identity.AuthorizationException
+import com.buddylabs.pinglide.domain.identity.AuthorizationState
 import com.buddylabs.pinglide.domain.identity.CredentialAccess
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.IdentityStorageException
@@ -83,11 +84,6 @@ class OwnPairings(
                     return@withAccess false
                 }
                 when (failure.failure) {
-                    PairingFailure.Revoked -> renewal.rejectAccess(
-                        identity,
-                        RefreshState.RegistrationRevoked
-                    )
-
                     PairingFailure.LoginRequired -> renewal.rejectAccess(
                         identity,
                         RefreshState.LoginRequired
@@ -209,11 +205,6 @@ class OwnPairings(
         if (failure.failure != PairingFailure.Gone) {
             if (store.readPairings().authority.generation == requested.authority.generation) {
                 when (failure.failure) {
-                    PairingFailure.Revoked -> renewal.rejectAccess(
-                        identity,
-                        RefreshState.RegistrationRevoked
-                    )
-
                     PairingFailure.LoginRequired -> renewal.rejectAccess(
                         identity,
                         RefreshState.LoginRequired
@@ -323,6 +314,11 @@ class OwnPairings(
 
     private fun PairingSnapshot.canSend(initial: PairingSnapshot?): Boolean =
         authority.identity != null && authority.refreshState == RefreshState.Active &&
+            renewal.state.value !in setOf(
+                AuthorizationState.RegistrationRevoked,
+                AuthorizationState.RegistrationClosed,
+                AuthorizationState.StorageUnavailable
+            ) &&
             (initial == null || sameOwner(initial))
 
     private suspend fun refreshFailed() = stateGate.withLock {

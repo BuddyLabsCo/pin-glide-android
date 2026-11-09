@@ -70,15 +70,12 @@ class OwnPairingService(private val baseUrl: String, private val client: Call.Fa
 }
 
 private fun rejectPairingResponse(status: Int, body: Any?, allowMissing: Boolean): Nothing {
-    requireUnexpiredAccess(status, body)
+    requireCurrentSenderAccess(status, body)
     val code = serviceProblem(status, body)?.code
     val unusable = code == "credential_invalid" || code == "credential_revoked"
     throw PairingServiceException(
         when {
             allowMissing && status == 404 && code == "resource_not_found" -> PairingFailure.Gone
-
-            status == 409 && code == "device_registration_revoked" ->
-                PairingFailure.Revoked
 
             status == 401 && unusable ->
                 PairingFailure.LoginRequired

@@ -100,7 +100,7 @@
     <string name="home_sms_restored">SMS permission is on. Forwarding has resumed.</string>
     <string name="home_login_title">Sign in again</string>
     <string name="home_login_copy">Your credentials cannot be renewed. Signing in with the original QQ account preserves this Sender’s Pairings.</string>
-    <string name="home_revoked_title">This Sender was revoked</string>
+    <string name="home_revoked_title">Device registration revoked</string>
     <string name="home_revoked_copy">This Sender registration is permanently closed. Forwarding has stopped.</string>
     <string name="home_details">Open target details</string>
     <string name="home_receiving">Receive SMS</string>
@@ -123,4 +123,6 @@
     <string name="home_gone_copy">The Pairing may have been removed or revoked elsewhere. This operation did not continue. Pair again to forward to this target.</string>
     <string name="home_return_list">Return to target list</string>
     <string name="home_add_again">Add target again</string>
+    <string name="registration_revoked_description">This device’s old registration is permanently closed and cannot be restored. Signing in again creates a new registration. You will need to pair your target devices again.</string>
+    <string name="registration_start_again">Sign out and sign in again</string>
 </resources>

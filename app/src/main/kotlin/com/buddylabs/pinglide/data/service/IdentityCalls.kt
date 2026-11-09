@@ -9,15 +9,16 @@ import okhttp3.Response
 import okio.BufferedSink
 
 internal fun identityCalls(client: Call.Factory) = Call.Factory { request ->
-    val body = checkNotNull(request.body)
-    val oneShotBody = object : RequestBody() {
-        override fun contentType() = body.contentType()
+    val oneShotBody = request.body?.let { body ->
+        object : RequestBody() {
+            override fun contentType() = body.contentType()
 
-        override fun contentLength() = body.contentLength()
+            override fun contentLength() = body.contentLength()
 
-        override fun writeTo(sink: BufferedSink) = body.writeTo(sink)
+            override fun writeTo(sink: BufferedSink) = body.writeTo(sink)
 
-        override fun isOneShot() = true
+            override fun isOneShot() = true
+        }
     }
     val call = client.newCall(request.newBuilder().method(request.method, oneShotBody).build())
     object : Call by call {

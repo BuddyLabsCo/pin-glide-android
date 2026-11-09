@@ -26,4 +26,6 @@
     <color name="home_warning_container">#FFF1C7</color>
     <color name="home_on_warning">#4C3900</color>
     <color name="home_capacity">#A64900</color>
+    <color name="registration_error">#A33B34</color>
+    <color name="registration_error_container">#FFDAD6</color>
 </resources>
