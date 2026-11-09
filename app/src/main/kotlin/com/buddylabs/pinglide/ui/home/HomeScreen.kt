@@ -18,7 +18,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,12 +38,15 @@ import com.buddylabs.pinglide.ui.components.ScreenLayout
 fun HomeScreen(
     state: HomeState,
     smsGranted: Boolean,
+    smsRecovery: SmsRecovery,
+    onRestoreSms: () -> Unit,
+    onSmsFeedbackDismiss: (SmsRecovery) -> Unit,
     onRefresh: () -> Unit,
     onSelect: (String, Boolean) -> Unit,
     onAdd: () -> Unit
 ) {
     val readiness = state.readiness(smsGranted)
-    var selectedId by remember { mutableStateOf<String?>(null) }
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     val selected = state.targets.find { it.pairingId == selectedId }
     ScreenLayout {
         Text(
@@ -57,6 +60,9 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item { HomeHero(state, readiness) }
+                if (!smsGranted) {
+                    item { HomeSmsRecovery(smsRecovery == SmsRecovery.Pending, onRestoreSms) }
+                }
                 if (state.failed && state.targets.isNotEmpty()) {
                     item {
                         Text(
@@ -92,6 +98,7 @@ fun HomeScreen(
                 )
             }
         }
+        SmsRecoveryNotice(state, smsGranted, smsRecovery, onSmsFeedbackDismiss)
     }
     if (selected != null) {
         AlertDialog(

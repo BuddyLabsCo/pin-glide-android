@@ -39,6 +39,8 @@ data class HomeState(
 
             !smsGranted -> HomeReadiness.SmsRequired
 
+            authorization != AuthorizationState.Ready -> HomeReadiness.Unknown
+
             !listed -> HomeReadiness.Unknown
 
             targets.isEmpty() -> HomeReadiness.Empty

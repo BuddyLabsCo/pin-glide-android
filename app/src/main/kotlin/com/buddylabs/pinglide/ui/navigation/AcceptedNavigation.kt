@@ -22,6 +22,7 @@ internal fun AcceptedNavigation(
     onCheckSms: () -> Boolean,
     loginState: LoginState,
     home: HomeViewModel,
+    onRestoreSms: () -> Unit,
     onBackground: () -> Unit,
     setup: @Composable () -> Unit
 ) {
@@ -30,8 +31,9 @@ internal fun AcceptedNavigation(
         return
     }
     val state by home.state.collectAsState()
+    val smsRecovery by home.smsRecovery.collectAsState()
     var completed by remember { mutableStateOf(progress.state.completed) }
-    var pairingEntryOpen by remember { mutableStateOf(false) }
+    val pairingEntryOpen by home.pairingEntryOpen.collectAsState()
     val revoked = state.authorization == AuthorizationState.RegistrationRevoked
     LaunchedEffect(Unit) { home.refresh() }
     if (!completed && !smsGranted && !revoked) {
@@ -40,7 +42,7 @@ internal fun AcceptedNavigation(
     }
     val leaveEntry = {
         if (completed) {
-            pairingEntryOpen = false
+            home.closePairingEntry()
         } else if (onCheckSms()) {
             progress.complete()
             completed = true
@@ -54,9 +56,12 @@ internal fun AcceptedNavigation(
         HomeScreen(
             state,
             smsGranted,
+            smsRecovery,
+            onRestoreSms = onRestoreSms,
+            onSmsFeedbackDismiss = home::dismissSmsFeedback,
             onRefresh = home::refresh,
             onSelect = { pairingId, enabled -> home.select(state, pairingId, enabled) },
-            onAdd = { pairingEntryOpen = true }
+            onAdd = home::openPairingEntry
         )
     }
 }
