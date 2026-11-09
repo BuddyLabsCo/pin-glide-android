@@ -109,12 +109,21 @@ class OwnPairings(
         stateGate.withLock {
             if (state.value !== expectedState) return@withLock
             val expected = snapshot ?: return@withLock
+            val owner = expected.authority.identity ?: return@withLock
+            val target = expected.items.find { it.pairingId == pairingId } ?: return@withLock
             try {
-                store.select(expected, pairingId, enabled)
+                val current = store.readPairings()
+                val identity = current.authority.identity
+                val accepted = current.revision == expected.revision &&
+                    current.authority.refreshState == expected.authority.refreshState &&
+                    identity?.accountId == owner.accountId && identity.senderId == owner.senderId &&
+                    current.items.any {
+                        it.pairingId == pairingId && it.receiverId == target.receiverId
+                    } && store.select(current, pairingId, enabled)
                 publish(
                     store.readPairings(),
                     refreshing = state.value.refreshing,
-                    failed = state.value.failed
+                    failed = state.value.failed || !accepted
                 )
             } catch (_: IdentityStorageException) {
                 mutableState.value = state.value.copy(failed = true)

@@ -82,16 +82,33 @@ The final command passed:
 gradlew qualityCheck :app:compileDebugKotlin :app:compileReleaseKotlin :app:assembleDebug :app:test --continue
 ```
 
-This includes formatting, Detekt, Debug/Release Android lint, both Kotlin variants,
-the Debug APK and all six existing host tests. Ten isolated assertions against
-the compiled readiness projection also passed. No automated tests or harnesses
-were added to this production-only slice.
+This includes formatting, Detekt, Debug/Release Android lint, both Kotlin
+variants, the Debug APK and all ten host tests after the review correction.
+The original implementation also passed ten isolated assertions against the
+compiled readiness projection.
 
-Ripwire quality-delta still reports five structural findings: preference-setter
-similarity, Activity churn/size and encrypted-store size. These are accepted
-trade-offs to retain the existing preference convention and single encrypted
-writer; no findings were suppressed. Its test graph maps no tests to the new
-workflow and leaves 33 files unindexed, so the host suite is not evidence of
-end-to-end Home coverage. No device or emulator was connected: gesture delivery,
+Ripwire's review-fix delta flags five existing encrypted-store overrides as
+unreachable even though PinGlideApplication wires that store into login, renewal
+and Pairing workflows. These are interface-resolution limitations, not deleted
+callers; no findings were suppressed. Its graph maps one workflow test, leaves
+six impacted symbols uncovered and 33 files unindexed, so it does not establish
+complete coverage. No device or emulator was connected: gesture delivery,
 TalkBack, visual themes/font scaling and process-restart behavior remain
 unverified on Android hardware.
+
+## Review correction: selection during credential renewal
+
+A current local switch action now reads a fresh protected snapshot before its
+write. It can cross credential generations only when Account, Sender, Pairing
+and Receiver identity, authority state and Pairing revision still match the
+displayed snapshot. The storage generation check remains intact. A rejected
+write publishes the current snapshot with a failure indication rather than
+silently presenting it as accepted.
+
+Four focused host regression tests cover OFF during successful renewal with
+the list response held pending, OFF surviving subsequent reconciliation and
+storage, stale Home rows and changed preference revisions, changed Account or
+Sender, and revoked authority. The renewal regression failed against the
+original implementation before the fix and passed afterward. These tests use
+the public OwnPairings workflow, real credential renewal and a controlled
+in-memory persistence boundary; they do not verify Android Keystore or UI.
