@@ -108,6 +108,13 @@
     <string name="home_key_recovery">The local key is missing or damaged. Forwarding to this target is off. Remove its Pairing, then add the target again. Other targets are unaffected.</string>
     <string name="home_rename">Rename target</string>
     <string name="home_alias_help">Enter a unique target name of 1–40 characters.</string>
+    <string name="home_alias_scope">This name is visible only to this Sender.</string>
+    <string name="home_alias_label">Target name</string>
+    <string name="home_alias_blank">Enter a target name.</string>
+    <string name="home_alias_too_long">Use no more than 40 characters.</string>
+    <string name="home_alias_invalid_characters">The name contains an invalid character. Enter it again.</string>
+    <string name="home_alias_duplicate">Another paired target already has this name. Choose a different name.</string>
+    <string name="home_saving">Saving</string>
     <string name="home_save">Save</string>
     <string name="home_remove">Remove this target’s Pairing</string>
     <string name="home_remove_title">Remove “%1$s”?</string>

@@ -28,6 +28,7 @@ data class HomeState(
     val refreshing: Boolean = false,
     val failed: Boolean = false,
     val authorization: AuthorizationState = AuthorizationState.Checking,
+    val generation: Long = 0,
     val owner: Pair<String, String>? = null
 ) {
     fun readiness(smsGranted: Boolean): HomeReadiness {

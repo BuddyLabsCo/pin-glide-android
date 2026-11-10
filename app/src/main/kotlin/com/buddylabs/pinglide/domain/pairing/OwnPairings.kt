@@ -192,6 +192,9 @@ class OwnPairings(
             return@withAccess PairingChange.InvalidAlias
         }
         val updated = submitChange(identity, requested, target.pairingId, alias)
+        if (updated != null && updated.alias != alias) {
+            return@withAccess PairingChange.Unavailable
+        }
         finishChange(requested, target, updated, alias == null)
     }
 
@@ -227,6 +230,14 @@ class OwnPairings(
     private fun PairingSnapshot.contains(target: OwnPairing): Boolean =
         items.any { it.pairingId == target.pairingId && it.receiverId == target.receiverId }
 
+    private fun PairingSnapshot.canFinishChange(
+        requested: PairingSnapshot,
+        target: OwnPairing
+    ): Boolean = sameOwner(requested) && authority.generation == requested.authority.generation &&
+        authority.refreshState == requested.authority.refreshState && contains(target) &&
+        items.first { it.pairingId == target.pairingId }.alias ==
+        requested.items.first { it.pairingId == target.pairingId }.alias
+
     private suspend fun finishChange(
         requested: PairingSnapshot,
         target: OwnPairing,
@@ -234,11 +245,7 @@ class OwnPairings(
         removing: Boolean
     ): PairingChange = stateGate.withLock {
         val current = store.readPairings()
-        if (!current.sameOwner(requested) ||
-            current.authority.generation != requested.authority.generation ||
-            current.authority.refreshState != requested.authority.refreshState ||
-            !current.contains(target)
-        ) {
+        if (!current.canFinishChange(requested, target)) {
             return@withLock PairingChange.Unavailable
         }
         if (updated != null &&
@@ -368,6 +375,7 @@ class OwnPairings(
             refreshing = refreshing,
             failed = failed,
             authorization = renewal.state.value,
+            generation = current.authority.generation,
             owner = current.authority.identity?.let { it.accountId to it.senderId }
         )
     }

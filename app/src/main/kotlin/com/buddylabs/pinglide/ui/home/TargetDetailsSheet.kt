@@ -35,15 +35,17 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
+import com.buddylabs.pinglide.domain.pairing.PairingAliasError
 import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.domain.pairing.TargetDevice
-import com.buddylabs.pinglide.domain.pairing.validPairingAlias
+import com.buddylabs.pinglide.domain.pairing.pairingAliasError
 
 private enum class DetailsPage { Details, Rename, Remove }
 
@@ -70,24 +72,27 @@ internal fun TargetDetailsSheet(
         if (action.result == PairingChange.Renamed) page = DetailsPage.Details
     }
     val name = target.alias.ifBlank { stringResource(R.string.home_target_device) }
+    val title = if (page == DetailsPage.Rename) stringResource(R.string.home_rename) else name
     ModalBottomSheet(
         onDismissRequest = { if (!pending) onDismiss() },
         sheetState = sheet,
         sheetGesturesEnabled = !pending,
         contentWindowInsets = { WindowInsets.safeDrawing },
-        modifier = Modifier.imePadding().semantics { paneTitle = name }
+        modifier = Modifier.imePadding().semantics { paneTitle = title }
     ) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                name,
+                title,
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.semantics { heading() }
             )
-            Text(targetPresence(target), style = MaterialTheme.typography.bodySmall)
-            if (!target.keyUsable) KeyFailureNotice()
+            if (page != DetailsPage.Rename) {
+                Text(targetPresence(target), style = MaterialTheme.typography.bodySmall)
+                if (!target.keyUsable) KeyFailureNotice()
+            }
             when (page) {
                 DetailsPage.Details -> {
                     Text(
@@ -129,6 +134,7 @@ internal fun TargetDetailsSheet(
 
                 DetailsPage.Rename -> RenameTarget(draft, otherAliases, pending, {
                     draft = it
+                    onClearAction()
                 }, onRename)
 
                 DetailsPage.Remove -> {
@@ -148,6 +154,7 @@ internal fun TargetDetailsSheet(
             if (page != DetailsPage.Details) {
                 OutlinedButton(
                     onClick = {
+                        draft = target.alias
                         onClearAction()
                         page = DetailsPage.Details
                     },
@@ -173,23 +180,37 @@ private fun RenameTarget(
     onRename: (String) -> Unit
 ) {
     val focus = remember { FocusRequester() }
-    val valid = validPairingAlias(draft, otherAliases)
+    val validation = pairingAliasError(draft, otherAliases)
+    val message = stringResource(
+        when (validation) {
+            PairingAliasError.Blank -> R.string.home_alias_blank
+            PairingAliasError.TooLong -> R.string.home_alias_too_long
+            PairingAliasError.InvalidCharacters -> R.string.home_alias_invalid_characters
+            PairingAliasError.Duplicate -> R.string.home_alias_duplicate
+            null -> R.string.home_alias_help
+        }
+    )
     LaunchedEffect(Unit) { focus.requestFocus() }
+    Text(stringResource(R.string.home_alias_scope), style = MaterialTheme.typography.bodySmall)
     OutlinedTextField(
         value = draft,
         onValueChange = onDraft,
         enabled = !pending,
-        isError = !valid,
-        label = { Text(stringResource(R.string.home_rename)) },
-        supportingText = { Text(stringResource(R.string.home_alias_help)) },
+        isError = validation != null,
+        label = { Text(stringResource(R.string.home_alias_label)) },
+        supportingText = {
+            Text(message, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        },
         singleLine = true,
-        modifier = Modifier.fillMaxWidth().focusRequester(focus)
+        modifier = Modifier.fillMaxWidth().focusRequester(focus).semantics {
+            if (validation != null) error(message)
+        }
     )
     Button(
         onClick = { onRename(draft) },
-        enabled = valid && !pending,
+        enabled = validation == null && !pending,
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-    ) { Text(stringResource(R.string.home_save)) }
+    ) { Text(stringResource(if (pending) R.string.home_saving else R.string.home_save)) }
 }
 
 @Composable

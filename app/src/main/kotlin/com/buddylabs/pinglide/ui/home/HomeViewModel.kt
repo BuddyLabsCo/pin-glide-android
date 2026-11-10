@@ -129,12 +129,25 @@ class HomeViewModel(private val pairings: OwnPairings, private val restoration: 
         mutableAction.value = pending
         viewModelScope.launch {
             val result = operation()
-            mutableAction.value = if (state.value.owner == expected.owner) {
-                pending.copy(pending = false, result = result)
+            val completed = state.value
+            if (result != PairingChange.InvalidAlias) pairings.synchronize()
+            if (action.value !== pending) return@launch
+            val current = state.value
+            mutableAction.value = if (current.owner == expected.owner &&
+                current.generation == completed.generation
+            ) {
+                val confirmed = if (result == PairingChange.Renamed &&
+                    current.targets.find { it.pairingId == pairingId }?.alias !=
+                    completed.targets.find { it.pairingId == pairingId }?.alias
+                ) {
+                    PairingChange.Unavailable
+                } else {
+                    result
+                }
+                pending.copy(pending = false, result = confirmed)
             } else {
                 TargetAction()
             }
-            if (result != PairingChange.InvalidAlias) pairings.refresh()
         }
     }
 }
