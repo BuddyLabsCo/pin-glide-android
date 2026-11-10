@@ -11,6 +11,7 @@ okhttp = "5.5.1"
 serialization = "1.11.0"
 coroutines = "1.11.0"
 bouncycastle = "1.86"
+camerax = "1.5.3"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
@@ -23,6 +24,11 @@ serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-jso
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
 junit = { module = "junit:junit", version = "4.13.2" }
+camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+camera-mlkit = { module = "androidx.camera:camera-mlkit-vision", version.ref = "camerax" }
+barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version = "17.3.0" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

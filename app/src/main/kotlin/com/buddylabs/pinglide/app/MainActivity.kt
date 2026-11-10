@@ -21,6 +21,7 @@ import com.buddylabs.pinglide.ui.home.HomeViewModel
 import com.buddylabs.pinglide.ui.navigation.AcceptedNavigation
 import com.buddylabs.pinglide.ui.navigation.SetupNavigation
 import com.buddylabs.pinglide.ui.onboarding.LoginViewModel
+import com.buddylabs.pinglide.ui.pairing.PairingEntryViewModel
 
 class MainActivity : ComponentActivity() {
     private val permissions by lazy { SetupPermissions(this) }
@@ -36,6 +37,17 @@ class MainActivity : ComponentActivity() {
         )[LoginViewModel::class.java]
     }
     private var smsGranted by mutableStateOf(false)
+    private val pairing by lazy {
+        ViewModelProvider(
+            this,
+            object : ViewModelProvider.Factory {
+                override fun <Model : ViewModel> create(modelClass: Class<Model>): Model =
+                    modelClass.cast(
+                        PairingEntryViewModel((application as PinGlideApplication)::pairingEntry)
+                    )!!
+            }
+        )[PairingEntryViewModel::class.java]
+    }
     private val home by lazy {
         ViewModelProvider(
             this,
@@ -86,6 +98,7 @@ class MainActivity : ComponentActivity() {
                     onCheckSms = ::checkSmsPermission,
                     loginState = loginState,
                     home = home,
+                    pairing = pairing,
                     onRestoreSms = ::restoreSmsPermission,
                     onBackground = { moveTaskToBack(true) },
                     onNewRegistration = login::beginRegistration

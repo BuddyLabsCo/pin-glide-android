@@ -52,7 +52,8 @@ fun HomeScreen(
     smsRecovery: SmsRecovery,
     home: HomeViewModel,
     onRestoreSms: () -> Unit,
-    onAdd: () -> Unit
+    onAdd: () -> Unit,
+    highlightedPairingId: String? = null
 ) {
     val readiness = state.readiness(smsGranted)
     val action by home.action.collectAsState()
@@ -69,6 +70,16 @@ fun HomeScreen(
     val dismiss = {
         selectedId = null
         restoreFocus = true
+    }
+    LaunchedEffect(highlightedPairingId) {
+        if (highlightedPairingId != null) {
+            selectedId = null
+            lastSelectedId = highlightedPairingId
+            listState.revealTarget(
+                state.targets.indexOfFirst { it.pairingId == highlightedPairingId },
+                highlightedPairingId
+            )
+        }
     }
     LaunchedEffect(restoreFocus) {
         if (restoreFocus) {
@@ -111,7 +122,13 @@ fun HomeScreen(
             lastSelectedId = it
             selectedId = it
         },
-        onAdd, home::restoreLogin, lastSelectedId, rowFocus, headingFocus, listState
+        onAdd,
+        home::restoreLogin,
+        lastSelectedId,
+        rowFocus,
+        headingFocus,
+        listState,
+        highlightedPairingId
     )
     LoginRestorationNotice(restoration, state.refreshing, home::dismissLoginNotice)
     SmsRecoveryNotice(state, smsGranted, smsRecovery, home::dismissSmsFeedback)
@@ -147,7 +164,8 @@ private fun HomeContent(
     lastSelectedId: String?,
     rowFocus: FocusRequester,
     headingFocus: FocusRequester,
-    listState: LazyListState
+    listState: LazyListState,
+    highlightedPairingId: String?
 ) {
     LaunchedEffect(Unit) { headingFocus.requestFocus() }
     ScreenLayout {
@@ -183,6 +201,7 @@ private fun HomeContent(
                             onOpen(target.pairingId)
                         },
                         onSelect = { onSelect(target.pairingId, it) },
+                        highlighted = target.pairingId == highlightedPairingId,
                         modifier = if (target.pairingId == lastSelectedId) {
                             Modifier.focusRequester(rowFocus)
                         } else {

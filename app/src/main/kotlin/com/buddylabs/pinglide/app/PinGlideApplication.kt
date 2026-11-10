@@ -5,6 +5,7 @@ import com.buddylabs.pinglide.BuildConfig
 import com.buddylabs.pinglide.data.service.CredentialRenewalService
 import com.buddylabs.pinglide.data.service.CurrentSenderAuthorizationService
 import com.buddylabs.pinglide.data.service.OwnPairingService
+import com.buddylabs.pinglide.data.service.PairingSessionService
 import com.buddylabs.pinglide.data.service.QqLoginService
 import com.buddylabs.pinglide.data.storage.ProtectedIdentityStore
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
@@ -13,7 +14,9 @@ import com.buddylabs.pinglide.domain.identity.ExplicitLogin
 import com.buddylabs.pinglide.domain.identity.QqAuthorization
 import com.buddylabs.pinglide.domain.identity.SenderRestoration
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
+import com.buddylabs.pinglide.domain.pairing.PairingEntry
 import com.buddylabs.pinglide.platform.DeviceInfo
+import com.buddylabs.pinglide.platform.crypto.PairingQrReader
 import com.buddylabs.pinglide.platform.qq.QqConnectAuthorization
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
@@ -89,5 +92,14 @@ class PinGlideApplication : Application() {
         service = loginService,
         renewal = credentialRenewal,
         deviceName = DeviceInfo(this)::senderName
+    )
+
+    fun pairingEntry(scope: CoroutineScope) = PairingEntry(
+        identityStore,
+        ownPairings,
+        PairingSessionService(BuildConfig.SERVICE_URL, identityClient),
+        PairingQrReader(),
+        credentialRenewal,
+        scope
     )
 }

@@ -1,5 +1,7 @@
 package com.buddylabs.pinglide.ui.home
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,15 +9,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
@@ -32,11 +39,18 @@ internal fun TargetRow(
     enabled: Boolean,
     onOpen: () -> Unit,
     onSelect: (Boolean) -> Unit,
+    highlighted: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val name = target.alias.ifBlank { stringResource(R.string.home_target_device) }
+    val outline by animateColorAsState(
+        if (highlighted) MaterialTheme.colorScheme.primary else Color.Transparent,
+        label = "Pairing scan outline"
+    )
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 80.dp),
+        Modifier.fillMaxWidth().heightIn(
+            min = 80.dp
+        ).border(2.dp, outline, RoundedCornerShape(16.dp)),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(
@@ -51,6 +65,13 @@ internal fun TargetRow(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(name, style = MaterialTheme.typography.titleMedium)
+            if (highlighted) {
+                Text(
+                    stringResource(R.string.pairing_already_added),
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+                )
+            }
             Text(targetPresence(target), style = MaterialTheme.typography.bodySmall)
             if (!target.keyUsable) {
                 Text(
