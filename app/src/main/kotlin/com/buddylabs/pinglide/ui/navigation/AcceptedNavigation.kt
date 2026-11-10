@@ -7,6 +7,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.buddylabs.pinglide.domain.identity.AuthorizationState
 import com.buddylabs.pinglide.domain.identity.LoginState
@@ -30,6 +31,7 @@ internal fun AcceptedNavigation(
     onRestoreSms: () -> Unit,
     onBackground: () -> Unit,
     onNewRegistration: () -> Unit,
+    settings: @Composable (onDismiss: () -> Unit) -> Unit,
     setup: @Composable () -> Unit
 ) {
     if (loginState == LoginState.Revoked) {
@@ -49,6 +51,7 @@ internal fun AcceptedNavigation(
     var completed by remember { mutableStateOf(progress.state.completed) }
     val pairingEntryOpen by home.pairingEntryOpen.collectAsState()
     val revoked = state.authorization == AuthorizationState.RegistrationRevoked
+    var settingsOpen by rememberSaveable(state.owner) { mutableStateOf(false) }
     LaunchedEffect(Unit) { home.refresh() }
     if (!completed && !smsGranted && !revoked) {
         setup()
@@ -67,7 +70,10 @@ internal fun AcceptedNavigation(
         FirstDeviceScreen(onLeave = leaveEntry)
     } else {
         BackHandler(onBack = onBackground)
-        HomeDestination(state, smsGranted, smsRecovery, home, onRestoreSms)
+        HomeDestination(state, smsGranted, smsRecovery, home, onRestoreSms) { settingsOpen = true }
+        if (settingsOpen && !revoked) {
+            settings { settingsOpen = false }
+        }
     }
 }
 
@@ -77,7 +83,8 @@ private fun HomeDestination(
     smsGranted: Boolean,
     smsRecovery: SmsRecovery,
     home: HomeViewModel,
-    onRestoreSms: () -> Unit
+    onRestoreSms: () -> Unit,
+    onSettings: () -> Unit
 ) {
     val restoration by home.loginRestoration.collectAsState()
     when (restoration) {
@@ -95,7 +102,8 @@ private fun HomeDestination(
             smsRecovery,
             home = home,
             onRestoreSms = onRestoreSms,
-            onAdd = home::openPairingEntry
+            onAdd = home::openPairingEntry,
+            onSettings = onSettings
         )
     }
 }
