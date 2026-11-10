@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.buddylabs.pinglide.domain.identity.LoginState
+import com.buddylabs.pinglide.domain.identity.LogoutState
 import com.buddylabs.pinglide.domain.settings.SetupProgress
 import com.buddylabs.pinglide.domain.settings.SetupState
 import com.buddylabs.pinglide.ui.components.PrivacyScreen
@@ -47,6 +48,9 @@ fun SetupNavigation(
     onBatterySettings: () -> Boolean,
     loginState: LoginState,
     onLogin: () -> Unit,
+    onNewAccount: () -> Unit,
+    logoutState: LogoutState,
+    onRetryLogout: () -> Unit,
     onCancelLogin: () -> Unit,
     onRetryIdentity: () -> Unit,
     onNewRegistration: () -> Unit,
@@ -67,7 +71,9 @@ fun SetupNavigation(
         loginState == LoginState.Welcome
     )
     val leaveLogin = {
-        if (loginState == LoginState.Loading || loginState == LoginState.Error) {
+        if (loginState in
+            setOf(LoginState.Loading, LoginState.Error, LoginState.RestorationError)
+        ) {
             onCancelLogin()
         } else {
             onBackground()
@@ -84,11 +90,15 @@ fun SetupNavigation(
     when (destination) {
         SetupDestination.Welcome -> WelcomeScreen(
             onStartSetup = {
-                onNewRegistration()
-                progress.start()
-                setup = progress.state
+                if (logoutState == LogoutState.Ready) {
+                    onNewRegistration()
+                    progress.start()
+                    setup = progress.state
+                }
             },
-            onPrivacy = { privacyOpen = true }
+            onPrivacy = { privacyOpen = true },
+            logoutState = logoutState,
+            onRetryLogout = onRetryLogout
         )
 
         SetupDestination.Sms, SetupDestination.SmsDenied -> SmsPermissionScreen(
@@ -117,6 +127,7 @@ fun SetupNavigation(
         SetupDestination.QqLogin -> QqLoginScreen(
             state = loginState,
             onLogin = onLogin,
+            onNewAccount = onNewAccount,
             onCancel = onCancelLogin,
             onRetryStorage = onRetryIdentity,
             onBack = leaveLogin

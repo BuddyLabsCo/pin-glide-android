@@ -184,4 +184,12 @@
     <string name="settings_device_access">Device access management</string>
     <string name="settings_device_access_explanation">Revocation requires verification with the current QQ account. The selected Sender’s registration and Pairings will be permanently removed. Other Senders are unaffected.</string>
     <string name="settings_about">About</string>
+    <string name="account_loading">Loading…</string>
+    <string name="account_error">Could not load account information</string>
+    <string name="account_logout">Log out</string>
+    <string name="account_logout_title">Log out?</string>
+    <string name="account_logout_description">Pin Glide will immediately stop forwarding on this device and try to revoke its service credentials. Device Pairings and local Pairing keys will be kept.</string>
+    <string name="account_logout_storage_error">Forwarding has stopped, but the logout state could not be saved. Retry before closing the app.</string>
+    <string name="account_restore_error">Could not restore the original Sender. Retry, or verify your QQ account again to register a new Sender. Existing Pairing keys are kept until the new login succeeds.</string>
+    <string name="account_new_login">Register a Sender with fresh QQ authorization</string>
 </resources>

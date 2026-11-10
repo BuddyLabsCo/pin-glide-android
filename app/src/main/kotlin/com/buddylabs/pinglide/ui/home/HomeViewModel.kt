@@ -66,7 +66,11 @@ class HomeViewModel(private val pairings: OwnPairings, private val restoration: 
 
     fun leaveLogin() {
         restoration.leave()
+        restoration.dismissNotice()
         loginOperation?.cancel()
+        recoveryGeneration++
+        mutableSmsRecovery.value = SmsRecovery.Idle
+        mutableAction.value = TargetAction()
     }
 
     fun dismissLoginNotice() = restoration.dismissNotice()

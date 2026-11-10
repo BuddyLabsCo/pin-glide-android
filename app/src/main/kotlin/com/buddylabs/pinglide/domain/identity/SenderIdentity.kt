@@ -40,8 +40,12 @@ data class IdentitySnapshot(
     val identity: SenderIdentity? = null,
     val renewal: RenewalOperation? = null,
     val refreshState: RefreshState = RefreshState.Active,
-    val closedSenderIds: Set<String> = emptySet()
+    val closedSenderIds: Set<String> = emptySet(),
+    val restoration: SenderContext? = null
 )
+
+@Serializable
+data class SenderContext(val accountId: String, val senderId: String)
 
 interface IdentityStore {
     suspend fun read(): IdentitySnapshot

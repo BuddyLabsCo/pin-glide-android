@@ -53,6 +53,8 @@ package.json, package-lock.json                # Node generator dependencies and
 docs/ui-prototype/                            # Approved review artifacts; outside the Android runtime.
 ```
 
+Ordinary logout writes a credential-free marker in no-backup storage before replacing the encrypted identity snapshot. The marker keeps old snapshot credentials inactive if replacement fails; only a successfully committed explicit login removes it. Signed-out snapshots retain only Sender restoration context, Pairing keys/metadata and receive preferences. Logout cancels pending terminal commits through the storage commit guard and prevents stale authorization publication. Setup stays at Welcome until local persistence succeeds; failures expose logout Retry there. Remote logout uses one captured refresh credential in memory and never blocks navigation or becomes a persisted retry.
+
 ## Responsibilities
 
 UI owns presentation and navigation; domain owns workflow policy and its required I/O interfaces. Data/platform implement those operations; `app/` assembles concrete dependencies. Domain imports no Android, Compose, OkHttp or generated DTOs. UI does not access credentials, keys, concrete storage or network clients. Create interfaces at these seams, not around every class.

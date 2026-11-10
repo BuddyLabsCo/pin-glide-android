@@ -7,7 +7,9 @@ import com.buddylabs.pinglide.data.service.CurrentSenderAuthorizationService
 import com.buddylabs.pinglide.data.service.OwnPairingService
 import com.buddylabs.pinglide.data.service.PairingSessionService
 import com.buddylabs.pinglide.data.service.QqLoginService
+import com.buddylabs.pinglide.data.service.ServiceAccount
 import com.buddylabs.pinglide.data.storage.ProtectedIdentityStore
+import com.buddylabs.pinglide.domain.identity.AccountSession
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.CurrentSenderAuthorization
 import com.buddylabs.pinglide.domain.identity.ExplicitLogin
@@ -58,6 +60,15 @@ class PinGlideApplication : Application() {
             identityStore,
             OwnPairingService(BuildConfig.SERVICE_URL, identityClient),
             credentialRenewal,
+            processScope
+        )
+    }
+
+    val accountSession by lazy {
+        AccountSession(
+            identityStore,
+            credentialRenewal,
+            ServiceAccount(BuildConfig.SERVICE_URL, identityClient),
             processScope
         )
     }

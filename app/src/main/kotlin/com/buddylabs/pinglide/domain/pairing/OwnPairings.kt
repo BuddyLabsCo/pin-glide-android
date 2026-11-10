@@ -37,6 +37,14 @@ class OwnPairings(
         scope.launch {
             renewal.state.collect { authorization ->
                 stateGate.withLock {
+                    if (authorization == AuthorizationState.LoggedOut) {
+                        snapshot = null
+                        presence = emptyMap()
+                        presenceOwner = null
+                        removals.clear()
+                        mutableState.value = HomeState(authorization = authorization)
+                        return@withLock
+                    }
                     mutableState.value = state.value.copy(authorization = authorization)
                 }
             }
@@ -111,7 +119,7 @@ class OwnPairings(
 
     suspend fun select(expectedState: HomeState, pairingId: String, enabled: Boolean) =
         stateGate.withLock {
-            if (state.value !== expectedState) return@withLock
+            if (!canSelect(expectedState)) return@withLock
             if (pairingId in removals) return@withLock
             val expected = snapshot ?: return@withLock
             val owner = expected.authority.identity ?: return@withLock
@@ -137,6 +145,9 @@ class OwnPairings(
 
     suspend fun rename(expected: HomeState, pairingId: String, alias: String): PairingChange =
         change(expected, pairingId, alias.trim())
+
+    private fun canSelect(expected: HomeState): Boolean =
+        state.value === expected && renewal.isSessionCurrent(renewal.sessionGeneration)
 
     suspend fun remove(expected: HomeState, pairingId: String): PairingChange =
         change(expected, pairingId, null)
@@ -355,13 +366,18 @@ class OwnPairings(
 
     private fun PairingSnapshot.canSend(initial: PairingSnapshot?): Boolean =
         authority.identity != null && authority.refreshState == RefreshState.Active &&
+            renewal.isSessionCurrent(renewal.sessionGeneration) &&
             !renewal.isRegistrationClosed(authority.identity) &&
             renewal.state.value !in setOf(
                 AuthorizationState.RegistrationRevoked,
                 AuthorizationState.RegistrationClosed,
+                AuthorizationState.LoggedOut,
                 AuthorizationState.StorageUnavailable
             ) &&
-            (initial == null || sameOwner(initial))
+            (
+                initial == null ||
+                    (sameOwner(initial) && authority.generation == initial.authority.generation)
+                )
 
     private suspend fun refreshFailed() = stateGate.withLock {
         presence = emptyMap()
@@ -382,6 +398,13 @@ class OwnPairings(
         refreshing: Boolean = false,
         failed: Boolean = false
     ) {
+        if (renewal.state.value == AuthorizationState.LoggedOut) {
+            snapshot = null
+            presence = emptyMap()
+            presenceOwner = null
+            mutableState.value = HomeState(authorization = AuthorizationState.LoggedOut)
+            return
+        }
         snapshot = current
         mutableState.value = HomeState(
             targets = current.items.map { pairing ->
