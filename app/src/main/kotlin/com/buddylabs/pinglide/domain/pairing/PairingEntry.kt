@@ -26,7 +26,8 @@ class PairingEntry(
     private val decoder: PairingQrDecoder,
     private val renewal: CredentialRenewal,
     private val scope: CoroutineScope,
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
+    private val activation: PairingActivation
 ) {
     private val mutableState = MutableStateFlow(PairingEntryState())
     val state = mutableState.asStateFlow()
@@ -162,18 +163,49 @@ class PairingEntry(
         val expected = ++epoch
         watcher?.cancel()
         mutableState.value = state.value.copy(pending = true)
+        confirmSession(current, alias, expected)
+    }
+
+    private suspend fun confirmSession(current: PairingQr, alias: String, expected: Long) {
         try {
             val result = authorize(current.sessionId)
             if (expected != epoch || currentSnapshot() == null) return
             validate(result, current)
             session = result
-            mutableState.value = state.value.copy(pending = false, alias = alias, confirmed = true)
-            observe(expected)
+            ticker?.cancel()
+            mutableState.value = state.value.copy(
+                page = PairingEntryPage.Progress,
+                alias = alias,
+                confirmed = true,
+                stage = PairingStage.Opening
+            )
+            val pairingId = activation.activate(current, result, alias) { stage ->
+                if (expected == epoch) mutableState.value = state.value.copy(stage = stage)
+            }
+            if (expected != epoch || currentSnapshot() == null) return
+            current.clear()
+            qr = null
+            session = null
+            mutableState.value = state.value.copy(
+                page = PairingEntryPage.Success,
+                pending = false,
+                activatedPairingId = pairingId
+            )
         } catch (failure: PairingEntryException) {
-            if (expected == epoch) fail(failure.problem)
+            failCurrent(expected, failure.problem)
         } catch (_: AuthorizationException) {
             if (expected == epoch) leave()
+        } catch (_: IdentityStorageException) {
+            failCurrent(expected, PairingEntryProblem.Unavailable)
+        } catch (_: AccessExpiredException) {
+            failCurrent(expected, PairingEntryProblem.Unavailable)
+        } catch (_: PairingServiceException) {
+            failCurrent(expected, PairingEntryProblem.Unavailable)
         }
+    }
+
+    private fun failCurrent(expected: Long, problem: PairingEntryProblem) {
+        if (expected == epoch) fail(problem)
     }
 
     fun returnToScanner() {
@@ -225,6 +257,11 @@ class PairingEntry(
 
     suspend fun foreground() {
         if (state.value.page == PairingEntryPage.Idle) return
+        if (state.value.page == PairingEntryPage.Progress ||
+            state.value.page == PairingEntryPage.Success
+        ) {
+            return
+        }
         val snapshot = currentSnapshot() ?: return
         aliases = snapshot.items.map { it.alias }
         mutableState.value =

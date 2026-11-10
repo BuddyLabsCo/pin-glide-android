@@ -47,7 +47,7 @@ internal fun AcceptedNavigation(
     setup: @Composable () -> Unit
 ) {
     LaunchedEffect(loginState) {
-        if (loginState != LoginState.FirstDevice) pairing.close()
+        if (loginState != LoginState.FirstDevice) pairing.abandon()
     }
     if (loginState == LoginState.Revoked) {
         BackHandler(onBack = onBackground)
@@ -73,10 +73,9 @@ internal fun AcceptedNavigation(
             completed = true
         }
     }
-    PairingEntryNotices(entry, state, pairing) {
-        if (!completed) completeEntry()
-    }
+    PairingEntryNotices(entry, state, pairing, completeEntry)
     val onboarding = !completed && !revoked
+    PairingCompletion(entry, state, completeEntry)
     if (onboarding && !smsGranted) {
         setup()
         return
@@ -89,6 +88,8 @@ internal fun AcceptedNavigation(
     key(cameraHost) {
         PairingCameraGate(pairing, state, cameraHost) { onScan ->
             when {
+                state.needsPairingLogin(onboarding) -> PairingLoginRecovery(home, onBackground)
+
                 entry.page != PairingEntryPage.Idle && !revoked -> PairingScreen(entry, pairing)
 
                 onboarding -> {
@@ -118,6 +119,21 @@ internal fun AcceptedNavigation(
 }
 
 @Composable
+private fun PairingCompletion(entry: PairingEntryState, state: HomeState, complete: () -> Unit) {
+    LaunchedEffect(entry.activatedPairingId, state.targets) {
+        if (entry.activatedPairingId != null || state.targets.any { it.keyUsable }) {
+            complete()
+        }
+    }
+}
+
+private fun HomeState.needsPairingLogin(onboarding: Boolean): Boolean = onboarding &&
+    (
+        authorization == AuthorizationState.LoginRequired ||
+            authorization == AuthorizationState.RecoveryRequired
+        )
+
+@Composable
 private fun PairingEntryNotices(
     entry: PairingEntryState,
     state: HomeState,
@@ -130,7 +146,7 @@ private fun PairingEntryNotices(
             state.authorization == AuthorizationState.LoginRequired ||
             state.authorization == AuthorizationState.RecoveryRequired
         ) {
-            pairing.close()
+            pairing.abandon()
         } else {
             pairing.foreground()
         }

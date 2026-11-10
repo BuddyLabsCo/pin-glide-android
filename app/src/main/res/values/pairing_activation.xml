@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pairing_success">配对完成</string>
+    <string name="pairing_progress_title">正在配对</string>
+    <string name="pairing_failed_title">配对未完成</string>
+    <string name="pairing_progress_opening">正在打开配对通道</string>
+    <string name="pairing_progress_identity">正在生成设备身份</string>
+    <string name="pairing_progress_key">正在交换加密密钥</string>
+    <string name="pairing_progress_confirm">正在确认配对信息</string>
+    <string name="pairing_home">进入首页</string>
+    <string name="pairing_return">返回</string>
+    <string name="pairing_test_send">发送测试消息</string>
+    <string name="pairing_test_sending">正在发送…</string>
+    <string name="pairing_test_received">测试消息已发送</string>
+    <string name="pairing_test_offline">目标设备离线，测试消息未送达</string>
+    <string name="pairing_test_uncertain">无法确认测试消息是否送达</string>
+    <string name="pairing_test_no_key">配对或本机密钥不可用</string>
+    <string name="pairing_test_login">登录已失效，请返回首页重新登录</string>
+    <string name="pairing_test_rejected">测试消息被拒绝</string>
+    <string name="pairing_login_title">需要重新登录</string>
+    <string name="pairing_login_copy">配对尚未建立。重新登录 QQ 后，从扫描二维码重新开始。</string>
+    <string name="pairing_login_action">重新登录 QQ</string>
+</resources>

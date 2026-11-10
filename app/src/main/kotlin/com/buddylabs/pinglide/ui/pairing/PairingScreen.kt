@@ -54,6 +54,10 @@ import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
 fun PairingScreen(state: PairingEntryState, model: PairingEntryViewModel) {
+    if (state.page == PairingEntryPage.Progress || state.page == PairingEntryPage.Success) {
+        PairingResultScreen(state, model)
+        return
+    }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val lifecycleState by lifecycle.currentStateAsState()
     val resumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)

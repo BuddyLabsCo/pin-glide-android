@@ -7,16 +7,23 @@ import com.buddylabs.pinglide.data.service.CurrentSenderAuthorizationService
 import com.buddylabs.pinglide.data.service.OwnPairingService
 import com.buddylabs.pinglide.data.service.PairingSessionService
 import com.buddylabs.pinglide.data.service.QqLoginService
+import com.buddylabs.pinglide.data.service.TestDeliveryService
 import com.buddylabs.pinglide.data.storage.ProtectedIdentityStore
+import com.buddylabs.pinglide.data.storage.SetupPreferences
+import com.buddylabs.pinglide.domain.forwarding.PairingTestMessage
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.CurrentSenderAuthorization
 import com.buddylabs.pinglide.domain.identity.ExplicitLogin
 import com.buddylabs.pinglide.domain.identity.QqAuthorization
 import com.buddylabs.pinglide.domain.identity.SenderRestoration
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
+import com.buddylabs.pinglide.domain.pairing.PairingActivation
 import com.buddylabs.pinglide.domain.pairing.PairingEntry
 import com.buddylabs.pinglide.platform.DeviceInfo
+import com.buddylabs.pinglide.platform.crypto.PairingCryptography
 import com.buddylabs.pinglide.platform.crypto.PairingQrReader
+import com.buddylabs.pinglide.platform.crypto.encryptTestMessage
+import com.buddylabs.pinglide.platform.permissions.SetupPermissions
 import com.buddylabs.pinglide.platform.qq.QqConnectAuthorization
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
@@ -62,6 +69,15 @@ class PinGlideApplication : Application() {
         )
     }
 
+    val pairingTestMessage by lazy {
+        PairingTestMessage(
+            identityStore,
+            credentialRenewal,
+            ::encryptTestMessage,
+            TestDeliveryService(BuildConfig.SERVICE_URL, identityClient)
+        )
+    }
+
     private val currentSenderAuthorization by lazy {
         CurrentSenderAuthorization(
             credentialRenewal,
@@ -71,7 +87,13 @@ class PinGlideApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        processScope.launch { credentialRenewal.recover() }
+        processScope.launch {
+            credentialRenewal.recover()
+            ownPairings.synchronize()
+            if (ownPairings.state.value.targets.any { it.keyUsable }) {
+                completeActivatedSetup()
+            }
+        }
     }
 
     fun checkCurrentSenderAuthorization() {
@@ -100,6 +122,21 @@ class PinGlideApplication : Application() {
         PairingSessionService(BuildConfig.SERVICE_URL, identityClient),
         PairingQrReader(),
         credentialRenewal,
-        scope
+        scope,
+        activation = PairingActivation(
+            identityStore,
+            ownPairings,
+            PairingSessionService(BuildConfig.SERVICE_URL, identityClient),
+            PairingCryptography(),
+            credentialRenewal,
+            onActivated = ::completeActivatedSetup
+        )
     )
+
+    private fun completeActivatedSetup() {
+        val progress = SetupPreferences(this)
+        if (progress.state.batteryAcknowledged && SetupPermissions(this).smsGranted) {
+            progress.complete()
+        }
+    }
 }

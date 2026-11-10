@@ -8,6 +8,8 @@ import com.buddylabs.pinglide.generated.http.infrastructure.ApiResponse
 import com.buddylabs.pinglide.generated.http.infrastructure.ClientError
 import com.buddylabs.pinglide.generated.http.infrastructure.Success
 import com.buddylabs.pinglide.generated.http.model.AuthorizeRequest
+import com.buddylabs.pinglide.generated.http.model.CompleteRequest
+import com.buddylabs.pinglide.generated.http.model.PairingSessionView
 import java.io.IOException
 import java.time.DateTimeException
 import java.time.Instant
@@ -20,17 +22,7 @@ class PairingSessionService(private val baseUrl: String, private val client: OkH
         val result = request(token, 200) {
             it.postPairingSessionAuthorizeWithHttpInfo(sessionId, AuthorizeRequest())
         } ?: throw PairingEntryException(PairingEntryProblem.Unavailable)
-        return sessionView(
-            result.sessionId,
-            result.receiverId,
-            result.senderId,
-            result.pairingId,
-            result.mode.value,
-            result.state.value,
-            result.expiresAt,
-            result.senderConfirmed,
-            result.receiverConfirmed
-        )
+        return result.toSession()
     }
 
     override suspend fun cancel(token: String, sessionId: String) {
@@ -39,6 +31,22 @@ class PairingSessionService(private val baseUrl: String, private val client: OkH
 
     override fun watch(token: String, sessionId: String) =
         pairingSessionEvents(baseUrl, client, token, sessionId)
+
+    override fun connect(
+        token: String,
+        sessionId: String
+    ): com.buddylabs.pinglide.domain.pairing.PairingConnection =
+        PairingChannel(baseUrl, client, token, sessionId)
+
+    override suspend fun complete(token: String, sessionId: String): PairingSession {
+        val result = request(token, 200) {
+            it.postPairingSessionCompleteWithHttpInfo(
+                sessionId,
+                CompleteRequest(CompleteRequest.KeyConfirmation.confirmed)
+            )
+        } ?: throw PairingEntryException(PairingEntryProblem.Unavailable)
+        return result.toSession()
+    }
 
     private suspend fun <Result> request(
         token: String,
@@ -111,3 +119,8 @@ internal fun sessionView(
 } catch (_: DateTimeException) {
     throw PairingEntryException(PairingEntryProblem.Unavailable)
 }
+
+private fun PairingSessionView.toSession(): PairingSession = sessionView(
+    sessionId, receiverId, senderId, pairingId, mode.value, state.value, expiresAt,
+    senderConfirmed, receiverConfirmed
+)

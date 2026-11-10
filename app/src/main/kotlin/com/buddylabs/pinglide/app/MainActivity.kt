@@ -49,7 +49,9 @@ class MainActivity : ComponentActivity() {
             object : ViewModelProvider.Factory {
                 override fun <Model : ViewModel> create(modelClass: Class<Model>): Model =
                     modelClass.cast(
-                        PairingEntryViewModel((application as PinGlideApplication)::pairingEntry)
+                        (application as PinGlideApplication).let {
+                            PairingEntryViewModel(it::pairingEntry, it.pairingTestMessage::send)
+                        }
                     )!!
             }
         )[PairingEntryViewModel::class.java]

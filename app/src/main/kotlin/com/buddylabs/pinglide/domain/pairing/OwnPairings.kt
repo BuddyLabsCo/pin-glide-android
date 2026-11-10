@@ -85,7 +85,11 @@ class OwnPairings(
                 throw PairingServiceException(PairingFailure.Unavailable)
             }
             val items = try {
-                service.list(identity.management.token)
+                restoreAliases(
+                    identity.management.token,
+                    expected,
+                    service.list(identity.management.token)
+                )
             } catch (failure: PairingServiceException) {
                 if (store.readPairings().authority.generation != expected.authority.generation) {
                     return@withAccess false
@@ -108,6 +112,22 @@ class OwnPairings(
                 accepted
             }
         }
+
+    private suspend fun restoreAliases(
+        token: String,
+        expected: PairingSnapshot,
+        items: List<RemotePairing>
+    ): List<RemotePairing> = items.map { remote ->
+        val provisional = expected.provisional.find { it.pairingId == remote.pairingId }
+        if (provisional != null && provisional.receiverId != remote.receiverId) {
+            throw PairingServiceException(PairingFailure.Unavailable)
+        }
+        if (provisional != null && provisional.alias != remote.alias) {
+            service.rename(token, remote.pairingId, provisional.alias)
+        } else {
+            remote
+        }
+    }
 
     suspend fun select(expectedState: HomeState, pairingId: String, enabled: Boolean) =
         stateGate.withLock {
