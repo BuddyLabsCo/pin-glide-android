@@ -28,6 +28,11 @@ including failed/cancelled attempts. Negative/invalid counts and the exhausted
 2^32 bound cannot authorize encryption. Recovery reuses ciphertext and consumes
 no additional encryption. Persisting a reservation preserves receive switches
 and the other Pairings.
+Counter-only reservations preserve the Pairing management revision, so a test
+does not invalidate Home's displayed snapshot before toggle, rename or removal.
+Writers still serialize reservations against the latest stored count; list
+reconciliation and management writes retain that count. Metadata and authority
+changes continue to invalidate stale operations.
 
 ## Delivery and feedback
 
@@ -45,6 +50,10 @@ An expired-U response reports login expiry without triggering the general
 credential wrapper's resubmission of the upload. Persistent uncertainty stops
 after the permitted attempts; there is no polling, queue or message retry state.
 A later deliberate tap creates a new test operation.
+If reconciliation changes the revision before a reservation commits, the send
+revalidates the current authority, session and selected target. A valid origin
+shows inline uncertainty without encrypting or uploading; an obsolete origin
+stays suppressed.
 
 HTTP 207 must contain exactly one result with index zero, the original messageId
 and the selected receiverId. Missing, duplicate, out-of-range, mismatched,
@@ -73,6 +82,16 @@ body-read boundaries, identical request bodies, the 20-second timeout, authority
 expiry without resend, counter exhaustion, selected OFF-target isolation, key
 copy erasure and stale/duplicate inline actions. These assertions are not shipped
 or added to the repository's persistent test suite.
+
+Review-fix checks reproduced both snapshot failures before their respective fixes.
+All 151 additional disposable assertions passed through the public send, inline
+action, management and storage interfaces. They cover first-attempt toggle,
+rename and removal on the tested/other target after received/failed delivery,
+concurrent durable counter reservations, pending list reconciliation, visible
+reservation-conflict uncertainty and suppression after alias, target, key,
+authority or session changes. These host checks use the real storage writer and
+file persistence with substitutes for Android Context and Keystore protection;
+they do not establish native Keystore behavior.
 
 Android device execution, TalkBack/font/IME/theme visual acceptance, Keystore
 crash atomicity and live target arrival require device/service acceptance.

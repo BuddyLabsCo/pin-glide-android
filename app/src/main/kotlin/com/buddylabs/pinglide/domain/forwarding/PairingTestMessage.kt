@@ -106,10 +106,9 @@ class PairingTestMessage(
         if (target == null || target.encryptions !in 2 until 4294967296L) {
             return TestMessageResult.NoKey
         }
-        if (origin.items.none { it.sameTarget(target) } ||
-            !store.reserveEncryption(initial, pairingId)
-        ) {
-            return null
+        if (origin.items.none { it.sameTarget(target) }) return null
+        if (!store.reserveEncryption(initial, pairingId)) {
+            return if (current(initial, target, session)) TestMessageResult.Uncertain else null
         }
         val key = checkNotNull(target.key).copyOf()
         val encrypted = try {
