@@ -11,8 +11,11 @@ and therefore from duplicate checks; a failed refresh cannot establish removal.
 The editor presents separate blank, length, invalid-character and duplicate
 errors in Chinese and English, including accessible error/live-region semantics.
 It uses the existing light/dark theme, scrollable sheet, system/IME insets and
-48dp controls. Saving has a text status with no additional animation. Idle Cancel
-discards the draft; configuration changes retain the editor and ViewModel work.
+48dp controls. Cancel and Save share a row that wraps when the available width or
+font size requires it. Saving has a text status with no additional animation.
+Idle Cancel, Back, outside taps and downward dismissal discard the draft and
+return to the selected target's details; configuration changes retain the editor
+and ViewModel work.
 
 ## Submission and reconciliation
 

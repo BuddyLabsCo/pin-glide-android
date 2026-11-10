@@ -2,6 +2,7 @@ package com.buddylabs.pinglide.ui.home
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -26,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -46,6 +48,7 @@ import com.buddylabs.pinglide.domain.pairing.PairingAliasError
 import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.domain.pairing.TargetDevice
 import com.buddylabs.pinglide.domain.pairing.pairingAliasError
+import kotlinx.coroutines.launch
 
 private enum class DetailsPage { Details, Rename, Remove }
 
@@ -64,6 +67,12 @@ internal fun TargetDetailsSheet(
     var page by rememberSaveable(target.pairingId) { mutableStateOf(DetailsPage.Details) }
     var draft by rememberSaveable(target.pairingId) { mutableStateOf(target.alias) }
     val pending by rememberUpdatedState(action.pending)
+    val scope = rememberCoroutineScope()
+    val returnToDetails: () -> Unit = {
+        draft = target.alias
+        onClearAction()
+        page = DetailsPage.Details
+    }
     val sheet = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
         confirmValueChange = { it != SheetValue.Hidden || !pending }
@@ -74,7 +83,16 @@ internal fun TargetDetailsSheet(
     val name = target.alias.ifBlank { stringResource(R.string.home_target_device) }
     val title = if (page == DetailsPage.Rename) stringResource(R.string.home_rename) else name
     ModalBottomSheet(
-        onDismissRequest = { if (!pending) onDismiss() },
+        onDismissRequest = {
+            if (!pending) {
+                if (page == DetailsPage.Rename) {
+                    returnToDetails()
+                    scope.launch { sheet.show() }
+                } else {
+                    onDismiss()
+                }
+            }
+        },
         sheetState = sheet,
         sheetGesturesEnabled = !pending,
         contentWindowInsets = { WindowInsets.safeDrawing },
@@ -135,7 +153,7 @@ internal fun TargetDetailsSheet(
                 DetailsPage.Rename -> RenameTarget(draft, otherAliases, pending, {
                     draft = it
                     onClearAction()
-                }, onRename)
+                }, onRename, returnToDetails)
 
                 DetailsPage.Remove -> {
                     Text(
@@ -151,22 +169,20 @@ internal fun TargetDetailsSheet(
                 }
             }
             ActionNotice(action, page, target.enabled)
-            if (page != DetailsPage.Details) {
+            if (page == DetailsPage.Remove) {
                 OutlinedButton(
-                    onClick = {
-                        draft = target.alias
-                        onClearAction()
-                        page = DetailsPage.Details
-                    },
+                    onClick = returnToDetails,
                     enabled = !pending,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 ) { Text(stringResource(R.string.setup_cancel)) }
             }
-            OutlinedButton(
-                onClick = onDismiss,
-                enabled = !pending,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            ) { Text(stringResource(R.string.close)) }
+            if (page != DetailsPage.Rename) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    enabled = !pending,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                ) { Text(stringResource(R.string.close)) }
+            }
         }
     }
 }
@@ -177,7 +193,8 @@ private fun RenameTarget(
     otherAliases: List<String>,
     pending: Boolean,
     onDraft: (String) -> Unit,
-    onRename: (String) -> Unit
+    onRename: (String) -> Unit,
+    onCancel: () -> Unit
 ) {
     val focus = remember { FocusRequester() }
     val validation = pairingAliasError(draft, otherAliases)
@@ -206,11 +223,22 @@ private fun RenameTarget(
             if (validation != null) error(message)
         }
     )
-    Button(
-        onClick = { onRename(draft) },
-        enabled = validation == null && !pending,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-    ) { Text(stringResource(if (pending) R.string.home_saving else R.string.home_save)) }
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        OutlinedButton(
+            onClick = onCancel,
+            enabled = !pending,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+        ) { Text(stringResource(R.string.setup_cancel)) }
+        Button(
+            onClick = { onRename(draft) },
+            enabled = validation == null && !pending,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+        ) { Text(stringResource(if (pending) R.string.home_saving else R.string.home_save)) }
+    }
 }
 
 @Composable
