@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.buddylabs.pinglide.domain.identity.IdentityStorageException
 import com.buddylabs.pinglide.domain.pairing.HomeState
 import com.buddylabs.pinglide.domain.pairing.PairingEntry
+import com.buddylabs.pinglide.domain.pairing.PairingEntryPage
 import com.buddylabs.pinglide.domain.pairing.PairingHost
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -18,8 +19,8 @@ class PairingEntryViewModel(create: (CoroutineScope) -> PairingEntry) : ViewMode
     private var operation: Job? = null
     private var requestedOwner: Pair<String, String>? = null
     private var requestedGeneration = 0L
-    var requestedHost: PairingHost? = null
-        private set
+    private var cameraRequestId = 0L
+    private var requestedHost: PairingHost? = null
 
     init {
         viewModelScope.launch {
@@ -32,16 +33,28 @@ class PairingEntryViewModel(create: (CoroutineScope) -> PairingEntry) : ViewMode
         }
     }
 
-    fun requestCamera(host: PairingHost, home: HomeState) {
+    fun requestCamera(host: PairingHost, home: HomeState): Long {
+        cameraRequestId++
         requestedHost = host
         requestedOwner = home.owner
         requestedGeneration = home.generation
+        return cameraRequestId
     }
 
-    fun cameraGranted(home: HomeState) {
-        val host = requestedHost ?: return
+    fun isCameraRequestCurrent(requestId: Long, home: HomeState): Boolean =
+        requestedHost != null && requestId == cameraRequestId &&
+            home.owner == requestedOwner && home.generation == requestedGeneration
+
+    fun cancelCameraRequest() {
+        cameraRequestId++
         requestedHost = null
-        if (home.owner != requestedOwner || home.generation != requestedGeneration) return
+        requestedOwner = null
+    }
+
+    fun cameraGranted(requestId: Long, home: HomeState) {
+        if (!isCameraRequestCurrent(requestId, home)) return
+        val host = requestedHost ?: return
+        cancelCameraRequest()
         run { entry.start(host) }
     }
 
@@ -53,12 +66,18 @@ class PairingEntryViewModel(create: (CoroutineScope) -> PairingEntry) : ViewMode
 
     fun back() {
         operation?.cancel()
-        entry.scannerBack()
+        if (state.value.host == PairingHost.Onboarding &&
+            state.value.page == PairingEntryPage.Consent
+        ) {
+            entry.returnToScanner()
+        } else {
+            close()
+        }
     }
 
     fun close() {
         operation?.cancel()
-        requestedHost = null
+        cancelCameraRequest()
         entry.leave()
     }
 

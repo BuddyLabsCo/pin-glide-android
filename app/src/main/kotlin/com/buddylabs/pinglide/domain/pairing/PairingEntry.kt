@@ -176,22 +176,16 @@ class PairingEntry(
         }
     }
 
-    fun scannerBack() {
-        if (state.value.host == PairingHost.Onboarding &&
-            state.value.page == PairingEntryPage.Consent
-        ) {
-            epoch++
-            watcher?.cancel()
-            ticker?.cancel()
-            mutableState.value = state.value.copy(
-                page = PairingEntryPage.Scanner,
-                pending = false,
-                problem = null,
-                confirmed = false
-            )
-        } else {
-            leave()
-        }
+    fun returnToScanner() {
+        epoch++
+        watcher?.cancel()
+        ticker?.cancel()
+        mutableState.value = state.value.copy(
+            page = PairingEntryPage.Scanner,
+            pending = false,
+            problem = null,
+            confirmed = false
+        )
     }
 
     fun freshScan() {

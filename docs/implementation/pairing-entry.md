@@ -51,6 +51,14 @@ authorize response is reconciled after cancellation so a late reservation is
 released instead of reopening consent. A released session cannot be reused in
 the same process while its cancellation may still be in flight.
 
+The UI ViewModel chooses the host-specific Back destination; the domain exposes
+scanner resumption and reservation cleanup without choosing navigation policy.
+Camera permission and settings results carry a request ID bound to the entry
+host and Account/Sender generation. Leaving or changing the host invalidates
+that request and disposes its settings Snackbar. A late result cannot open a
+scanner for an obsolete host or consume a newer request. Configuration changes
+retain pending requests while the same host remains active.
+
 The consent action validates and acknowledges the current alias and rechecks the
 live session. This slice ends at that acknowledged consent. Issue #24 owns HPKE,
 real progress, protected provisional keys and authoritative activation; this
@@ -73,5 +81,7 @@ build-directory-only assertion check covers malformed and forbidden QR content,
 curve and PSK validation, alias boundaries, both supported modes, host exits,
 absolute expiry, duplicate preservation, capacity, late cancellation and WSS
 closure. No persistent automated tests, E2E harness or debug seeds are added.
+Review-fix assertions also exercise the UI ViewModel's Back decisions and reject
+camera results after host exit, request replacement and identity changes.
 No Android device was connected for camera, permission, visual or TalkBack
 acceptance; those remain manual checks with real target-generated QR codes.

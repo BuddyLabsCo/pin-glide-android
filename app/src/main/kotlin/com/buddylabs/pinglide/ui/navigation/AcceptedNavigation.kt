@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -64,11 +65,14 @@ internal fun AcceptedNavigation(
     val entry by pairing.state.collectAsState()
     val revoked = state.authorization == AuthorizationState.RegistrationRevoked
     LaunchedEffect(Unit) { home.refresh() }
-    PairingEntryNotices(entry, state, pairing) {
-        if (!completed && onCheckSms()) {
+    val completeEntry = {
+        if (onCheckSms()) {
             progress.complete()
             completed = true
         }
+    }
+    PairingEntryNotices(entry, state, pairing) {
+        if (!completed) completeEntry()
     }
     val onboarding = !completed && !revoked
     if (onboarding && !smsGranted) {
@@ -76,34 +80,35 @@ internal fun AcceptedNavigation(
         return
     }
     val leaveEntry = {
-        if (onCheckSms()) {
-            progress.complete()
-            completed = true
-        }
+        pairing.close()
+        completeEntry()
     }
-    PairingCameraGate(pairing, state) { onScan ->
-        when {
-            entry.page != PairingEntryPage.Idle && !revoked -> PairingScreen(entry, pairing)
+    val cameraHost = if (onboarding) PairingHost.Onboarding else PairingHost.Home
+    key(cameraHost) {
+        PairingCameraGate(pairing, state, cameraHost) { onScan ->
+            when {
+                entry.page != PairingEntryPage.Idle && !revoked -> PairingScreen(entry, pairing)
 
-            onboarding -> {
-                BackHandler(onBack = leaveEntry)
-                FirstDeviceScreen(onLeave = leaveEntry, onScan = { onScan(PairingHost.Onboarding) })
-            }
+                onboarding -> {
+                    BackHandler(onBack = leaveEntry)
+                    FirstDeviceScreen(onLeave = leaveEntry, onScan = onScan)
+                }
 
-            else -> {
-                BackHandler(onBack = onBackground)
-                HomeDestination(
-                    state,
-                    smsGranted,
-                    smsRecovery,
-                    home,
-                    onRestoreSms,
-                    onAdd = {
-                        home.beginPairing()
-                        onScan(PairingHost.Home)
-                    },
-                    highlightedPairingId = entry.duplicatePairingId
-                )
+                else -> {
+                    BackHandler(onBack = onBackground)
+                    HomeDestination(
+                        state,
+                        smsGranted,
+                        smsRecovery,
+                        home,
+                        onRestoreSms,
+                        onAdd = {
+                            home.beginPairing()
+                            onScan()
+                        },
+                        highlightedPairingId = entry.duplicatePairingId
+                    )
+                }
             }
         }
     }
