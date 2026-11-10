@@ -1,6 +1,5 @@
 package com.buddylabs.pinglide.ui.pairing
 
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,13 +17,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
@@ -47,15 +43,8 @@ internal fun PairingResultScreen(
     model: PairingEntryViewModel,
     onLeave: () -> Unit
 ) {
-    val test by model.testState.collectAsState()
     val success = state.page == PairingEntryPage.Success
     val unconfirmed = state.problem == PairingEntryProblem.Unconfirmed
-    val context = LocalContext.current
-    LaunchedEffect(test.announceReceived) {
-        if (model.consumeTestSuccess()) {
-            Toast.makeText(context, R.string.pairing_test_received, Toast.LENGTH_SHORT).show()
-        }
-    }
     val title = stringResource(
         when {
             success -> R.string.pairing_success
@@ -82,7 +71,7 @@ internal fun PairingResultScreen(
             )
             when {
                 success -> {
-                    PairingTestAction(test.pending, test.outcome, model::testMessage)
+                    PairingTestAction(model.testMessage)
                     TextButton(
                         onClick = model::close,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)

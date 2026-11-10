@@ -50,6 +50,8 @@ import com.buddylabs.pinglide.domain.pairing.PairingAliasError
 import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.domain.pairing.TargetDevice
 import com.buddylabs.pinglide.domain.pairing.pairingAliasError
+import com.buddylabs.pinglide.ui.components.PairingTestAction
+import com.buddylabs.pinglide.ui.components.TestMessageAction
 import kotlinx.coroutines.launch
 
 private enum class DetailsPage { Details, Rename, Remove }
@@ -60,6 +62,7 @@ internal fun TargetDetailsSheet(
     target: TargetDevice,
     otherAliases: List<String>,
     action: TargetAction,
+    testMessage: TestMessageAction,
     onSelect: (Boolean) -> Unit,
     onRename: (String) -> Unit,
     onRemove: () -> Unit,
@@ -67,6 +70,9 @@ internal fun TargetDetailsSheet(
     onDismiss: () -> Unit
 ) {
     var page by rememberSaveable(target.pairingId) { mutableStateOf(DetailsPage.Details) }
+    LaunchedEffect(page, target.pairingId) {
+        testMessage.enter(target.pairingId.takeIf { page == DetailsPage.Details })
+    }
     var draft by rememberSaveable(target.pairingId) { mutableStateOf(target.alias) }
     val pending by rememberUpdatedState(action.pending)
     val scope = rememberCoroutineScope()
@@ -133,6 +139,7 @@ internal fun TargetDetailsSheet(
                     OutlinedButton(
                         onClick = {
                             draft = target.alias
+                            testMessage.leave()
                             onClearAction()
                             page = DetailsPage.Rename
                         },
@@ -140,6 +147,7 @@ internal fun TargetDetailsSheet(
                     ) { Text(stringResource(R.string.home_rename)) }
                     OutlinedButton(
                         onClick = {
+                            testMessage.leave()
                             onClearAction()
                             page = DetailsPage.Remove
                         },
@@ -150,6 +158,7 @@ internal fun TargetDetailsSheet(
                             color = MaterialTheme.colorScheme.error
                         )
                     }
+                    PairingTestAction(testMessage, enabled = target.keyUsable)
                 }
 
                 DetailsPage.Rename -> RenameTarget(draft, otherAliases, pending, {

@@ -22,7 +22,13 @@ import okhttp3.OkHttpClient
 
 class TestDeliveryService(private val baseUrl: String, client: OkHttpClient) :
     com.buddylabs.pinglide.domain.forwarding.TestDeliveryService {
-    private val client = client.newBuilder().callTimeout(20, TimeUnit.SECONDS).build()
+    private val client = client.newBuilder()
+        .callTimeout(20, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(false)
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .cache(null)
+        .build()
 
     override suspend fun send(
         token: String,
@@ -66,6 +72,11 @@ class TestDeliveryService(private val baseUrl: String, client: OkHttpClient) :
             ) {
                 return@repeat
             }
+            if (response.statusCode in setOf(400, 422) &&
+                code in setOf("invalid_request", "validation_failed")
+            ) {
+                return TestMessageResult.RequestError
+            }
             return result(response, request)
         }
         return TestMessageResult.Uncertain
@@ -80,7 +91,7 @@ class TestDeliveryService(private val baseUrl: String, client: OkHttpClient) :
         requireCurrentSenderAccess(response.statusCode, body)
         val code = serviceProblem(response.statusCode, body)?.code
         if (response.statusCode == 401 &&
-            code in setOf("credential_invalid", "credential_revoked")
+            code in setOf("credential_missing", "credential_invalid", "credential_revoked")
         ) {
             throw PairingServiceException(PairingFailure.LoginRequired)
         }
@@ -92,7 +103,7 @@ class TestDeliveryService(private val baseUrl: String, client: OkHttpClient) :
         "invalid_delivery_item" -> TestMessageResult.InvalidPayload
         "unsupported_crypto_version" -> TestMessageResult.UnsupportedEncryption
         "duplicate_receiver" -> TestMessageResult.DuplicateTarget
-        else -> TestMessageResult.Uncertain
+        else -> TestMessageResult.Rejected
     }
 
     private fun result(
@@ -107,24 +118,28 @@ class TestDeliveryService(private val baseUrl: String, client: OkHttpClient) :
         ) {
             return TestMessageResult.Uncertain
         }
-        return when (item.status) {
-            UploadResult.Status.received -> if (item.error ==
-                null
-            ) {
-                TestMessageResult.Received
-            } else {
-                TestMessageResult.Uncertain
-            }
+        return status(item)
+    }
 
-            UploadResult.Status.offline -> if (item.error?.code == "offline") {
-                TestMessageResult.Offline
-            } else {
-                TestMessageResult.Uncertain
-            }
-
-            UploadResult.Status.rejected -> rejection(item.error?.code)
-
-            else -> TestMessageResult.Uncertain
+    private fun status(item: UploadResult): TestMessageResult = when (item.status) {
+        UploadResult.Status.received -> if (item.error ==
+            null
+        ) {
+            TestMessageResult.Received
+        } else {
+            TestMessageResult.Uncertain
         }
+
+        UploadResult.Status.offline -> TestMessageResult.Offline
+
+        UploadResult.Status.rejected -> rejection(item.error?.code)
+
+        UploadResult.Status.send_failed -> TestMessageResult.SendFailed
+
+        UploadResult.Status.ack_timeout -> TestMessageResult.AckTimeout
+
+        UploadResult.Status.interrupted -> TestMessageResult.Interrupted
+
+        UploadResult.Status.unknown_default_open_api -> TestMessageResult.Uncertain
     }
 }

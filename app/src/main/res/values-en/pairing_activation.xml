@@ -13,6 +13,11 @@
     <string name="pairing_test_sending">Sending…</string>
     <string name="pairing_test_received">Test message sent</string>
     <string name="pairing_test_offline">Target device is offline; test message was not delivered</string>
+    <string name="pairing_test_rejected">Test message was not sent: delivery was rejected</string>
+    <string name="pairing_test_send_failed">Delivery unconfirmed: the sending connection failed</string>
+    <string name="pairing_test_ack_timeout">Delivery unconfirmed: waiting for target arrival timed out</string>
+    <string name="pairing_test_interrupted">Delivery unconfirmed: service processing was interrupted</string>
+    <string name="pairing_test_request_error">Test message was not sent: invalid request parameters</string>
     <string name="pairing_test_uncertain">Test message delivery could not be confirmed</string>
     <string name="pairing_test_no_key">Pairing or local key is unavailable</string>
     <string name="pairing_test_login">Login expired. Return to Home to sign in again</string>

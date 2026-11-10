@@ -113,7 +113,7 @@ class ProtectedIdentityStore(context: Context) :
     override suspend fun reserveEncryption(expected: PairingSnapshot, pairingId: String): Boolean =
         updatePairings(expected, expected.listed) { current ->
             val target = current.items.single { it.pairingId == pairingId }
-            require(target.keyUsable && target.encryptions < 4294967296L)
+            require(target.keyUsable && target.encryptions in 2 until 4294967296L)
             current.items.map {
                 if (it.pairingId == pairingId) it.copy(encryptions = it.encryptions + 1) else it
             }
