@@ -120,6 +120,8 @@
     <string name="home_remove_title">Remove “%1$s”?</string>
     <string name="home_remove_copy">This Sender will stop forwarding SMS to this target. The target and its Pairings with other Senders will stay active.</string>
     <string name="home_remove_confirm">Remove Pairing</string>
+    <string name="home_removing">Removing Pairing</string>
+    <string name="home_remove_retry">Retry removal</string>
     <string name="home_target_pending">Submitting, please wait</string>
     <string name="home_target_busy">The operation did not complete and receiving is unchanged. Wait for the current operation to finish and retry.</string>
     <string name="home_rename_error">The saved name is unconfirmed. Your input is kept. Check your connection and retry; the next refresh will reconcile the result.</string>

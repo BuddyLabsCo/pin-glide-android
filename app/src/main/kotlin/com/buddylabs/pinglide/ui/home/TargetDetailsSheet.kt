@@ -1,5 +1,6 @@
 package com.buddylabs.pinglide.ui.home
 
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -156,16 +158,27 @@ internal fun TargetDetailsSheet(
                 }, onRename, returnToDetails)
 
                 DetailsPage.Remove -> {
-                    Text(
-                        stringResource(R.string.home_remove_title, name),
-                        style = MaterialTheme.typography.titleLarge
-                    )
+                    RemovalTitle(name, pending)
                     Text(stringResource(R.string.home_remove_copy))
                     Button(
                         onClick = onRemove,
                         enabled = !pending,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        ),
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    ) { Text(stringResource(R.string.home_remove_confirm)) }
+                    ) {
+                        Text(
+                            stringResource(
+                                if (action.result == PairingChange.Unavailable) {
+                                    R.string.home_remove_retry
+                                } else {
+                                    R.string.home_remove_confirm
+                                }
+                            )
+                        )
+                    }
                 }
             }
             ActionNotice(action, page, target.enabled)
@@ -185,6 +198,24 @@ internal fun TargetDetailsSheet(
             }
         }
     }
+}
+
+@Composable
+private fun RemovalTitle(name: String, pending: Boolean) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    Text(
+        if (pending) {
+            stringResource(R.string.home_removing)
+        } else {
+            stringResource(R.string.home_remove_title, name)
+        },
+        style = MaterialTheme.typography.titleLarge,
+        modifier = Modifier.focusRequester(focus).focusable().semantics {
+            heading()
+            liveRegion = LiveRegionMode.Polite
+        }
+    )
 }
 
 @Composable

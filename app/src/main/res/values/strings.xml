@@ -120,6 +120,8 @@
     <string name="home_remove_title">移除“%1$s”？</string>
     <string name="home_remove_copy">当前设备会停止向目标设备发送短信。目标设备和其他设备的配对不会被关闭。</string>
     <string name="home_remove_confirm">移除配对</string>
+    <string name="home_removing">正在移除配对</string>
+    <string name="home_remove_retry">重试移除</string>
     <string name="home_target_pending">正在提交，请稍候</string>
     <string name="home_target_busy">操作未完成，接收设置未改变。请等待当前操作结束后重试。</string>
     <string name="home_rename_error">名称保存结果未确认，输入已保留。请检查网络后重试；下次刷新会核对实际结果。</string>

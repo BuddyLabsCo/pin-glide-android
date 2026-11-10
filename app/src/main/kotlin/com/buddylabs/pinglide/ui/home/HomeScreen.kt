@@ -91,7 +91,9 @@ fun HomeScreen(
     LaunchedEffect(selectedAction.result) {
         if (selectedAction.result == PairingChange.Removed) dismiss()
     }
-    if (selectedId != null && selected == null && state.listed && !selectedAction.pending) {
+    if (selectedId != null && selected == null && state.listed && !selectedAction.pending &&
+        selectedAction.result != PairingChange.Removed
+    ) {
         BackHandler(onBack = dismiss)
         TargetGone(onDismiss = dismiss, onAdd = {
             dismiss()
