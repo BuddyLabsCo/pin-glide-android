@@ -5,9 +5,19 @@ import kotlinx.coroutines.flow.Flow
 
 enum class PairingHost { Onboarding, Home }
 
-enum class PairingEntryPage { Idle, Scanner, Consent }
+enum class PairingEntryPage { Idle, Scanner, Consent, Progress, Success }
 
-enum class PairingEntryProblem { InvalidQr, Closed, Unsupported, Capacity, Unavailable, Camera }
+enum class PairingStage { Opening, Identity, Key, Confirm }
+
+enum class PairingEntryProblem {
+    InvalidQr,
+    Closed,
+    Unsupported,
+    Capacity,
+    Unavailable,
+    Unconfirmed,
+    Camera
+}
 
 data class PairingEntryState(
     val page: PairingEntryPage = PairingEntryPage.Idle,
@@ -19,7 +29,9 @@ data class PairingEntryState(
     val remainingSeconds: Long = 0,
     val confirmed: Boolean = false,
     val duplicatePairingId: String? = null,
-    val highlightUntil: Long = 0
+    val highlightUntil: Long = 0,
+    val stage: PairingStage = PairingStage.Opening,
+    val activatedPairingId: String? = null
 )
 
 class PairingQr(
@@ -62,6 +74,12 @@ interface PairingSessionService {
     suspend fun cancel(token: String, sessionId: String)
 
     fun watch(token: String, sessionId: String): Flow<PairingSession>
+
+    fun connect(token: String, sessionId: String): PairingConnection =
+        throw PairingEntryException(PairingEntryProblem.Unavailable)
+
+    suspend fun complete(token: String, sessionId: String): PairingSession =
+        throw PairingEntryException(PairingEntryProblem.Unavailable)
 }
 
 class PairingEntryException(val problem: PairingEntryProblem) : Exception("Pairing unavailable")

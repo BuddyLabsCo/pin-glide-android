@@ -53,10 +53,8 @@ import com.buddylabs.pinglide.platform.scanner.PairingCamera
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
-fun PairingScreen(state: PairingEntryState, model: PairingEntryViewModel) {
+fun PairingScreen(state: PairingEntryState, model: PairingEntryViewModel, onLeave: () -> Unit) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val lifecycleState by lifecycle.currentStateAsState()
-    val resumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
     DisposableEffect(lifecycle, model) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) model.foreground()
@@ -64,6 +62,12 @@ fun PairingScreen(state: PairingEntryState, model: PairingEntryViewModel) {
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
+    if (state.page == PairingEntryPage.Progress || state.page == PairingEntryPage.Success) {
+        PairingResultScreen(state, model, onLeave)
+        return
+    }
+    val lifecycleState by lifecycle.currentStateAsState()
+    val resumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
     BackHandler(onBack = model::close)
     val scanning = state.page == PairingEntryPage.Scanner
     val title = stringResource(
@@ -227,5 +231,6 @@ internal fun pairingProblemText(problem: PairingEntryProblem): Int = when (probl
     PairingEntryProblem.Unsupported -> R.string.pairing_unsupported
     PairingEntryProblem.Capacity -> R.string.pairing_capacity
     PairingEntryProblem.Unavailable -> R.string.pairing_unavailable
+    PairingEntryProblem.Unconfirmed -> R.string.pairing_unconfirmed
     PairingEntryProblem.Camera -> R.string.pairing_camera_unavailable
 }

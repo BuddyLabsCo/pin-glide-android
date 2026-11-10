@@ -82,9 +82,11 @@ class ProtectedIdentityStore(context: Context) :
     override suspend fun reconcile(expected: PairingSnapshot, items: List<RemotePairing>): Boolean =
         updatePairings(expected, listed = true) { current ->
             items.map { remote ->
-                val local = current.items.find { it.pairingId == remote.pairingId }
+                val local = (current.items + current.provisional).find {
+                    it.pairingId == remote.pairingId
+                }
                 require(local == null || local.receiverId == remote.receiverId)
-                local?.copy(alias = remote.alias)
+                local?.copy(alias = remote.alias, provisionalSessionId = null)
                     ?: OwnPairing(remote.pairingId, remote.receiverId, remote.alias)
             }
         }
@@ -98,6 +100,24 @@ class ProtectedIdentityStore(context: Context) :
             if (it.pairingId == pairingId) it.copy(enabled = enabled && it.keyUsable) else it
         }
     }
+
+    override suspend fun saveProvisional(expected: PairingSnapshot, pairing: OwnPairing): Boolean =
+        updatePairings(expected, expected.listed) { current ->
+            require(pairing.provisionalSessionId != null && pairing.keyUsable)
+            require(
+                (current.items + current.provisional).none { it.pairingId == pairing.pairingId }
+            )
+            current.items + pairing
+        }
+
+    override suspend fun reserveEncryption(expected: PairingSnapshot, pairingId: String): Boolean =
+        updatePairings(expected, expected.listed) { current ->
+            val target = current.items.single { it.pairingId == pairingId }
+            require(target.keyUsable && target.encryptions < 4294967296L)
+            current.items.map {
+                if (it.pairingId == pairingId) it.copy(encryptions = it.encryptions + 1) else it
+            }
+        }
 
     private suspend fun updatePairings(
         expected: PairingSnapshot,
@@ -153,7 +173,8 @@ class ProtectedIdentityStore(context: Context) :
             authority,
             document["pairingsRevision"]?.jsonPrimitive?.long ?: 0,
             document["pairingsListed"]?.jsonPrimitive?.boolean ?: false,
-            items
+            items.filter { it.provisionalSessionId == null },
+            items.filter { it.provisionalSessionId != null }
         )
     }
 
@@ -173,7 +194,11 @@ class ProtectedIdentityStore(context: Context) :
                 "pairingsRevision" to JsonPrimitive(Math.addExact(current.revision, 1)),
                 "pairingsListed" to JsonPrimitive(listed),
                 "pairings" to JsonArray(
-                    items.map {
+                    (
+                        items + current.provisional.filter { pending ->
+                            items.none { it.pairingId == pending.pairingId }
+                        }
+                        ).map {
                         JsonObject(
                             originals[it.pairingId]?.jsonObject.orEmpty() +
                                 json.encodeToJsonElement(it).jsonObject.let { fields ->

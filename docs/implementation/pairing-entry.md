@@ -59,13 +59,11 @@ that request and disposes its settings Snackbar. A late result cannot open a
 scanner for an obsolete host or consume a newer request. Configuration changes
 retain pending requests while the same host remains active.
 
-The consent action validates and acknowledges the current alias and rechecks the
-live session. This slice ends at that acknowledged consent. Issue #24 owns HPKE,
-real progress, protected provisional keys and authoritative activation; this
-change never reports Pairing success or persists a key. In v1.0.2, repeating
-authorize returns the existing reservation and does not update its alias. The
-edited alias remains in operation memory for the activation workflow, which must
-reconcile it through the existing own-alias operation once the Pairing is active.
+The consent action validates the current alias and rechecks the live session. It
+then starts the authenticated activation described in [Pairing activation](pairing-activation.md).
+In v1.0.2, repeating authorize returns the existing reservation and does not update
+its alias. Activation reconciles the edited alias through the existing own-alias
+operation before presenting success.
 
 ## Published contract and verification
 

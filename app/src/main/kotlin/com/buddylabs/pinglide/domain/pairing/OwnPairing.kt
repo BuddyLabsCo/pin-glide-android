@@ -20,7 +20,9 @@ data class OwnPairing(
     val alias: String,
     val enabled: Boolean = true,
     val key: ByteArray? = null,
-    val keyFailed: Boolean = false
+    val keyFailed: Boolean = false,
+    val provisionalSessionId: String? = null,
+    val encryptions: Long = 2
 ) {
     val keyUsable: Boolean get() = !keyFailed && key?.size == 32
 }
@@ -29,7 +31,8 @@ class PairingSnapshot(
     val authority: IdentitySnapshot,
     val revision: Long = 0,
     val listed: Boolean = false,
-    val items: List<OwnPairing> = emptyList()
+    val items: List<OwnPairing> = emptyList(),
+    val provisional: List<OwnPairing> = emptyList()
 )
 
 interface PairingStore {
@@ -38,6 +41,10 @@ interface PairingStore {
     suspend fun reconcile(expected: PairingSnapshot, items: List<RemotePairing>): Boolean
 
     suspend fun select(expected: PairingSnapshot, pairingId: String, enabled: Boolean): Boolean
+
+    suspend fun saveProvisional(expected: PairingSnapshot, pairing: OwnPairing): Boolean = false
+
+    suspend fun reserveEncryption(expected: PairingSnapshot, pairingId: String): Boolean = false
 }
 
 fun interface PairingService {
