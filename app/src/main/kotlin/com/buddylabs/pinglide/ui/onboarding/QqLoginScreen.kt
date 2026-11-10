@@ -40,7 +40,7 @@ fun QqLoginScreen(
 ) {
     when (state) {
         LoginState.Restoring, LoginState.Loading -> LoginBusyScreen(state, onCancel, onBack)
-        LoginState.FirstDevice -> FirstDeviceScreen(onLeave = onBack)
+        LoginState.FirstDevice -> Unit
         else -> LoginActionScreen(state, onLogin, onCancel, onRetryStorage, onBack)
     }
 }

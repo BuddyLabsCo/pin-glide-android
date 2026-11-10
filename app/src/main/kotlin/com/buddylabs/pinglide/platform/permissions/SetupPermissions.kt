@@ -18,6 +18,13 @@ class SetupPermissions(private val context: Context) {
     val smsRequestBlocked: Boolean
         get() = preferences.getBoolean("sms_request_blocked", false)
 
+    val cameraRequestBlocked: Boolean
+        get() = preferences.getBoolean("camera_request_blocked", false)
+
+    fun recordCameraRequestResult(blocked: Boolean) {
+        preferences.edit().putBoolean("camera_request_blocked", blocked).apply()
+    }
+
     fun recordSmsRequestResult(blocked: Boolean) {
         preferences.edit().putBoolean("sms_request_blocked", blocked).apply()
     }

@@ -116,5 +116,10 @@ dependencies {
     implementation(libs.serialization.json)
     implementation(libs.coroutines.core)
     implementation(libs.bouncycastle)
+    implementation(libs.camera.view)
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.mlkit)
+    implementation(libs.barcode.scanning)
     testImplementation(libs.junit)
 }

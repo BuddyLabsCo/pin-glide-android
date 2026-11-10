@@ -1,0 +1,109 @@
+package com.buddylabs.pinglide.ui.pairing
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.buddylabs.pinglide.domain.identity.IdentityStorageException
+import com.buddylabs.pinglide.domain.pairing.HomeState
+import com.buddylabs.pinglide.domain.pairing.PairingEntry
+import com.buddylabs.pinglide.domain.pairing.PairingEntryPage
+import com.buddylabs.pinglide.domain.pairing.PairingHost
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+
+class PairingEntryViewModel(create: (CoroutineScope) -> PairingEntry) : ViewModel() {
+    private val entry = create(viewModelScope)
+    val state = entry.state
+    private var operation: Job? = null
+    private var requestedOwner: Pair<String, String>? = null
+    private var requestedGeneration = 0L
+    private var cameraRequestId = 0L
+    private var requestedHost: PairingHost? = null
+
+    init {
+        viewModelScope.launch {
+            state.collectLatest { current ->
+                if (current.duplicatePairingId != null) {
+                    delay((current.highlightUntil - System.currentTimeMillis()).coerceAtLeast(0))
+                    if (state.value.highlightUntil == current.highlightUntil) entry.clearHighlight()
+                }
+            }
+        }
+    }
+
+    fun requestCamera(host: PairingHost, home: HomeState): Long {
+        cameraRequestId++
+        requestedHost = host
+        requestedOwner = home.owner
+        requestedGeneration = home.generation
+        return cameraRequestId
+    }
+
+    fun isCameraRequestCurrent(requestId: Long, home: HomeState): Boolean =
+        requestedHost != null && requestId == cameraRequestId &&
+            home.owner == requestedOwner && home.generation == requestedGeneration
+
+    fun cancelCameraRequest() {
+        cameraRequestId++
+        requestedHost = null
+        requestedOwner = null
+    }
+
+    fun cameraGranted(requestId: Long, home: HomeState) {
+        if (!isCameraRequestCurrent(requestId, home)) return
+        val host = requestedHost ?: return
+        cancelCameraRequest()
+        run { entry.start(host) }
+    }
+
+    fun scan(text: String, defaultAlias: String) = run { entry.scan(text, defaultAlias) }
+
+    fun editAlias(alias: String) = entry.editAlias(alias)
+
+    fun confirm() = run { entry.confirm() }
+
+    fun back() {
+        operation?.cancel()
+        if (state.value.host == PairingHost.Onboarding &&
+            state.value.page == PairingEntryPage.Consent
+        ) {
+            entry.returnToScanner()
+        } else {
+            close()
+        }
+    }
+
+    fun close() {
+        operation?.cancel()
+        cancelCameraRequest()
+        entry.leave()
+    }
+
+    fun freshScan() {
+        operation?.cancel()
+        entry.freshScan()
+    }
+
+    fun foreground() = run { entry.foreground() }
+
+    fun cameraFailed() = entry.cameraFailed()
+
+    fun dismissNotice() = entry.dismissNotice()
+
+    private fun run(action: suspend () -> Unit) {
+        if (operation?.isActive == true) return
+        operation = viewModelScope.launch {
+            try {
+                action()
+            } catch (_: IdentityStorageException) {
+                entry.leave()
+            }
+        }
+    }
+
+    override fun onCleared() {
+        entry.leave()
+    }
+}

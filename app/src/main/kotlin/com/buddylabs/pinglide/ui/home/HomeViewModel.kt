@@ -25,8 +25,6 @@ class HomeViewModel(private val pairings: OwnPairings, private val restoration: 
     val action = mutableAction.asStateFlow()
     private val mutableSmsRecovery = MutableStateFlow(SmsRecovery.Idle)
     val smsRecovery = mutableSmsRecovery.asStateFlow()
-    private val mutablePairingEntryOpen = MutableStateFlow(false)
-    val pairingEntryOpen = mutablePairingEntryOpen.asStateFlow()
     private var recoveryGeneration = 0L
 
     init {
@@ -77,14 +75,9 @@ class HomeViewModel(private val pairings: OwnPairings, private val restoration: 
         restoration.cancel()
     }
 
-    fun openPairingEntry() {
+    fun beginPairing() {
         recoveryGeneration++
         mutableSmsRecovery.value = SmsRecovery.Idle
-        mutablePairingEntryOpen.value = true
-    }
-
-    fun closePairingEntry() {
-        mutablePairingEntryOpen.value = false
     }
 
     fun beginSmsRecovery(): Boolean {
