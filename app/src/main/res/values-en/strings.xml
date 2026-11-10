@@ -169,4 +169,19 @@
     <string name="pairing_camera_blocked">Camera permission is blocked. Enable it in system settings.</string>
     <string name="pairing_open_settings">Open settings</string>
     <string name="pairing_settings_unavailable">Unable to open settings. Open system settings manually to enable the camera.</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_account_group">Account</string>
+    <string name="settings_account">QQ account</string>
+    <string name="settings_display">Display</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_app_language">App language</string>
+    <string name="settings_follow_system">Follow system</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_background">Background operation</string>
+    <string name="settings_battery">Battery optimization</string>
+    <string name="settings_battery_subtitle">Pin Glide needs battery optimization turned off to keep working</string>
+    <string name="settings_security">Security</string>
+    <string name="settings_device_access">Device access management</string>
+    <string name="settings_device_access_explanation">Revocation requires verification with the current QQ account. The selected Sender’s registration and Pairings will be permanently removed. Other Senders are unaffected.</string>
+    <string name="settings_about">About</string>
 </resources>

@@ -5,6 +5,9 @@ import android.os.Build
 import android.provider.Settings
 
 class DeviceInfo(private val context: Context) {
+    fun installedVersion(): String = context.packageManager.getPackageInfo(context.packageName, 0)
+        .versionName.orEmpty()
+
     fun senderName(): String {
         val systemName = try {
             Settings.Global.getString(context.contentResolver, "device_name")

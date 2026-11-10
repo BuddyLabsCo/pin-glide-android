@@ -17,6 +17,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
@@ -53,6 +56,7 @@ fun HomeScreen(
     home: HomeViewModel,
     onRestoreSms: () -> Unit,
     onAdd: () -> Unit,
+    onSettings: () -> Unit,
     highlightedPairingId: String? = null
 ) {
     val readiness = state.readiness(smsGranted)
@@ -124,6 +128,7 @@ fun HomeScreen(
         },
         onAdd,
         home::restoreLogin,
+        onSettings,
         lastSelectedId,
         rowFocus,
         headingFocus,
@@ -161,6 +166,7 @@ private fun HomeContent(
     onOpen: (String) -> Unit,
     onAdd: () -> Unit,
     onRestoreLogin: () -> Unit,
+    onSettings: () -> Unit,
     lastSelectedId: String?,
     rowFocus: FocusRequester,
     headingFocus: FocusRequester,
@@ -169,12 +175,21 @@ private fun HomeContent(
 ) {
     LaunchedEffect(Unit) { headingFocus.requestFocus() }
     ScreenLayout {
-        Text(
-            stringResource(R.string.app_name),
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(vertical = 20.dp).focusRequester(headingFocus)
-                .focusable().semantics { heading() }
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.app_name),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.weight(1f).padding(vertical = 20.dp)
+                    .focusRequester(headingFocus)
+                    .focusable().semantics { heading() }
+            )
+            IconButton(onClick = onSettings) {
+                Icon(
+                    painterResource(R.drawable.ic_settings),
+                    stringResource(R.string.settings_title)
+                )
+            }
+        }
         HomeRefreshContainer(state, onRefresh, Modifier.weight(1f)) {
             LazyColumn(
                 state = listState,

@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.buddylabs.pinglide.R
@@ -42,6 +43,7 @@ internal fun AcceptedNavigation(
     onRestoreSms: () -> Unit,
     onBackground: () -> Unit,
     onNewRegistration: () -> Unit,
+    settings: @Composable (onDismiss: () -> Unit) -> Unit,
     setup: @Composable () -> Unit
 ) {
     LaunchedEffect(loginState) {
@@ -106,7 +108,8 @@ internal fun AcceptedNavigation(
                             home.beginPairing()
                             onScan()
                         },
-                        highlightedPairingId = entry.duplicatePairingId
+                        highlightedPairingId = entry.duplicatePairingId,
+                        settings = settings
                     )
                 }
             }
@@ -158,8 +161,10 @@ private fun HomeDestination(
     home: HomeViewModel,
     onRestoreSms: () -> Unit,
     onAdd: () -> Unit,
-    highlightedPairingId: String?
+    highlightedPairingId: String?,
+    settings: @Composable (onDismiss: () -> Unit) -> Unit
 ) {
+    var settingsOpen by rememberSaveable(state.owner) { mutableStateOf(false) }
     val restoration by home.loginRestoration.collectAsState()
     when (restoration) {
         RestorationState.Loading, RestorationState.Cancelled,
@@ -177,7 +182,11 @@ private fun HomeDestination(
             home = home,
             onRestoreSms = onRestoreSms,
             onAdd = onAdd,
-            highlightedPairingId = highlightedPairingId
+            highlightedPairingId = highlightedPairingId,
+            onSettings = { settingsOpen = true }
         )
+    }
+    if (settingsOpen && state.authorization != AuthorizationState.RegistrationRevoked) {
+        settings { settingsOpen = false }
     }
 }
