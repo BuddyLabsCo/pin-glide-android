@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.buddylabs.pinglide.domain.identity.AuthorizationState
 import com.buddylabs.pinglide.domain.identity.ExplicitLogin
 import com.buddylabs.pinglide.domain.identity.LoginState
+import com.buddylabs.pinglide.domain.identity.LogoutState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -12,8 +13,14 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class LoginViewModel(private val login: ExplicitLogin) : ViewModel() {
-    val state = combine(login.state, login.authorizationState) { entry, authorization ->
+    val state = combine(login.state, login.authorizationState, login.logoutState) {
+            entry,
+            authorization,
+            logout
+        ->
         when {
+            logout != LogoutState.Ready -> LoginState.Welcome
+
             authorization == AuthorizationState.LoggedOut && entry in setOf(
                 LoginState.FirstDevice,
                 LoginState.Restoring,
@@ -52,9 +59,9 @@ class LoginViewModel(private val login: ExplicitLogin) : ViewModel() {
     }
 
     fun beginRegistration() {
+        if (login.logoutState.value != LogoutState.Ready) return
         if (state.value !in setOf(LoginState.Revoked, LoginState.Welcome)) return
         if (registration?.isActive == true) return
-        login.cancel()
         operation?.cancel()
         registration = viewModelScope.launch { login.beginRegistration() }
         operation = registration

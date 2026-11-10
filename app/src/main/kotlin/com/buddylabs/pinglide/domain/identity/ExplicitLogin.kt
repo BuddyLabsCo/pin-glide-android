@@ -28,6 +28,7 @@ class ExplicitLogin(
     private val mutableState = MutableStateFlow(LoginState.Restoring)
     val state = mutableState.asStateFlow()
     val authorizationState = renewal.state
+    val logoutState = renewal.logoutState
     private var snapshot = IdentitySnapshot()
     private var attempt: LoginAttempt? = null
 
@@ -55,12 +56,16 @@ class ExplicitLogin(
     }
 
     suspend fun beginRegistration() {
-        cancel()
         try {
             snapshot = renewal.beginRegistration()
+            cancel()
             mutableState.value = LoginState.Entry
         } catch (_: IdentityStorageException) {
-            mutableState.value = LoginState.StorageError
+            mutableState.value = if (logoutState.value == LogoutState.Failed) {
+                LoginState.Welcome
+            } else {
+                LoginState.StorageError
+            }
         }
     }
 

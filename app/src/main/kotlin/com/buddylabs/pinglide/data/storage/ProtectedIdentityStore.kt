@@ -230,7 +230,7 @@ class ProtectedIdentityStore(context: Context) :
                     return@storageOperation persist(
                         registrationDocument(replacement),
                         alias,
-                        LoginAttempt()
+                        attempt
                     )
                 }
                 check(!original.refreshState.closesRegistration)

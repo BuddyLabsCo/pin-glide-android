@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.buddylabs.pinglide.domain.identity.LoginState
+import com.buddylabs.pinglide.domain.identity.LogoutState
 import com.buddylabs.pinglide.domain.settings.SetupProgress
 import com.buddylabs.pinglide.domain.settings.SetupState
 import com.buddylabs.pinglide.ui.components.PrivacyScreen
@@ -48,7 +49,7 @@ fun SetupNavigation(
     loginState: LoginState,
     onLogin: () -> Unit,
     onNewAccount: () -> Unit,
-    logoutStorageFailed: Boolean,
+    logoutState: LogoutState,
     onRetryLogout: () -> Unit,
     onCancelLogin: () -> Unit,
     onRetryIdentity: () -> Unit,
@@ -89,12 +90,14 @@ fun SetupNavigation(
     when (destination) {
         SetupDestination.Welcome -> WelcomeScreen(
             onStartSetup = {
-                onNewRegistration()
-                progress.start()
-                setup = progress.state
+                if (logoutState == LogoutState.Ready) {
+                    onNewRegistration()
+                    progress.start()
+                    setup = progress.state
+                }
             },
             onPrivacy = { privacyOpen = true },
-            logoutStorageFailed = logoutStorageFailed,
+            logoutState = logoutState,
             onRetryLogout = onRetryLogout
         )
 

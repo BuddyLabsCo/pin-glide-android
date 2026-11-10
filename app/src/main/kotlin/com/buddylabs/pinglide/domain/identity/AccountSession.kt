@@ -11,6 +11,8 @@ interface LogoutStore {
     suspend fun logout(): RefreshCredential?
 }
 
+enum class LogoutState { Ready, Pending, Failed }
+
 interface AccountService {
     suspend fun profile(identity: SenderIdentity): String?
 

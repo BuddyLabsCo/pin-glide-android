@@ -33,13 +33,14 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
+import com.buddylabs.pinglide.domain.identity.LogoutState
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
 fun WelcomeScreen(
     onStartSetup: () -> Unit,
     onPrivacy: () -> Unit,
-    logoutStorageFailed: Boolean,
+    logoutState: LogoutState,
     onRetryLogout: () -> Unit
 ) {
     val title = stringResource(R.string.app_name)
@@ -91,7 +92,7 @@ fun WelcomeScreen(
                 Icon(painterResource(R.drawable.ic_chevron), contentDescription = null)
             }
         }
-        if (logoutStorageFailed) {
+        if (logoutState == LogoutState.Failed) {
             Text(
                 stringResource(R.string.account_logout_storage_error),
                 color = MaterialTheme.colorScheme.error,
@@ -103,7 +104,7 @@ fun WelcomeScreen(
         }
         Button(
             onClick = onStartSetup,
-            enabled = !logoutStorageFailed,
+            enabled = logoutState == LogoutState.Ready,
             modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp).heightIn(min = 56.dp)
         ) {
             Text(stringResource(R.string.start_setup))

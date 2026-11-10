@@ -96,7 +96,7 @@ class MainActivity : ComponentActivity() {
                 PinGlideTheme {
                     val loginState by login.state.collectAsState()
                     val app = application as PinGlideApplication
-                    val logoutFailed by app.credentialRenewal.logoutStorageFailed.collectAsState()
+                    val logoutState by app.credentialRenewal.logoutState.collectAsState()
                     LaunchedEffect(loginState) {
                         if (loginState == LoginState.FirstDevice) {
                             (application as PinGlideApplication).checkCurrentSenderAuthorization()
@@ -148,7 +148,7 @@ class MainActivity : ComponentActivity() {
                             loginState = loginState,
                             onLogin = login::signIn,
                             onNewAccount = login::signInNewAccount,
-                            logoutStorageFailed = logoutFailed,
+                            logoutState = logoutState,
                             onRetryLogout = app.accountSession::logout,
                             onCancelLogin = login::cancel,
                             onRetryIdentity = login::restore,

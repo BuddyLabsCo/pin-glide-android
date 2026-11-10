@@ -5,6 +5,11 @@ import kotlinx.serialization.Serializable
 
 enum class CredentialAccess { Management, Upload }
 
+internal data class RegistrationClosure(
+    val destination: RefreshState,
+    val terminalSnapshot: IdentitySnapshot?
+)
+
 internal fun IdentitySnapshot.needsRenewal(
     access: CredentialAccess,
     rejectedGeneration: Long?,
