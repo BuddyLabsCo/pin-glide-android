@@ -47,6 +47,9 @@ fun SetupNavigation(
     onBatterySettings: () -> Boolean,
     loginState: LoginState,
     onLogin: () -> Unit,
+    onNewAccount: () -> Unit,
+    logoutStorageFailed: Boolean,
+    onRetryLogout: () -> Unit,
     onCancelLogin: () -> Unit,
     onRetryIdentity: () -> Unit,
     onNewRegistration: () -> Unit,
@@ -67,7 +70,9 @@ fun SetupNavigation(
         loginState == LoginState.Welcome
     )
     val leaveLogin = {
-        if (loginState == LoginState.Loading || loginState == LoginState.Error) {
+        if (loginState in
+            setOf(LoginState.Loading, LoginState.Error, LoginState.RestorationError)
+        ) {
             onCancelLogin()
         } else {
             onBackground()
@@ -88,7 +93,9 @@ fun SetupNavigation(
                 progress.start()
                 setup = progress.state
             },
-            onPrivacy = { privacyOpen = true }
+            onPrivacy = { privacyOpen = true },
+            logoutStorageFailed = logoutStorageFailed,
+            onRetryLogout = onRetryLogout
         )
 
         SetupDestination.Sms, SetupDestination.SmsDenied -> SmsPermissionScreen(
@@ -117,6 +124,7 @@ fun SetupNavigation(
         SetupDestination.QqLogin -> QqLoginScreen(
             state = loginState,
             onLogin = onLogin,
+            onNewAccount = onNewAccount,
             onCancel = onCancelLogin,
             onRetryStorage = onRetryIdentity,
             onBack = leaveLogin

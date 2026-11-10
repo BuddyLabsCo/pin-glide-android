@@ -23,7 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -34,7 +36,12 @@ import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
-fun WelcomeScreen(onStartSetup: () -> Unit, onPrivacy: () -> Unit) {
+fun WelcomeScreen(
+    onStartSetup: () -> Unit,
+    onPrivacy: () -> Unit,
+    logoutStorageFailed: Boolean,
+    onRetryLogout: () -> Unit
+) {
     val title = stringResource(R.string.app_name)
     ScreenLayout {
         Column(
@@ -84,8 +91,19 @@ fun WelcomeScreen(onStartSetup: () -> Unit, onPrivacy: () -> Unit) {
                 Icon(painterResource(R.drawable.ic_chevron), contentDescription = null)
             }
         }
+        if (logoutStorageFailed) {
+            Text(
+                stringResource(R.string.account_logout_storage_error),
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            )
+            TextButton(onClick = onRetryLogout, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.setup_check_again))
+            }
+        }
         Button(
             onClick = onStartSetup,
+            enabled = !logoutStorageFailed,
             modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp).heightIn(min = 56.dp)
         ) {
             Text(stringResource(R.string.start_setup))

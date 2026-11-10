@@ -10,6 +10,7 @@ enum class LoginState {
     Entry,
     Loading,
     Error,
+    RestorationError,
     StorageError,
     FirstDevice,
     Revoked,
@@ -39,6 +40,8 @@ class ExplicitLogin(
 
                 snapshot.refreshState == RefreshState.RegistrationClosed -> LoginState.Welcome
 
+                snapshot.refreshState == RefreshState.LoggedOut -> LoginState.Welcome
+
                 snapshot.identity != null -> LoginState.FirstDevice
 
                 snapshot.generation == 0L || snapshot.closedSenderIds.isNotEmpty() ->
@@ -61,28 +64,25 @@ class ExplicitLogin(
         }
     }
 
-    suspend fun login() {
-        if (state.value !in listOf(LoginState.Entry, LoginState.Error)) return
+    suspend fun login(registerNew: Boolean = false) {
+        if (state.value !in
+            listOf(LoginState.Entry, LoginState.Error, LoginState.RestorationError)
+        ) {
+            return
+        }
         val current = LoginAttempt()
         attempt = current
+        val expectedSession = renewal.sessionGeneration
+        val retained = snapshot.restoration?.takeUnless { registerNew }
         mutableState.value = LoginState.Loading
         try {
-            val name = deviceName()
-            require(
-                name.isNotBlank() && name == name.trim() &&
-                    name.codePointCount(0, name.length) <= 64
-            )
+            val name = senderName()
             val code = authorization.authorize()
             if (attempt !== current) return
             require(code.isNotBlank())
             check(store.read().generation == snapshot.generation)
-            val identity = service.login(code, name, senderId = null)
-            if (attempt !== current) return
-            identity.validate(clock.instant(), requireFresh = true)
-            require(identity.senderId !in snapshot.closedSenderIds)
-            check(store.accept(snapshot.generation, identity, current))
-            renewal.recover()
-            if (attempt === current) mutableState.value = LoginState.FirstDevice
+            val identity = service.login(code, name, senderId = retained?.senderId)
+            acceptLogin(identity, current, retained, expectedSession)
         } catch (cancelled: CancellationException) {
             current.cancel()
             if (attempt === current) {
@@ -93,8 +93,36 @@ class ExplicitLogin(
         } catch (_: IdentityStorageException) {
             if (attempt === current) mutableState.value = LoginState.StorageError
         } catch (_: Exception) {
-            if (attempt === current) mutableState.value = LoginState.Error
+            if (attempt ===
+                current
+            ) {
+                mutableState.value =
+                    if (retained == null) LoginState.Error else LoginState.RestorationError
+            }
         }
+    }
+
+    private fun senderName(): String = deviceName().also {
+        require(it.isNotBlank() && it == it.trim() && it.codePointCount(0, it.length) <= 64)
+    }
+
+    private suspend fun acceptLogin(
+        identity: SenderIdentity,
+        current: LoginAttempt,
+        retained: SenderContext?,
+        expectedSession: Long
+    ) {
+        if (attempt !== current || renewal.sessionGeneration != expectedSession) return
+        identity.validate(clock.instant(), requireFresh = true)
+        require(
+            retained == null || retained == SenderContext(identity.accountId, identity.senderId)
+        )
+        require(identity.senderId !in snapshot.closedSenderIds)
+        check(store.accept(snapshot.generation, identity, current))
+        if (renewal.sessionGeneration != expectedSession) return
+        renewal.resumeSession()
+        renewal.recover()
+        if (attempt === current) mutableState.value = LoginState.FirstDevice
     }
 
     fun cancel() {
@@ -103,5 +131,11 @@ class ExplicitLogin(
         mutableState.value =
             if (current?.accepted == true) LoginState.FirstDevice else LoginState.Entry
         attempt = null
+    }
+
+    fun leaveAccount() {
+        cancel()
+        snapshot = IdentitySnapshot()
+        mutableState.value = LoginState.Welcome
     }
 }

@@ -10,6 +10,9 @@ The current device that forwards newly received SMS messages to its paired targe
 **Sender registration**:
 A Sender's identity within one Account. Permanent revocation closes that identity; expiration or replacement of its access credentials does not by itself close the registration.
 
+**Sender restoration context**:
+The protected Account and Sender identifiers retained after ordinary logout. Only a verified login to that same Account and Sender may reattach its retained Pairing keys and receive preferences. The context contains no service credentials.
+
 **Target device**:
 A device selected as a destination for messages from the current Sender.
 _Avoid_: Computer, phone, Windows endpoint in generic UI copy; user-chosen aliases are preserved.

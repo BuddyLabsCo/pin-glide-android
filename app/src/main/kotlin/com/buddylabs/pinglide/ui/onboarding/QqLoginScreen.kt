@@ -34,6 +34,7 @@ import com.buddylabs.pinglide.ui.components.ScreenLayout
 fun QqLoginScreen(
     state: LoginState,
     onLogin: () -> Unit,
+    onNewAccount: () -> Unit,
     onCancel: () -> Unit,
     onRetryStorage: () -> Unit,
     onBack: () -> Unit
@@ -41,7 +42,7 @@ fun QqLoginScreen(
     when (state) {
         LoginState.Restoring, LoginState.Loading -> LoginBusyScreen(state, onCancel, onBack)
         LoginState.FirstDevice -> Unit
-        else -> LoginActionScreen(state, onLogin, onCancel, onRetryStorage, onBack)
+        else -> LoginActionScreen(state, onLogin, onNewAccount, onCancel, onRetryStorage, onBack)
     }
 }
 
@@ -49,6 +50,7 @@ fun QqLoginScreen(
 private fun LoginActionScreen(
     state: LoginState,
     onLogin: () -> Unit,
+    onNewAccount: () -> Unit,
     onCancel: () -> Unit,
     onRetryStorage: () -> Unit,
     onBack: () -> Unit
@@ -65,6 +67,7 @@ private fun LoginActionScreen(
         },
         description = when {
             storageError -> R.string.setup_identity_unavailable_description
+            state == LoginState.RestorationError -> R.string.account_restore_error
             error -> R.string.setup_qq_error_description
             else -> R.string.setup_qq_description
         },
@@ -85,27 +88,48 @@ private fun LoginActionScreen(
             }
         }
     ) {
-        Button(
-            onClick = if (storageError) onRetryStorage else onLogin,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
-        ) {
-            Text(
-                stringResource(
-                    when {
-                        storageError -> R.string.setup_check_again
-                        error -> R.string.setup_qq_retry
-                        else -> R.string.setup_qq_sign_in
-                    }
-                )
+        LoginActions(state, onLogin, onNewAccount, onCancel, onRetryStorage)
+    }
+}
+
+@Composable
+private fun LoginActions(
+    state: LoginState,
+    onLogin: () -> Unit,
+    onNewAccount: () -> Unit,
+    onCancel: () -> Unit,
+    onRetryStorage: () -> Unit
+) {
+    val storageError = state == LoginState.StorageError
+    val error = state != LoginState.Entry
+    Button(
+        onClick = if (storageError) onRetryStorage else onLogin,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+    ) {
+        Text(
+            stringResource(
+                when {
+                    storageError -> R.string.setup_check_again
+                    error -> R.string.setup_qq_retry
+                    else -> R.string.setup_qq_sign_in
+                }
             )
+        )
+    }
+    if (state == LoginState.RestorationError) {
+        TextButton(
+            onClick = onNewAccount,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        ) {
+            Text(stringResource(R.string.account_new_login))
         }
-        if (state == LoginState.Error) {
-            TextButton(
-                onClick = onCancel,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            ) {
-                Text(stringResource(R.string.setup_back))
-            }
+    }
+    if (state == LoginState.Error) {
+        TextButton(
+            onClick = onCancel,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        ) {
+            Text(stringResource(R.string.setup_back))
         }
     }
 }

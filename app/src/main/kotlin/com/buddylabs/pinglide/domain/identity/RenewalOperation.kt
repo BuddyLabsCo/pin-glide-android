@@ -5,6 +5,20 @@ import kotlinx.serialization.Serializable
 
 enum class CredentialAccess { Management, Upload }
 
+internal fun IdentitySnapshot.needsRenewal(
+    access: CredentialAccess,
+    rejectedGeneration: Long?,
+    now: Instant
+): Boolean {
+    val sender = checkNotNull(identity)
+    val expiresAt = when (access) {
+        CredentialAccess.Management -> sender.management.expiresAt
+        CredentialAccess.Upload -> sender.upload.expiresAt
+    }
+    return generation == rejectedGeneration ||
+        !Instant.parse(expiresAt).isAfter(now.plusSeconds(300))
+}
+
 enum class AuthorizationState {
     Checking,
     Ready,
@@ -14,7 +28,8 @@ enum class AuthorizationState {
     TemporarilyUnavailable,
     StorageUnavailable,
     RegistrationRevoked,
-    RegistrationClosed
+    RegistrationClosed,
+    LoggedOut
 }
 
 @Serializable
@@ -23,7 +38,8 @@ enum class RefreshState {
     LoginRequired,
     RecoveryRequired,
     RegistrationRevoked,
-    RegistrationClosed;
+    RegistrationClosed,
+    LoggedOut;
 
     val closesRegistration: Boolean
         get() = this == RegistrationRevoked || this == RegistrationClosed

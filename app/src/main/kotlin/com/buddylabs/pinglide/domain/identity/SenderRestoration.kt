@@ -54,6 +54,7 @@ class SenderRestoration(
 
     private suspend fun restore(current: LoginAttempt): RestorationState {
         val original = restorationSnapshot() ?: return RestorationState.Idle
+        val expectedSession = renewal.sessionGeneration
         if (attempt !== current) return RestorationState.Cancelled
         val saved = checkNotNull(original.identity)
         val name = deviceName()
@@ -62,26 +63,38 @@ class SenderRestoration(
                 name.codePointCount(0, name.length) <= 64
         )
         val code = authorization.authorize()
-        if (!isCurrent(original, current)) return RestorationState.Idle
+        if (!isCurrent(original, current, expectedSession)) {
+            return RestorationState.Idle
+        }
         require(code.isNotBlank())
         val identity = try {
             service.login(code, name, saved.senderId)
         } catch (failure: LoginServiceException) {
             if (!failure.registrationRevoked) throw failure
-            renewal.rejectAccess(saved, RefreshState.RegistrationRevoked)
+            if (!isCurrent(original, current, expectedSession)) {
+                return RestorationState.Idle
+            }
+            renewal.rejectAccess(saved, RefreshState.RegistrationRevoked, expectedSession)
             return RestorationState.Idle
         }
-        if (!isCurrent(original, current)) return RestorationState.Idle
+        if (!isCurrent(original, current, expectedSession)) {
+            return RestorationState.Idle
+        }
         identity.validate(clock.instant(), requireFresh = true)
         if (identity.accountId != saved.accountId) return RestorationState.AccountMismatch
         require(identity.senderId == saved.senderId)
         check(store.accept(original.generation, identity, current))
+        if (!renewal.isSessionCurrent(expectedSession)) return RestorationState.Idle
         renewal.recover()
         return RestorationState.Restored
     }
 
-    private suspend fun isCurrent(expected: IdentitySnapshot, current: LoginAttempt): Boolean {
-        if (attempt !== current) return false
+    private suspend fun isCurrent(
+        expected: IdentitySnapshot,
+        current: LoginAttempt,
+        session: Long
+    ): Boolean {
+        if (attempt !== current || !renewal.isSessionCurrent(session)) return false
         val latest = store.read()
         return attempt === current && latest.generation == expected.generation &&
             latest.identity?.accountId == expected.identity?.accountId &&
