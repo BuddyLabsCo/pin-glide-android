@@ -13,16 +13,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.buddylabs.pinglide.data.storage.LanguagePreferences
 import com.buddylabs.pinglide.data.storage.SetupPreferences
 import com.buddylabs.pinglide.domain.identity.LoginState
+import com.buddylabs.pinglide.domain.settings.AppLanguage
+import com.buddylabs.pinglide.platform.DeviceInfo
 import com.buddylabs.pinglide.platform.permissions.SetupPermissions
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import com.buddylabs.pinglide.ui.home.HomeViewModel
 import com.buddylabs.pinglide.ui.navigation.AcceptedNavigation
 import com.buddylabs.pinglide.ui.navigation.SetupNavigation
 import com.buddylabs.pinglide.ui.onboarding.LoginViewModel
+import com.buddylabs.pinglide.ui.settings.SettingsNavigation
 
 class MainActivity : ComponentActivity() {
+    private val languagePreferences by lazy { LanguagePreferences(applicationContext) }
+    private var language by mutableStateOf(AppLanguage.System)
     private val permissions by lazy { SetupPermissions(this) }
     private val login by lazy {
         ViewModelProvider(
@@ -72,44 +78,59 @@ class MainActivity : ComponentActivity() {
         smsRequestPending = savedInstanceState?.getBoolean("sms_request_pending") ?: false
         checkSmsPermission()
         val progress = SetupPreferences(applicationContext)
+        language = languagePreferences.language
         setContent {
-            PinGlideTheme {
-                val loginState by login.state.collectAsState()
-                LaunchedEffect(loginState) {
-                    if (loginState == LoginState.FirstDevice) {
-                        (application as PinGlideApplication).checkCurrentSenderAuthorization()
+            LocalizedContent(language) {
+                PinGlideTheme {
+                    val loginState by login.state.collectAsState()
+                    LaunchedEffect(loginState) {
+                        if (loginState == LoginState.FirstDevice) {
+                            (application as PinGlideApplication).checkCurrentSenderAuthorization()
+                        }
                     }
-                }
-                AcceptedNavigation(
-                    progress = progress,
-                    smsGranted = smsGranted,
-                    onCheckSms = ::checkSmsPermission,
-                    loginState = loginState,
-                    home = home,
-                    onRestoreSms = ::restoreSmsPermission,
-                    onBackground = { moveTaskToBack(true) },
-                    onNewRegistration = login::beginRegistration
-                ) {
-                    SetupNavigation(
+                    AcceptedNavigation(
                         progress = progress,
                         smsGranted = smsGranted,
-                        smsRequestPending = smsRequestPending,
-                        onRequestSms = {
-                            if (!smsRequestPending) {
-                                smsRequestPending = true
-                                smsPermissionRequest.launch(Manifest.permission.RECEIVE_SMS)
-                            }
-                        },
                         onCheckSms = ::checkSmsPermission,
-                        onApplicationSettings = { permissions.openApplicationSettings() },
-                        onBatterySettings = permissions::openBatterySettings,
                         loginState = loginState,
-                        onLogin = login::signIn,
-                        onCancelLogin = login::cancel,
-                        onRetryIdentity = login::restore,
+                        home = home,
+                        onRestoreSms = ::restoreSmsPermission,
+                        onBackground = { moveTaskToBack(true) },
                         onNewRegistration = login::beginRegistration,
-                        onBackground = { moveTaskToBack(true) }
-                    )
+                        settings = { onDismiss ->
+                            SettingsNavigation(
+                                language = language,
+                                onLanguage = {
+                                    languagePreferences.language = it
+                                    language = it
+                                },
+                                onBatterySettings = permissions::openBatterySettings,
+                                installedVersion = DeviceInfo(this).installedVersion(),
+                                onDismiss = onDismiss
+                            )
+                        }
+                    ) {
+                        SetupNavigation(
+                            progress = progress,
+                            smsGranted = smsGranted,
+                            smsRequestPending = smsRequestPending,
+                            onRequestSms = {
+                                if (!smsRequestPending) {
+                                    smsRequestPending = true
+                                    smsPermissionRequest.launch(Manifest.permission.RECEIVE_SMS)
+                                }
+                            },
+                            onCheckSms = ::checkSmsPermission,
+                            onApplicationSettings = { permissions.openApplicationSettings() },
+                            onBatterySettings = permissions::openBatterySettings,
+                            loginState = loginState,
+                            onLogin = login::signIn,
+                            onCancelLogin = login::cancel,
+                            onRetryIdentity = login::restore,
+                            onNewRegistration = login::beginRegistration,
+                            onBackground = { moveTaskToBack(true) }
+                        )
+                    }
                 }
             }
         }

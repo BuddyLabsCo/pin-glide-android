@@ -144,4 +144,21 @@
     <string name="home_login_mismatch">请使用原 QQ 账号</string>
     <string name="home_login_mismatch_copy">本次授权无法恢复当前设备的原注册。请确认使用原 QQ 账号重试；若要切换账号，请返回设置操作。</string>
     <string name="home_login_restored">登录已恢复，原有配对已保留</string>
+    <string name="settings_title">设置</string>
+    <string name="settings_account_group">账户</string>
+    <string name="settings_account">QQ 账号</string>
+    <string name="settings_display">显示</string>
+    <string name="settings_language">语言</string>
+    <string name="settings_app_language">应用语言</string>
+    <string name="settings_follow_system">跟随系统</string>
+    <string name="settings_simplified_chinese" translatable="false">简体中文</string>
+    <string name="settings_english" translatable="false">English</string>
+    <string name="settings_appearance">外观</string>
+    <string name="settings_background">后台运行</string>
+    <string name="settings_battery">电池优化</string>
+    <string name="settings_battery_subtitle">鹊信需要关闭电池优化才能持续工作</string>
+    <string name="settings_security">安全</string>
+    <string name="settings_device_access">设备访问管理</string>
+    <string name="settings_device_access_explanation">撤销需要验证当前 QQ 账号。所选发送端设备的注册和配对将被永久移除，其他发送端设备不受影响。</string>
+    <string name="settings_about">关于</string>
 </resources>
