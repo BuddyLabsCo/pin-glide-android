@@ -38,74 +38,77 @@ internal fun SettingsScreen(
     language: AppLanguage,
     installedVersion: String,
     onBatterySettings: () -> Boolean,
-    onNavigate: (SettingsDestination) -> Unit
+    onNavigate: (SettingsDestination) -> Unit,
+    onBack: () -> Unit
 ) {
     var focused by rememberSaveable { mutableStateOf(0) }
     var batteryError by rememberSaveable { mutableStateOf(false) }
-    val rowFocus = remember { FocusRequester() }
+    val controlFocus = remember { FocusRequester() }
     val focus: (Int) -> Modifier = { label ->
-        Modifier.then(if (focused == label) Modifier.focusRequester(rowFocus) else Modifier)
+        Modifier.then(if (focused == label) Modifier.focusRequester(controlFocus) else Modifier)
             .onFocusChanged { if (it.isFocused) focused = label }
     }
-    LaunchedEffect(Unit) { if (focused != 0) rowFocus.requestFocus() }
-    SettingsGroupTitle(stringResource(R.string.settings_account_group))
-    SettingsAction(
-        stringResource(R.string.settings_account),
-        R.drawable.ic_qq,
-        modifier = focus(R.string.settings_account)
-    ) {
-        focused = R.string.settings_account
-        onNavigate(SettingsDestination.Account)
-    }
-    SettingsGroupTitle(stringResource(R.string.settings_display))
-    SettingsAction(
-        stringResource(R.string.settings_language),
-        R.drawable.ic_language,
-        value = languageLabel(language),
-        modifier = focus(R.string.settings_language)
-    ) {
-        focused = R.string.settings_language
-        onNavigate(SettingsDestination.Language)
-    }
-    SettingsInformation(
-        stringResource(R.string.settings_appearance),
-        stringResource(R.string.settings_follow_system)
-    )
-    SettingsGroupTitle(stringResource(R.string.settings_background))
-    SettingsAction(
-        stringResource(R.string.settings_battery),
-        R.drawable.ic_battery,
-        description = stringResource(R.string.settings_battery_subtitle),
-        modifier = focus(R.string.settings_battery)
-    ) {
-        focused = R.string.settings_battery
-        batteryError = !onBatterySettings()
-    }
-    if (batteryError) {
-        Text(
-            stringResource(R.string.setup_settings_unavailable),
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+    LaunchedEffect(Unit) { if (focused != 0) controlFocus.requestFocus() }
+    SettingsPage(stringResource(R.string.settings_title), onBack, focus(R.string.setup_back)) {
+        SettingsGroupTitle(stringResource(R.string.settings_account_group))
+        SettingsAction(
+            stringResource(R.string.settings_account),
+            R.drawable.ic_qq,
+            modifier = focus(R.string.settings_account)
+        ) {
+            focused = R.string.settings_account
+            onNavigate(SettingsDestination.Account)
+        }
+        SettingsGroupTitle(stringResource(R.string.settings_display))
+        SettingsAction(
+            stringResource(R.string.settings_language),
+            R.drawable.ic_language,
+            value = languageLabel(language),
+            modifier = focus(R.string.settings_language)
+        ) {
+            focused = R.string.settings_language
+            onNavigate(SettingsDestination.Language)
+        }
+        SettingsInformation(
+            stringResource(R.string.settings_appearance),
+            stringResource(R.string.settings_follow_system)
         )
-    }
-    SettingsGroupTitle(stringResource(R.string.settings_security))
-    SettingsAction(
-        stringResource(R.string.settings_device_access),
-        R.drawable.ic_shield,
-        modifier = focus(R.string.settings_device_access)
-    ) {
-        focused = R.string.settings_device_access
-        onNavigate(SettingsDestination.DeviceAccess)
-    }
-    SettingsGroupTitle(stringResource(R.string.settings_about))
-    SettingsInformation(stringResource(R.string.app_name), installedVersion)
-    SettingsAction(
-        stringResource(R.string.privacy_title),
-        R.drawable.ic_lock,
-        modifier = focus(R.string.privacy_title)
-    ) {
-        focused = R.string.privacy_title
-        onNavigate(SettingsDestination.Privacy)
+        SettingsGroupTitle(stringResource(R.string.settings_background))
+        SettingsAction(
+            stringResource(R.string.settings_battery),
+            R.drawable.ic_battery,
+            description = stringResource(R.string.settings_battery_subtitle),
+            modifier = focus(R.string.settings_battery)
+        ) {
+            focused = R.string.settings_battery
+            batteryError = !onBatterySettings()
+        }
+        if (batteryError) {
+            Text(
+                stringResource(R.string.setup_settings_unavailable),
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            )
+        }
+        SettingsGroupTitle(stringResource(R.string.settings_security))
+        SettingsAction(
+            stringResource(R.string.settings_device_access),
+            R.drawable.ic_shield,
+            modifier = focus(R.string.settings_device_access)
+        ) {
+            focused = R.string.settings_device_access
+            onNavigate(SettingsDestination.DeviceAccess)
+        }
+        SettingsGroupTitle(stringResource(R.string.settings_about))
+        SettingsInformation(stringResource(R.string.app_name), installedVersion)
+        SettingsAction(
+            stringResource(R.string.privacy_title),
+            R.drawable.ic_lock,
+            modifier = focus(R.string.privacy_title)
+        ) {
+            focused = R.string.privacy_title
+            onNavigate(SettingsDestination.Privacy)
+        }
     }
 }
 

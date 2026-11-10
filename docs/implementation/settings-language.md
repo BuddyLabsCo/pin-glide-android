@@ -7,8 +7,10 @@ takes precedence over Settings. Account-owner changes reset the Settings entry.
 
 Settings owns its dialog's dismissal callback. System Back and the toolbar return
 children to Settings; root Back dismisses Settings. A saveable state holder keeps
-each destination's scroll state, and root actions restore keyboard focus to their
-originating row. Privacy uses the same read-only PrivacyScreen as Welcome.
+each destination's scroll state. The root toolbar and action rows share a saved
+focus owner, so configuration changes restore the actual focused control,
+including Back. Returning from a child still restores its originating row.
+Privacy uses the same read-only PrivacyScreen as Welcome.
 
 The Account and device-access destinations establish navigation only. Profile,
 logout, Sender inventory and revocation remain owned by issues #30-#35; these
@@ -62,11 +64,25 @@ the selected value changed while other text retained its old language. Providing
 Compose LocalResources explicitly fixed it; both picker directions then updated
 all visible Settings text immediately.
 
+The focus review regression was reproduced on the API-37 emulator before the
+fix: focus QQ account, move up to toolbar Back, then rotate. Focus incorrectly
+returned to QQ account. After sharing the saved root focus owner with the
+toolbar, the same sequence retained Back, and keyboard activation dismissed
+Settings to the original preview host. This uses the existing disposable preview;
+authenticated Home dismissal remains outside the device checks above.
+QQ account and Language also retained their originating-row focus after child
+Back and rotation. Back and Language retained focus through light/dark changes.
+The focused suite, final qualityCheck, both Kotlin compilations, Debug assembly
+and full unit suite passed again (14 tests, no failures or skips).
+
 Ripwire's quality delta and test gate were also inspected. They flag generic
 Compose layout similarity, navigation parameter growth, recent-file churn and
 existing application wiring without mapped automated coverage. These heuristic
 findings are not a passing automated-coverage claim; the repository's four
 required static checks passed and this slice was exercised as described above.
+For this review fix, the quality delta has no gating findings and one minor
+screen-length warning. The test gate still maps no automated tests to this UI
+change; the regression checks above exercise the production composables.
 
 Full authenticated Home navigation, ongoing network operations during
 configuration changes, physical devices, TalkBack speech and older Android

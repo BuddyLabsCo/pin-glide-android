@@ -88,6 +88,10 @@ private fun SettingsDestinationContent(
     onNavigate: (SettingsDestination) -> Unit,
     onLanguage: (AppLanguage) -> Unit
 ) {
+    if (destination == SettingsDestination.Root) {
+        SettingsScreen(language, installedVersion, onBatterySettings, onNavigate, onBack)
+        return
+    }
     if (destination == SettingsDestination.Privacy) {
         PrivacyScreen(onDismiss = onBack)
         return
@@ -96,17 +100,9 @@ private fun SettingsDestinationContent(
         SettingsDestination.Language -> R.string.settings_language
         SettingsDestination.Account -> R.string.settings_account
         SettingsDestination.DeviceAccess -> R.string.settings_device_access
-        else -> R.string.settings_title
     }
     SettingsPage(stringResource(title), onBack) {
         when (destination) {
-            SettingsDestination.Root -> SettingsScreen(
-                language,
-                installedVersion,
-                onBatterySettings,
-                onNavigate
-            )
-
             SettingsDestination.Language -> LanguageScreen(language, onLanguage)
 
             SettingsDestination.Account -> Text(stringResource(R.string.settings_account))
@@ -114,16 +110,15 @@ private fun SettingsDestinationContent(
             SettingsDestination.DeviceAccess -> Text(
                 stringResource(R.string.settings_device_access_explanation)
             )
-
-            SettingsDestination.Privacy -> Unit
         }
     }
 }
 
 @Composable
-private fun SettingsPage(
+internal fun SettingsPage(
     title: String,
     onBack: () -> Unit,
+    backModifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
     ScreenLayout {
@@ -131,7 +126,7 @@ private fun SettingsPage(
             Modifier.fillMaxWidth().padding(vertical = 8.dp).semantics { paneTitle = title },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBack) {
+            IconButton(onClick = onBack, modifier = backModifier) {
                 Icon(painterResource(R.drawable.ic_back), stringResource(R.string.setup_back))
             }
             Text(
