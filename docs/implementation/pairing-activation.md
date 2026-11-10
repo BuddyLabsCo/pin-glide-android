@@ -79,6 +79,37 @@ Duplicate taps are suppressed while navigation remains available. Leaving the
 origin or changing identity/target suppresses stale results; test failure cannot
 undo activation.
 
+## Review corrections
+
+Startup and foreground authorization checks now inspect retained provisional
+sessions over management-authenticated WSS. Account/Sender ownership, session,
+Pairing and Receiver IDs must match the usable protected key. Only an
+authoritative receiverConfirmed fact permits resubmitting an interrupted Sender
+completion report. Recovery never starts another handshake or creates a key.
+Membership reconciliation still controls local promotion and alias restoration.
+
+An unavailable session or membership response leaves completion explicitly
+unconfirmed. The result screen offers Check again; leaving it retains the
+provisional facts without cancelling a possibly activated session. A confirmed
+closed session with successfully refreshed, absent membership remains a terminal
+failure. Returning to the app can resume retained-session recovery.
+
+Test-message feedback carries the selected alias and maps published rejection
+codes to localized reasons. Unknown codes and ambiguous outcomes remain
+unconfirmed; raw service details never enter UI state. Confirmed received
+results create a consumable success notice, retained in the ViewModel across
+configuration changes and consumed before showing the localized Toast.
+Duplicate sends wait for that notice to be consumed, and leaving the origin or
+changing ownership clears pending feedback. Onboarding failure offers Pair later
+through the existing setup-completion callback; the Home host retains Return.
+
+Review-fix validation includes disposable build-directory checks for interrupted
+Sender reports, missing Receiver confirmation or key, every retained correlation
+field, authority changes, unavailable-versus-terminal evidence, reconciliation
+without handshake replay, cancellation suppression, safe delivery reasons,
+one-time success-event consumption and obsolete-result suppression. These JVM
+checks do not establish native Toast rendering or device navigation acceptance.
+
 ## Verification and limits
 
 Local validation uses generated-client compilation, the focused OwnPairingsTest

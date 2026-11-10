@@ -182,15 +182,7 @@ class PairingEntry(
             val pairingId = activation.activate(current, result, alias) { stage ->
                 if (expected == epoch) mutableState.value = state.value.copy(stage = stage)
             }
-            if (expected != epoch || currentSnapshot() == null) return
-            current.clear()
-            qr = null
-            session = null
-            mutableState.value = state.value.copy(
-                page = PairingEntryPage.Success,
-                pending = false,
-                activatedPairingId = pairingId
-            )
+            activated(pairingId, expected)
         } catch (failure: PairingEntryException) {
             failCurrent(expected, failure.problem)
         } catch (_: AuthorizationException) {
@@ -202,6 +194,19 @@ class PairingEntry(
         } catch (_: PairingServiceException) {
             failCurrent(expected, PairingEntryProblem.Unavailable)
         }
+    }
+
+    private suspend fun activated(pairingId: String, expected: Long) {
+        if (expected != epoch || currentSnapshot() == null) return
+        qr?.clear()
+        qr = null
+        session = null
+        mutableState.value = state.value.copy(
+            page = PairingEntryPage.Success,
+            pending = false,
+            problem = null,
+            activatedPairingId = pairingId
+        )
     }
 
     private fun failCurrent(expected: Long, problem: PairingEntryProblem) {
@@ -257,9 +262,21 @@ class PairingEntry(
 
     suspend fun foreground() {
         if (state.value.page == PairingEntryPage.Idle) return
-        if (state.value.page == PairingEntryPage.Progress ||
-            state.value.page == PairingEntryPage.Success
-        ) {
+        if (state.value.page == PairingEntryPage.Progress) {
+            if (state.value.problem == PairingEntryProblem.Unconfirmed && !state.value.pending) {
+                val pairingId = session?.pairingId ?: return
+                val expected = epoch
+                mutableState.value = state.value.copy(pending = true)
+                try {
+                    activated(activation.resume(pairingId), expected)
+                } catch (failure: PairingEntryException) {
+                    failCurrent(expected, failure.problem)
+                }
+            }
+            return
+        }
+        if (state.value.page == PairingEntryPage.Success) {
+            currentSnapshot()
             return
         }
         val snapshot = currentSnapshot() ?: return
@@ -404,7 +421,12 @@ class PairingEntry(
     private fun fail(problem: PairingEntryProblem) {
         watcher?.cancel()
         ticker?.cancel()
-        if (problem != PairingEntryProblem.InvalidQr) releaseCurrent()
+        if (problem == PairingEntryProblem.Unconfirmed) {
+            qr?.clear()
+            qr = null
+        } else if (problem != PairingEntryProblem.InvalidQr) {
+            releaseCurrent()
+        }
         mutableState.value = state.value.copy(
             pending = false,
             problem = problem,
@@ -432,7 +454,9 @@ class PairingEntry(
         qr?.clear()
         qr = null
         session = null
-        if (previous != null) releaseSession(previous.sessionId, owner)
+        if (previous != null && state.value.problem != PairingEntryProblem.Unconfirmed) {
+            releaseSession(previous.sessionId, owner)
+        }
     }
 
     private fun releaseSession(sessionId: String, previousOwner: Pair<String, String>?) {
@@ -441,6 +465,12 @@ class PairingEntry(
             try {
                 renewal.withAccess(CredentialAccess.Management) { identity ->
                     if (previousOwner == identity.accountId to identity.senderId) {
+                        if (store.readPairings().provisional.any {
+                                it.provisionalSessionId == sessionId
+                            }
+                        ) {
+                            return@withAccess
+                        }
                         try {
                             service.cancel(identity.management.token, sessionId)
                         } catch (failure: PairingServiceException) {

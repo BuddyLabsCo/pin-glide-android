@@ -89,6 +89,7 @@ class PinGlideApplication : Application() {
         super.onCreate()
         processScope.launch {
             credentialRenewal.recover()
+            pairingActivation.recover()
             ownPairings.synchronize()
             if (ownPairings.state.value.targets.any { it.keyUsable }) {
                 completeActivatedSetup()
@@ -97,7 +98,10 @@ class PinGlideApplication : Application() {
     }
 
     fun checkCurrentSenderAuthorization() {
-        processScope.launch { currentSenderAuthorization.check() }
+        processScope.launch {
+            currentSenderAuthorization.check()
+            pairingActivation.recover()
+        }
     }
 
     fun explicitLogin() = ExplicitLogin(
@@ -123,7 +127,11 @@ class PinGlideApplication : Application() {
         PairingQrReader(),
         credentialRenewal,
         scope,
-        activation = PairingActivation(
+        activation = pairingActivation
+    )
+
+    private val pairingActivation by lazy {
+        PairingActivation(
             identityStore,
             ownPairings,
             PairingSessionService(BuildConfig.SERVICE_URL, identityClient),
@@ -131,7 +139,7 @@ class PinGlideApplication : Application() {
             credentialRenewal,
             onActivated = ::completeActivatedSetup
         )
-    )
+    }
 
     private fun completeActivatedSetup() {
         val progress = SetupPreferences(this)

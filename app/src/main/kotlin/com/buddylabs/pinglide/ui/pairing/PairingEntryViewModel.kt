@@ -2,6 +2,7 @@ package com.buddylabs.pinglide.ui.pairing
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 import com.buddylabs.pinglide.domain.identity.IdentityStorageException
 import com.buddylabs.pinglide.domain.pairing.HomeState
@@ -18,7 +19,7 @@ import kotlinx.coroutines.launch
 
 class PairingEntryViewModel(
     create: (CoroutineScope) -> PairingEntry,
-    private val sendTest: suspend (String) -> TestMessageResult? = { TestMessageResult.Uncertain }
+    private val sendTest: suspend (String) -> TestMessageOutcome?
 ) : ViewModel() {
     private val entry = create(viewModelScope)
     val state = entry.state
@@ -34,6 +35,10 @@ class PairingEntryViewModel(
     init {
         viewModelScope.launch {
             state.collectLatest { current ->
+                if (current.page != PairingEntryPage.Success) {
+                    testOperation?.cancel()
+                    mutableTestState.value = PairingTestState()
+                }
                 if (current.duplicatePairingId != null) {
                     delay((current.highlightUntil - System.currentTimeMillis()).coerceAtLeast(0))
                     if (state.value.highlightUntil == current.highlightUntil) entry.clearHighlight()
@@ -110,16 +115,31 @@ class PairingEntryViewModel(
 
     fun testMessage() {
         val target = state.value.activatedPairingId ?: return
-        if (state.value.page != PairingEntryPage.Success || testOperation?.isActive == true) return
+        if (state.value.page != PairingEntryPage.Success || testOperation?.isActive == true ||
+            testState.value.announceReceived
+        ) {
+            return
+        }
         mutableTestState.value = PairingTestState(pending = true)
         testOperation = viewModelScope.launch {
             val result = sendTest(target)
             if (state.value.activatedPairingId == target &&
                 state.value.page == PairingEntryPage.Success
             ) {
-                mutableTestState.value = PairingTestState(result = result)
+                mutableTestState.value = PairingTestState(
+                    outcome = result,
+                    announceReceived = result?.result == TestMessageResult.Received
+                )
             }
         }
+    }
+
+    fun consumeTestSuccess(): Boolean {
+        if (state.value.page != PairingEntryPage.Success || !testState.value.announceReceived) {
+            return false
+        }
+        mutableTestState.value = testState.value.copy(announceReceived = false)
+        return true
     }
 
     fun dismissNotice() = entry.dismissNotice()
@@ -140,4 +160,8 @@ class PairingEntryViewModel(
     }
 }
 
-data class PairingTestState(val pending: Boolean = false, val result: TestMessageResult? = null)
+data class PairingTestState(
+    val pending: Boolean = false,
+    val outcome: TestMessageOutcome? = null,
+    val announceReceived: Boolean = false
+)

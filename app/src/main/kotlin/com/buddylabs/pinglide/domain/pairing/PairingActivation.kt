@@ -1,13 +1,15 @@
 package com.buddylabs.pinglide.domain.pairing
 
+import com.buddylabs.pinglide.domain.identity.AccessExpiredException
+import com.buddylabs.pinglide.domain.identity.AuthorizationException
 import com.buddylabs.pinglide.domain.identity.CredentialAccess
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
+import com.buddylabs.pinglide.domain.identity.IdentityStorageException
 import com.buddylabs.pinglide.domain.identity.RefreshState
 import java.time.Clock
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withTimeout
 
 class PairingActivation(
@@ -31,23 +33,118 @@ class PairingActivation(
             exchange.run()
         } catch (_: TimeoutCancellationException) {
             if (!exchange.saved) unavailable()
-        } catch (cancelled: CancellationException) {
-            throw cancelled
         } catch (failure: PairingEntryException) {
             if (!exchange.saved) throw failure
-            if (failure.problem == PairingEntryProblem.Unavailable) exchange.reconcile()
+        } catch (failure: PairingServiceException) {
+            if (!exchange.saved) throw failure
+        } catch (failure: AccessExpiredException) {
+            if (!exchange.saved) throw failure
+        } catch (failure: AuthorizationException) {
+            if (!exchange.saved) throw failure
+        } catch (failure: IdentityStorageException) {
+            if (!exchange.saved) throw failure
         } finally {
             exchange.close()
         }
-        val pairingId = session.pairingId ?: unavailable()
+        return resume(session.pairingId ?: unavailable())
+    }
+
+    suspend fun recover() {
+        val initial = try {
+            store.readPairings()
+        } catch (_: IdentityStorageException) {
+            return
+        }
+        for (pending in initial.provisional.filter { it.keyUsable }) {
+            try {
+                requireOwner(initial)
+                resume(pending.pairingId)
+            } catch (_: PairingEntryException) {
+                continue
+            }
+        }
+    }
+
+    suspend fun resume(pairingId: String): String = try {
+        resumeCurrent(pairingId)
+    } catch (failure: PairingEntryException) {
+        if (failure.problem == PairingEntryProblem.Closed) throw failure
+        unconfirmed()
+    } catch (_: PairingServiceException) {
+        unconfirmed()
+    } catch (_: AccessExpiredException) {
+        unconfirmed()
+    } catch (_: AuthorizationException) {
+        unconfirmed()
+    } catch (_: IdentityStorageException) {
+        unconfirmed()
+    }
+
+    private suspend fun resumeCurrent(pairingId: String): String {
+        val initial = store.readPairings()
+        val pending = initial.provisional.find { it.pairingId == pairingId && it.keyUsable }
+        val closed = pending != null && inspectRetained(initial, pending)
         requireOwner(initial)
         pairings.synchronize()
-        val committed = requireOwner(initial).items.find {
-            it.pairingId == pairingId && it.receiverId == session.receiverId && it.keyUsable
-        } ?: unavailable()
-        if (committed.alias != alias) unavailable()
-        onActivated()
-        return pairingId
+        val current = requireOwner(initial)
+        val active = current.items.find {
+            it.pairingId == pairingId && it.keyUsable &&
+                (pending == null || it.receiverId == pending.receiverId)
+        }
+        if (active != null && !pairings.state.value.failed) {
+            if (pending != null && active.alias != pending.alias) unconfirmed()
+            onActivated()
+            return pairingId
+        }
+        if (closed && !pairings.state.value.failed) {
+            throw PairingEntryException(PairingEntryProblem.Closed)
+        }
+        unconfirmed()
+    }
+
+    private suspend fun inspectRetained(initial: PairingSnapshot, pending: OwnPairing): Boolean =
+        try {
+            withTimeout(10_000) {
+                renewal.withAccess(CredentialAccess.Management) { identity ->
+                    requireOwner(initial)
+                    try {
+                        val current = service.watch(
+                            identity.management.token,
+                            checkNotNull(pending.provisionalSessionId)
+                        ).firstOrNull() ?: unavailable()
+                        validateRetained(current, pending, identity.senderId)
+                        if (!isActive(current) && current.receiverConfirmed &&
+                            !current.senderConfirmed
+                        ) {
+                            report(initial, current)
+                        }
+                    } catch (failure: PairingServiceException) {
+                        if (failure.failure == PairingFailure.LoginRequired) {
+                            renewal.rejectAccess(identity, RefreshState.LoginRequired)
+                        }
+                        throw failure
+                    }
+                }
+            }
+            false
+        } catch (_: TimeoutCancellationException) {
+            false
+        } catch (failure: PairingEntryException) {
+            failure.problem == PairingEntryProblem.Closed
+        } catch (_: PairingServiceException) {
+            false
+        } catch (_: AccessExpiredException) {
+            false
+        }
+
+    private fun validateRetained(current: PairingSession, pending: OwnPairing, senderId: String) {
+        if (current.sessionId != pending.provisionalSessionId ||
+            current.pairingId != pending.pairingId || current.receiverId != pending.receiverId ||
+            current.senderId != senderId
+        ) {
+            unavailable()
+        }
+        validate(current, current)
     }
 
     private inner class Exchange(
@@ -136,42 +233,6 @@ class PairingActivation(
             return isActive(report(initial, session))
         }
 
-        suspend fun reconcile() {
-            try {
-                withTimeout(remaining(session)) {
-                    renewal.withAccess(CredentialAccess.Management) { identity ->
-                        requireOwner(initial)
-                        service.watch(
-                            identity.management.token,
-                            session.sessionId
-                        ).catch { failure ->
-                            if (failure is PairingServiceException &&
-                                failure.failure == PairingFailure.LoginRequired
-                            ) {
-                                renewal.rejectAccess(identity, RefreshState.LoginRequired)
-                            }
-                            throw failure
-                        }.first { current ->
-                            validate(current, session)
-                            if (isActive(current)) {
-                                true
-                            } else {
-                                !current.senderConfirmed && isActive(report(initial, session))
-                            }
-                        }
-                    }
-                }
-            } catch (_: TimeoutCancellationException) {
-                return
-            } catch (failure: PairingEntryException) {
-                if (failure.problem != PairingEntryProblem.Closed &&
-                    failure.problem != PairingEntryProblem.Unavailable
-                ) {
-                    throw failure
-                }
-            }
-        }
-
         override fun close() {
             handshake?.close()
         }
@@ -179,7 +240,15 @@ class PairingActivation(
 
     private suspend fun report(initial: PairingSnapshot, session: PairingSession): PairingSession =
         renewal.withAccess(CredentialAccess.Management) { identity ->
-            requireOwner(initial)
+            val current = requireOwner(initial)
+            val pending = current.provisional.find {
+                it.provisionalSessionId == session.sessionId && it.pairingId == session.pairingId &&
+                    it.receiverId == session.receiverId && it.keyUsable
+            } ?: unconfirmed()
+            val original = initial.provisional.find { it.pairingId == pending.pairingId }
+            if (original != null && !checkNotNull(pending.key).contentEquals(original.key)) {
+                unconfirmed()
+            }
             try {
                 service.complete(identity.management.token, session.sessionId).also {
                     validate(it, session)
@@ -236,6 +305,9 @@ class PairingActivation(
 
             else -> false
         }
+
+    private fun unconfirmed(): Nothing =
+        throw PairingEntryException(PairingEntryProblem.Unconfirmed)
 
     private fun unavailable(): Nothing =
         throw PairingEntryException(PairingEntryProblem.Unavailable)

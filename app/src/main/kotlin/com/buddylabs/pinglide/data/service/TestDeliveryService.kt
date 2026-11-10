@@ -87,6 +87,14 @@ class TestDeliveryService(private val baseUrl: String, client: OkHttpClient) :
         return code
     }
 
+    private fun rejection(code: String?): TestMessageResult = when (code) {
+        "receiver_not_authorized" -> TestMessageResult.InvalidPairing
+        "invalid_delivery_item" -> TestMessageResult.InvalidPayload
+        "unsupported_crypto_version" -> TestMessageResult.UnsupportedEncryption
+        "duplicate_receiver" -> TestMessageResult.DuplicateTarget
+        else -> TestMessageResult.Uncertain
+    }
+
     private fun result(
         response: ApiResponse<UploadResponse?>,
         request: UploadRequest
@@ -108,9 +116,13 @@ class TestDeliveryService(private val baseUrl: String, client: OkHttpClient) :
                 TestMessageResult.Uncertain
             }
 
-            UploadResult.Status.offline -> TestMessageResult.Offline
+            UploadResult.Status.offline -> if (item.error?.code == "offline") {
+                TestMessageResult.Offline
+            } else {
+                TestMessageResult.Uncertain
+            }
 
-            UploadResult.Status.rejected -> TestMessageResult.Rejected
+            UploadResult.Status.rejected -> rejection(item.error?.code)
 
             else -> TestMessageResult.Uncertain
         }

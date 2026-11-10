@@ -90,7 +90,8 @@ internal fun AcceptedNavigation(
             when {
                 state.needsPairingLogin(onboarding) -> PairingLoginRecovery(home, onBackground)
 
-                entry.page != PairingEntryPage.Idle && !revoked -> PairingScreen(entry, pairing)
+                entry.page != PairingEntryPage.Idle && !revoked ->
+                    PairingScreen(entry, pairing, onLeave = leaveEntry)
 
                 onboarding -> {
                     BackHandler(onBack = leaveEntry)

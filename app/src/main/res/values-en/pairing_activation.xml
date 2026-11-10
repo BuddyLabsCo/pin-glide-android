@@ -16,7 +16,15 @@
     <string name="pairing_test_uncertain">Test message delivery could not be confirmed</string>
     <string name="pairing_test_no_key">Pairing or local key is unavailable</string>
     <string name="pairing_test_login">Login expired. Return to Home to sign in again</string>
-    <string name="pairing_test_rejected">Test message was rejected</string>
+    <string name="pairing_test_target_result">%1$s: %2$s</string>
+    <string name="pairing_test_invalid_pairing">Pairing is invalid or no longer authorized</string>
+    <string name="pairing_test_invalid_payload">Test message format is invalid</string>
+    <string name="pairing_test_unsupported_encryption">Encryption version is unsupported</string>
+    <string name="pairing_test_duplicate_target">Target device appears more than once</string>
+    <string name="pairing_unconfirmed_title">Pairing result unconfirmed</string>
+    <string name="pairing_unconfirmed">The pairing result could not be confirmed. Check again when connected.</string>
+    <string name="pairing_recheck">Check again</string>
+    <string name="pairing_later">Pair later</string>
     <string name="pairing_login_title">Sign in again</string>
     <string name="pairing_login_copy">Pairing has not been established. Sign in with QQ, then scan a new QR code.</string>
     <string name="pairing_login_action">Sign in with QQ again</string>

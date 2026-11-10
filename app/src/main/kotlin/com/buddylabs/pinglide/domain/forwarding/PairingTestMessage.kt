@@ -15,7 +15,19 @@ import java.util.UUID
 
 class TestCiphertext(val nonce: String, val ciphertext: String)
 
-enum class TestMessageResult { Received, Offline, Rejected, Uncertain, NoKey, LoginRequired }
+enum class TestMessageResult {
+    Received,
+    Offline,
+    InvalidPairing,
+    InvalidPayload,
+    UnsupportedEncryption,
+    DuplicateTarget,
+    Uncertain,
+    NoKey,
+    LoginRequired
+}
+
+data class TestMessageOutcome(val targetAlias: String, val result: TestMessageResult)
 
 fun interface TestDeliveryService {
     suspend fun send(
@@ -32,32 +44,37 @@ class PairingTestMessage(
     private val encrypt: (ByteArray) -> TestCiphertext,
     private val service: TestDeliveryService
 ) {
-    suspend fun send(pairingId: String): TestMessageResult? = try {
-        val initial = store.readPairings()
-        val target = initial.items.find { it.pairingId == pairingId && it.keyUsable }
-        if (target == null || target.encryptions >= 4294967296L) {
-            TestMessageResult.NoKey
-        } else {
-            if (!store.reserveEncryption(initial, pairingId)) {
+    suspend fun send(pairingId: String): TestMessageOutcome? {
+        var alias = ""
+        val result = try {
+            val initial = store.readPairings()
+            val target = initial.items.find { it.pairingId == pairingId && it.keyUsable }
+            alias = target?.alias.orEmpty()
+            if (target == null || target.encryptions >= 4294967296L) {
                 TestMessageResult.NoKey
             } else {
-                val key = checkNotNull(target.key).copyOf()
-                val encrypted = try {
-                    encrypt(key)
-                } finally {
-                    key.fill(0)
+                if (!store.reserveEncryption(initial, pairingId)) {
+                    TestMessageResult.NoKey
+                } else {
+                    val key = checkNotNull(target.key).copyOf()
+                    val encrypted = try {
+                        encrypt(key)
+                    } finally {
+                        key.fill(0)
+                    }
+                    upload(initial, target, encrypted)
                 }
-                upload(initial, target, encrypted)
             }
+        } catch (_: AuthorizationException) {
+            TestMessageResult.LoginRequired
+        } catch (_: AccessExpiredException) {
+            TestMessageResult.Uncertain
+        } catch (_: IdentityStorageException) {
+            TestMessageResult.NoKey
+        } catch (_: PairingServiceException) {
+            TestMessageResult.LoginRequired
         }
-    } catch (_: AuthorizationException) {
-        TestMessageResult.LoginRequired
-    } catch (_: AccessExpiredException) {
-        TestMessageResult.Uncertain
-    } catch (_: IdentityStorageException) {
-        TestMessageResult.NoKey
-    } catch (_: PairingServiceException) {
-        TestMessageResult.LoginRequired
+        return result?.let { TestMessageOutcome(alias, it) }
     }
 
     private suspend fun upload(

@@ -1,5 +1,6 @@
 package com.buddylabs.pinglide.ui.pairing
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
@@ -32,18 +34,32 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.PairingEntryPage
+import com.buddylabs.pinglide.domain.pairing.PairingEntryProblem
 import com.buddylabs.pinglide.domain.pairing.PairingEntryState
+import com.buddylabs.pinglide.domain.pairing.PairingHost
 import com.buddylabs.pinglide.domain.pairing.PairingStage
 import com.buddylabs.pinglide.ui.components.PairingTestAction
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
-internal fun PairingResultScreen(state: PairingEntryState, model: PairingEntryViewModel) {
+internal fun PairingResultScreen(
+    state: PairingEntryState,
+    model: PairingEntryViewModel,
+    onLeave: () -> Unit
+) {
     val test by model.testState.collectAsState()
     val success = state.page == PairingEntryPage.Success
+    val unconfirmed = state.problem == PairingEntryProblem.Unconfirmed
+    val context = LocalContext.current
+    LaunchedEffect(test.announceReceived) {
+        if (model.consumeTestSuccess()) {
+            Toast.makeText(context, R.string.pairing_test_received, Toast.LENGTH_SHORT).show()
+        }
+    }
     val title = stringResource(
         when {
             success -> R.string.pairing_success
+            unconfirmed -> R.string.pairing_unconfirmed_title
             state.problem != null -> R.string.pairing_failed_title
             else -> R.string.pairing_progress_title
         }
@@ -66,7 +82,7 @@ internal fun PairingResultScreen(state: PairingEntryState, model: PairingEntryVi
             )
             when {
                 success -> {
-                    PairingTestAction(test.pending, test.result, model::testMessage)
+                    PairingTestAction(test.pending, test.outcome, model::testMessage)
                     TextButton(
                         onClick = model::close,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
@@ -84,16 +100,35 @@ internal fun PairingResultScreen(state: PairingEntryState, model: PairingEntryVi
                         }
                     )
                     Button(
-                        onClick = model::freshScan,
+                        onClick = {
+                            if (unconfirmed) model.foreground() else model.freshScan()
+                        },
+                        enabled = !state.pending,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
                     ) {
-                        Text(stringResource(R.string.pairing_rescan))
+                        Text(
+                            stringResource(
+                                if (unconfirmed) {
+                                    R.string.pairing_recheck
+                                } else {
+                                    R.string.pairing_rescan
+                                }
+                            )
+                        )
                     }
                     TextButton(
-                        onClick = model::close,
+                        onClick = onLeave,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                     ) {
-                        Text(stringResource(R.string.pairing_return))
+                        Text(
+                            stringResource(
+                                if (state.host == PairingHost.Onboarding) {
+                                    R.string.pairing_later
+                                } else {
+                                    R.string.pairing_return
+                                }
+                            )
+                        )
                     }
                 }
 

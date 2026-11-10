@@ -16,7 +16,15 @@
     <string name="pairing_test_uncertain">无法确认测试消息是否送达</string>
     <string name="pairing_test_no_key">配对或本机密钥不可用</string>
     <string name="pairing_test_login">登录已失效，请返回首页重新登录</string>
-    <string name="pairing_test_rejected">测试消息被拒绝</string>
+    <string name="pairing_test_target_result">%1$s：%2$s</string>
+    <string name="pairing_test_invalid_pairing">配对无效或已失去授权</string>
+    <string name="pairing_test_invalid_payload">测试消息格式无效</string>
+    <string name="pairing_test_unsupported_encryption">不支持此加密版本</string>
+    <string name="pairing_test_duplicate_target">目标设备重复</string>
+    <string name="pairing_unconfirmed_title">配对结果未确认</string>
+    <string name="pairing_unconfirmed">暂时无法确认配对结果，请联网后重新检查。</string>
+    <string name="pairing_recheck">重新检查</string>
+    <string name="pairing_later">稍后配对</string>
     <string name="pairing_login_title">需要重新登录</string>
     <string name="pairing_login_copy">配对尚未建立。重新登录 QQ 后，从扫描二维码重新开始。</string>
     <string name="pairing_login_action">重新登录 QQ</string>

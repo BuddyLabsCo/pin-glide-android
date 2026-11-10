@@ -9,7 +9,15 @@ enum class PairingEntryPage { Idle, Scanner, Consent, Progress, Success }
 
 enum class PairingStage { Opening, Identity, Key, Confirm }
 
-enum class PairingEntryProblem { InvalidQr, Closed, Unsupported, Capacity, Unavailable, Camera }
+enum class PairingEntryProblem {
+    InvalidQr,
+    Closed,
+    Unsupported,
+    Capacity,
+    Unavailable,
+    Unconfirmed,
+    Camera
+}
 
 data class PairingEntryState(
     val page: PairingEntryPage = PairingEntryPage.Idle,
