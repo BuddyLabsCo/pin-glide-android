@@ -5,8 +5,11 @@ import com.buddylabs.pinglide.domain.identity.IdentitySnapshot
 import com.buddylabs.pinglide.domain.identity.IdentityStorageException
 import com.buddylabs.pinglide.domain.identity.IdentityStore
 import com.buddylabs.pinglide.domain.identity.LoginAttempt
+import com.buddylabs.pinglide.domain.identity.LogoutStore
+import com.buddylabs.pinglide.domain.identity.RefreshCredential
 import com.buddylabs.pinglide.domain.identity.RefreshState
 import com.buddylabs.pinglide.domain.identity.RenewalOperation
+import com.buddylabs.pinglide.domain.identity.SenderContext
 import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import com.buddylabs.pinglide.domain.pairing.OwnPairing
 import com.buddylabs.pinglide.domain.pairing.PairingSnapshot
@@ -41,8 +44,10 @@ import kotlinx.serialization.json.long
 
 class ProtectedIdentityStore(context: Context) :
     IdentityStore,
+    LogoutStore,
     PairingStore {
     private val file = File(context.noBackupFilesDir, "identity.snapshot")
+    private val logoutMarker = File(context.noBackupFilesDir, "identity.logged-out")
     private val protection = SnapshotProtection()
     private val writer = Mutex()
     private val json = Json {
@@ -54,6 +59,11 @@ class ProtectedIdentityStore(context: Context) :
         writer.withLock {
             storageOperation {
                 val (document, authority, alias) = load()
+                if (authority.refreshState ==
+                    RefreshState.LoggedOut
+                ) {
+                    return@storageOperation PairingSnapshot(authority)
+                }
                 val current = pairings(document, authority)
                 if (current.items.any { !it.keyUsable && (it.enabled || !it.keyFailed) }) {
                     val items = current.items.map {
@@ -207,6 +217,22 @@ class ProtectedIdentityStore(context: Context) :
         }
     }
 
+    override suspend fun logout(): RefreshCredential? = withContext(Dispatchers.IO) {
+        writer.withLock {
+            storageOperation {
+                val (document, original, alias) = load(applyLogout = false)
+                if (original.refreshState.closesRegistration) return@storageOperation null
+                FileOutputStream(logoutMarker).use { stream ->
+                    stream.write(1)
+                    stream.fd.sync()
+                }
+                val next = original.loggedOut()
+                check(persist(json.logoutDocument(document, next), alias, LoginAttempt()))
+                original.identity?.refresh
+            }
+        }
+    }
+
     override suspend fun updateRenewal(
         expected: IdentitySnapshot,
         replacement: IdentitySnapshot,
@@ -229,7 +255,7 @@ class ProtectedIdentityStore(context: Context) :
                     return@storageOperation persist(
                         registrationDocument(replacement),
                         alias,
-                        LoginAttempt()
+                        attempt
                     )
                 }
                 check(!original.refreshState.closesRegistration)
@@ -286,7 +312,10 @@ class ProtectedIdentityStore(context: Context) :
                 check(identity.senderId !in original.closedSenderIds)
                 val previous = original.identity
                 if (previous == null) {
-                    check(original.refreshState == RefreshState.Active)
+                    check(
+                        original.refreshState == RefreshState.Active ||
+                            original.refreshState == RefreshState.LoggedOut
+                    )
                 } else {
                     require(
                         identity.accountId == previous.accountId &&
@@ -294,21 +323,36 @@ class ProtectedIdentityStore(context: Context) :
                     )
                 }
                 identity.validate(Instant.now(), requireFresh = true)
+                val retained = original.restoration
+                val sameSender = retained == null ||
+                    retained == SenderContext(identity.accountId, identity.senderId)
+                val base = if (sameSender) {
+                    document
+                } else {
+                    JsonObject(
+                        document.filterKeys {
+                            !it.startsWith("pairings")
+                        }
+                    )
+                }
                 val next = JsonObject(
-                    document + mapOf(
+                    base + mapOf(
                         "version" to JsonPrimitive(1),
                         "generation" to JsonPrimitive(Math.addExact(original.generation, 1)),
                         "identity" to json.encodeToJsonElement(identity),
                         "renewal" to JsonNull,
+                        "restoration" to JsonNull,
                         "refreshState" to json.encodeToJsonElement(RefreshState.Active)
                     )
                 )
-                persist(next, alias, attempt)
+                val accepted = persist(next, alias, attempt)
+                if (accepted && logoutMarker.exists()) check(logoutMarker.delete())
+                accepted
             }
         }
     }
 
-    private fun load(): Triple<JsonObject, IdentitySnapshot, String?> {
+    private fun load(applyLogout: Boolean = true): Triple<JsonObject, IdentitySnapshot, String?> {
         if (!file.exists()) return Triple(JsonObject(emptyMap()), IdentitySnapshot(), null)
         val envelope = json.decodeFromString<ProtectedSnapshot>(file.readText(Charsets.UTF_8))
         val plaintext = protection.open(envelope)
@@ -333,8 +377,20 @@ class ProtectedIdentityStore(context: Context) :
         }.orEmpty()
         require(closedSenderIds.none { it.isBlank() })
         renewal?.validate(checkNotNull(identity), generation)
+        val restoration = json.readRestoration(document)
         val snapshot =
-            IdentitySnapshot(generation, identity, renewal, refreshState, closedSenderIds)
+            IdentitySnapshot(
+                generation,
+                identity,
+                renewal,
+                refreshState,
+                closedSenderIds,
+                restoration
+            )
+        if (logoutApplies(snapshot, applyLogout)) {
+            val loggedOut = snapshot.loggedOut()
+            return Triple(json.logoutDocument(document, loggedOut), loggedOut, envelope.keyAlias)
+        }
         if (refreshState.closesRegistration && identity != null) {
             val closed = snapshot.copy(
                 generation = Math.addExact(generation, 1),
@@ -379,6 +435,9 @@ class ProtectedIdentityStore(context: Context) :
             require(replacement.closedSenderIds == original.closedSenderIds)
         }
     }
+
+    private fun logoutApplies(snapshot: IdentitySnapshot, enabled: Boolean): Boolean =
+        enabled && logoutMarker.exists() && !snapshot.refreshState.closesRegistration
 
     private fun registrationDocument(snapshot: IdentitySnapshot) = JsonObject(
         mapOf(

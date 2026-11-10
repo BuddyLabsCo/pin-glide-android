@@ -5,6 +5,7 @@ import java.time.DateTimeException
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
@@ -22,16 +23,64 @@ class CredentialRenewal(
 ) {
     private val gate = Mutex()
     private var flight: Deferred<IdentitySnapshot>? = null
+    private var logoutFlight: Deferred<RefreshCredential?>? = null
+    private var closureCommit = LoginAttempt()
+
+    @Volatile
+    private var loggedOut = false
+
+    @Volatile
+    var sessionGeneration: Long = 0
+        private set
 
     @Volatile
     private var closedSenders = emptyMap<Pair<String, String>, RegistrationClosure>()
     private val mutableState = MutableStateFlow(AuthorizationState.Checking)
     val state = mutableState.asStateFlow()
+    private val mutableLogoutState = MutableStateFlow(LogoutState.Ready)
+    val logoutState = mutableLogoutState.asStateFlow()
 
-    private data class RegistrationClosure(
-        val destination: RefreshState,
-        val terminalSnapshot: IdentitySnapshot?
-    )
+    @Synchronized
+    fun logout(store: LogoutStore): Deferred<RefreshCredential?> {
+        logoutFlight?.takeUnless { it.isCompleted }?.let { return it }
+        closureCommit.cancel()
+        loggedOut = true
+        closedSenders = emptyMap()
+        sessionGeneration++
+        flight = null
+        publish(AuthorizationState.LoggedOut)
+        mutableLogoutState.value = LogoutState.Pending
+        return scope.async(start = CoroutineStart.UNDISPATCHED) {
+            gate.withLock {
+                try {
+                    store.logout().also { mutableLogoutState.value = LogoutState.Ready }
+                } catch (_: IdentityStorageException) {
+                    mutableLogoutState.value = LogoutState.Failed
+                    null
+                }
+            }
+        }.also { logoutFlight = it }
+    }
+
+    @Synchronized
+    fun resumeSession() {
+        sessionGeneration++
+        closureCommit = LoginAttempt()
+        loggedOut = false
+        logoutFlight = null
+        publish(AuthorizationState.Checking)
+    }
+
+    fun finishLogout(operation: Deferred<RefreshCredential?>) {
+        if (logoutFlight === operation) logoutFlight = null
+    }
+
+    fun isSessionCurrent(generation: Long): Boolean = !loggedOut && generation == sessionGeneration
+
+    private fun requireSession(generation: Long) {
+        if (isSessionCurrent(generation)) return
+        throw AuthorizationException(AuthorizationState.LoggedOut)
+    }
 
     suspend fun recover() {
         try {
@@ -41,21 +90,28 @@ class CredentialRenewal(
         }
     }
 
-    suspend fun rejectAccess(identity: SenderIdentity, failure: RefreshState) {
+    suspend fun rejectAccess(
+        identity: SenderIdentity,
+        failure: RefreshState,
+        session: Long = sessionGeneration
+    ) {
         withContext(NonCancellable) {
             gate.withLock {
+                if (!isSessionCurrent(session)) return@withLock
+                val current = store.read()
+                if (!isSessionCurrent(session)) return@withLock
+                if (current.identity?.accountId != identity.accountId ||
+                    current.identity.senderId != identity.senderId
+                ) {
+                    return@withLock
+                }
                 if (failure == RefreshState.RegistrationRevoked) {
                     retainRevocation(identity, failure)
-                }
-                val current = store.read()
-                if (failure == RefreshState.RegistrationRevoked) {
                     closeRegistration(current, identity)
                     requireAuthority(store.read())
                     return@withLock
                 }
-                if (current.identity?.management?.token !=
-                    identity.management.token
-                ) {
+                if (current.identity.management.token != identity.management.token) {
                     return@withLock
                 }
                 requireAuthority(current)
@@ -71,30 +127,36 @@ class CredentialRenewal(
         access: CredentialAccess,
         work: suspend (SenderIdentity) -> Result
     ): Result {
+        val session = sessionGeneration
         val authorized = authorize(access)
         return try {
-            execute(authorized, work)
+            execute(authorized, session, work)
         } catch (_: AccessExpiredException) {
+            requireSession(session)
             val renewed = authorize(access, authorized.generation)
-            execute(renewed, work)
+            execute(renewed, session, work)
         }
     }
 
     private suspend fun <Result> execute(
         authorized: IdentitySnapshot,
+        session: Long,
         work: suspend (SenderIdentity) -> Result
     ): Result {
+        requireSession(session)
         val identity = checkNotNull(authorized.identity)
         val result = try {
             work(identity)
         } catch (_: CurrentSenderRevokedException) {
-            rejectAccess(identity, RefreshState.RegistrationRevoked)
+            requireSession(session)
+            rejectAccess(identity, RefreshState.RegistrationRevoked, session)
             throw AuthorizationException(AuthorizationState.TemporarilyUnavailable)
         }
         gate.withLock {
             val current = store.read()
             requireAuthority(current)
-            if (current.identity?.senderId != identity.senderId ||
+            if (!isSessionCurrent(session) || current.generation != authorized.generation ||
+                current.identity?.senderId != identity.senderId ||
                 current.identity.accountId != identity.accountId
             ) {
                 throw AuthorizationException(AuthorizationState.TemporarilyUnavailable)
@@ -122,26 +184,36 @@ class CredentialRenewal(
         }
     }
 
-    suspend fun beginRegistration(): IdentitySnapshot = gate.withLock {
-        val current = readAuthority()
-        if (!current.refreshState.closesRegistration) throw IdentityStorageException()
-        val next = current.copy(
-            generation = Math.addExact(current.generation, 1),
-            refreshState = RefreshState.Active
-        )
-        if (!store.updateRenewal(current, next)) throw IdentityStorageException()
-        mutableState.value = AuthorizationState.LoginRequired
-        next
+    suspend fun beginRegistration(): IdentitySnapshot {
+        logoutFlight?.await()
+        if (logoutState.value == LogoutState.Failed) throw IdentityStorageException()
+        return gate.withLock {
+            val current = readAuthority()
+            if (current.refreshState == RefreshState.LoggedOut) {
+                publish(AuthorizationState.LoginRequired)
+                return@withLock current
+            }
+            if (!current.refreshState.closesRegistration) throw IdentityStorageException()
+            val next = current.copy(
+                generation = Math.addExact(current.generation, 1),
+                refreshState = RefreshState.Active
+            )
+            if (!store.updateRenewal(current, next)) throw IdentityStorageException()
+            publish(AuthorizationState.LoginRequired)
+            next
+        }
     }
 
     fun isRegistrationClosed(identity: SenderIdentity): Boolean =
         (identity.accountId to identity.senderId) in closedSenders
 
+    @Synchronized
     private fun retainRevocation(
         identity: SenderIdentity,
         destination: RefreshState,
         terminalSnapshot: IdentitySnapshot? = null
     ) {
+        if (loggedOut) return
         val owner = identity.accountId to identity.senderId
         val retained = closedSenders[owner]
         if (retained?.destination != RefreshState.RegistrationClosed) {
@@ -155,6 +227,7 @@ class CredentialRenewal(
 
     private suspend fun readAuthority(): IdentitySnapshot {
         val current = store.read()
+        if (loggedOut) return current
         if (current.refreshState == RefreshState.RegistrationRevoked &&
             closedSenders.values.any {
                 it.destination == RefreshState.RegistrationClosed && it.terminalSnapshot == current
@@ -166,7 +239,7 @@ class CredentialRenewal(
                     refreshState = RefreshState.RegistrationClosed
                 )
                 if (!store.updateRenewal(current, next)) throw IdentityStorageException()
-                mutableState.value = AuthorizationState.RegistrationClosed
+                publish(AuthorizationState.RegistrationClosed)
                 next
             }
         }
@@ -177,30 +250,33 @@ class CredentialRenewal(
     }
 
     private suspend fun closeRegistration(current: IdentitySnapshot, expected: SenderIdentity) {
-        if (current.identity?.senderId != expected.senderId ||
+        if (loggedOut || current.identity?.senderId != expected.senderId ||
             current.identity.accountId != expected.accountId
         ) {
             return
         }
-        mutableState.value = AuthorizationState.RegistrationRevoked
-        val owner = expected.accountId to expected.senderId
-        val closure = checkNotNull(closedSenders[owner])
+        publish(AuthorizationState.RegistrationRevoked)
+        val closure = closedSenders[expected.accountId to expected.senderId] ?: return
         val destination = closure.destination
         val next = IdentitySnapshot(
             generation = Math.addExact(current.generation, 1),
             refreshState = destination,
             closedSenderIds = current.closedSenderIds + expected.senderId
         )
-        closedSenders = closedSenders + (owner to closure.copy(terminalSnapshot = next))
-        if (!store.updateRenewal(current, next)) {
+        retainRevocation(expected, destination, next)
+        val saved = store.updateRenewal(current, next, closureCommit)
+        if (loggedOut) return
+        if (!saved) {
             requireAuthority(store.read())
             throw AuthorizationException(AuthorizationState.StorageUnavailable)
         }
-        mutableState.value = if (destination == RefreshState.RegistrationClosed) {
-            AuthorizationState.RegistrationClosed
-        } else {
-            AuthorizationState.RegistrationRevoked
-        }
+        publish(
+            if (destination == RefreshState.RegistrationClosed) {
+                AuthorizationState.RegistrationClosed
+            } else {
+                AuthorizationState.RegistrationRevoked
+            }
+        )
     }
 
     suspend fun authorize(
@@ -213,12 +289,12 @@ class CredentialRenewal(
                     val current = readAuthority()
                     requireAuthority(current)
                     if (current.renewal == null &&
-                        !needsRenewal(current, access, rejectedGeneration)
+                        !current.needsRenewal(access, rejectedGeneration, clock.instant())
                     ) {
-                        mutableState.value = AuthorizationState.Ready
+                        publish(AuthorizationState.Ready)
                         return current
                     }
-                    mutableState.value = AuthorizationState.Renewing
+                    publish(AuthorizationState.Renewing)
                     flight?.takeUnless { it.isCompleted } ?: scope.async {
                         runRenewal(current)
                     }.also { flight = it }
@@ -230,22 +306,11 @@ class CredentialRenewal(
         }
     }
 
-    private fun needsRenewal(
-        snapshot: IdentitySnapshot,
-        access: CredentialAccess,
-        rejectedGeneration: Long?
-    ): Boolean {
-        val identity = checkNotNull(snapshot.identity)
-        val expiresAt = when (access) {
-            CredentialAccess.Management -> identity.management.expiresAt
-            CredentialAccess.Upload -> identity.upload.expiresAt
-        }
-        return snapshot.generation == rejectedGeneration ||
-            !Instant.parse(expiresAt).isAfter(clock.instant().plusSeconds(300))
-    }
-
     private fun requireAuthority(snapshot: IdentitySnapshot) {
         when {
+            loggedOut || snapshot.refreshState == RefreshState.LoggedOut ->
+                unavailable(AuthorizationState.LoggedOut)
+
             snapshot.refreshState == RefreshState.RegistrationClosed ->
                 unavailable(AuthorizationState.RegistrationClosed)
 
@@ -269,7 +334,7 @@ class CredentialRenewal(
             gate.withLock {
                 val current = store.read()
                 requireAuthority(current)
-                if (current.renewal == null) mutableState.value = AuthorizationState.Ready
+                if (current.renewal == null) publish(AuthorizationState.Ready)
             }
             return result
         } catch (unavailable: AuthorizationException) {
@@ -316,6 +381,7 @@ class CredentialRenewal(
     }
 
     private suspend fun send(pending: IdentitySnapshot): IdentitySnapshot {
+        val session = sessionGeneration
         val operation = checkNotNull(pending.renewal)
         val identity = checkNotNull(pending.identity)
         gate.withLock {
@@ -334,6 +400,7 @@ class CredentialRenewal(
         }
         return try {
             val reply = service.renew(identity.refresh, operation)
+            requireSession(session)
             validateReply(reply, operation, identity)
             val accepted = pending.copy(
                 generation = Math.addExact(pending.generation, 1),
@@ -345,7 +412,8 @@ class CredentialRenewal(
                 if (store.updateRenewal(pending, accepted)) accepted else store.read()
             }
         } catch (failure: RenewalServiceException) {
-            handleFailure(pending, failure.failure)
+            requireSession(session)
+            handleFailure(pending, failure.failure, session)
         }
     }
 
@@ -374,7 +442,8 @@ class CredentialRenewal(
 
     private suspend fun handleFailure(
         pending: IdentitySnapshot,
-        failure: RenewalFailure
+        failure: RenewalFailure,
+        session: Long
     ): IdentitySnapshot {
         if (failure != RenewalFailure.Revoked) {
             val current = store.read()
@@ -400,7 +469,11 @@ class CredentialRenewal(
             RenewalFailure.LoginRequired -> invalidate(pending, RefreshState.LoginRequired)
 
             RenewalFailure.Revoked -> {
-                rejectAccess(checkNotNull(pending.identity), RefreshState.RegistrationRevoked)
+                rejectAccess(
+                    checkNotNull(pending.identity),
+                    RefreshState.RegistrationRevoked,
+                    session
+                )
                 store.read()
             }
         }
@@ -415,8 +488,13 @@ class CredentialRenewal(
         if (store.updateRenewal(original, replacement)) replacement else store.read()
     }
 
-    private fun unavailable(outcome: AuthorizationState): Nothing {
-        mutableState.value = outcome
-        throw AuthorizationException(outcome)
+    @Synchronized
+    private fun publish(outcome: AuthorizationState): AuthorizationState {
+        val destination = if (loggedOut) AuthorizationState.LoggedOut else outcome
+        mutableState.value = destination
+        return destination
     }
+
+    private fun unavailable(outcome: AuthorizationState): Nothing =
+        throw AuthorizationException(publish(outcome))
 }

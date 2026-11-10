@@ -334,6 +334,8 @@ class PairingEntry(
         val current = store.readPairings()
         val identity = current.authority.identity
         if (identity == null || owner != identity.accountId to identity.senderId ||
+            renewal.state.value ==
+            com.buddylabs.pinglide.domain.identity.AuthorizationState.LoggedOut ||
             current.authority.refreshState != RefreshState.Active
         ) {
             leave()

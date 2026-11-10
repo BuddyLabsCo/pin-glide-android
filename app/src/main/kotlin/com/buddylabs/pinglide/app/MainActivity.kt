@@ -97,6 +97,8 @@ class MainActivity : ComponentActivity() {
             LocalizedContent(language) {
                 PinGlideTheme {
                     val loginState by login.state.collectAsState()
+                    val app = application as PinGlideApplication
+                    val logoutState by app.credentialRenewal.logoutState.collectAsState()
                     LaunchedEffect(loginState) {
                         if (loginState == LoginState.FirstDevice) {
                             (application as PinGlideApplication).checkCurrentSenderAuthorization()
@@ -121,6 +123,13 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onBatterySettings = permissions::openBatterySettings,
                                 installedVersion = DeviceInfo(this).installedVersion(),
+                                account = app.accountSession,
+                                onLogout = {
+                                    app.accountSession.logout()
+                                    login.leaveAccount()
+                                    home.leaveLogin()
+                                    pairing.close()
+                                },
                                 onDismiss = onDismiss
                             )
                         }
@@ -140,6 +149,9 @@ class MainActivity : ComponentActivity() {
                             onBatterySettings = permissions::openBatterySettings,
                             loginState = loginState,
                             onLogin = login::signIn,
+                            onNewAccount = login::signInNewAccount,
+                            logoutState = logoutState,
+                            onRetryLogout = app.accountSession::logout,
                             onCancelLogin = login::cancel,
                             onRetryIdentity = login::restore,
                             onNewRegistration = login::beginRegistration,

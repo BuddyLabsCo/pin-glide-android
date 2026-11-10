@@ -7,10 +7,12 @@ import com.buddylabs.pinglide.data.service.CurrentSenderAuthorizationService
 import com.buddylabs.pinglide.data.service.OwnPairingService
 import com.buddylabs.pinglide.data.service.PairingSessionService
 import com.buddylabs.pinglide.data.service.QqLoginService
+import com.buddylabs.pinglide.data.service.ServiceAccount
 import com.buddylabs.pinglide.data.service.TestDeliveryService
 import com.buddylabs.pinglide.data.storage.ProtectedIdentityStore
 import com.buddylabs.pinglide.data.storage.SetupPreferences
 import com.buddylabs.pinglide.domain.forwarding.PairingTestMessage
+import com.buddylabs.pinglide.domain.identity.AccountSession
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.CurrentSenderAuthorization
 import com.buddylabs.pinglide.domain.identity.ExplicitLogin
@@ -75,6 +77,15 @@ class PinGlideApplication : Application() {
             credentialRenewal,
             ::encryptTestMessage,
             TestDeliveryService(BuildConfig.SERVICE_URL, identityClient)
+        )
+    }
+
+    val accountSession by lazy {
+        AccountSession(
+            identityStore,
+            credentialRenewal,
+            ServiceAccount(BuildConfig.SERVICE_URL, identityClient),
+            processScope
         )
     }
 

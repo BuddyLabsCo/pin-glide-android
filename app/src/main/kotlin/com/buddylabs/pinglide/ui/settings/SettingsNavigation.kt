@@ -14,6 +14,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.buddylabs.pinglide.R
+import com.buddylabs.pinglide.domain.identity.AccountSession
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PrivacyScreen
 import com.buddylabs.pinglide.ui.components.ScreenLayout
@@ -42,9 +44,14 @@ fun SettingsNavigation(
     onLanguage: (AppLanguage) -> Unit,
     onBatterySettings: () -> Boolean,
     installedVersion: String,
+    account: AccountSession,
+    onLogout: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var destination by rememberSaveable { mutableStateOf(SettingsDestination.Root) }
+    LaunchedEffect(destination) {
+        if (destination != SettingsDestination.Account) account.close()
+    }
     val stateHolder = rememberSaveableStateHolder()
     val back = {
         if (destination == SettingsDestination.Root) {
@@ -72,7 +79,9 @@ fun SettingsNavigation(
                 onLanguage = {
                     destination = SettingsDestination.Root
                     onLanguage(it)
-                }
+                },
+                account = account,
+                onLogout = onLogout
             )
         }
     }
@@ -86,7 +95,9 @@ private fun SettingsDestinationContent(
     onBatterySettings: () -> Boolean,
     onBack: () -> Unit,
     onNavigate: (SettingsDestination) -> Unit,
-    onLanguage: (AppLanguage) -> Unit
+    onLanguage: (AppLanguage) -> Unit,
+    account: AccountSession,
+    onLogout: () -> Unit
 ) {
     if (destination == SettingsDestination.Root) {
         SettingsScreen(language, installedVersion, onBatterySettings, onNavigate, onBack)
@@ -105,7 +116,7 @@ private fun SettingsDestinationContent(
         when (destination) {
             SettingsDestination.Language -> LanguageScreen(language, onLanguage)
 
-            SettingsDestination.Account -> Text(stringResource(R.string.settings_account))
+            SettingsDestination.Account -> AccountScreen(account, onLogout)
 
             SettingsDestination.DeviceAccess -> Text(
                 stringResource(R.string.settings_device_access_explanation)
