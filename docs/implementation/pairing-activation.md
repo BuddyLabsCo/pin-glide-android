@@ -93,6 +93,10 @@ unconfirmed. The result screen offers Check again; leaving it retains the
 provisional facts without cancelling a possibly activated session. A confirmed
 closed session with successfully refreshed, absent membership remains a terminal
 failure. Returning to the app can resume retained-session recovery.
+The shared Pairing screen keeps its resume observer installed on progress and
+result pages too. Returning with unchanged credentials rechecks an unconfirmed
+result through the active entry, so recovered membership updates the displayed
+success state without another scan, handshake or manual Check again.
 
 Test-message feedback carries the selected alias and maps published rejection
 codes to localized reasons. Unknown codes and ambiguous outcomes remain
