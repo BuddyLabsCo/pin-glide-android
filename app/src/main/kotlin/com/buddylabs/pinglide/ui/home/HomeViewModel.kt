@@ -148,23 +148,36 @@ class HomeViewModel(private val pairings: OwnPairings, private val restoration: 
         viewModelScope.launch {
             val result = operation()
             if (action.value !== pending) return@launch
+            val completed = state.value
             if (result != PairingChange.InvalidAlias) pairings.synchronize()
             if (action.value !== pending) return@launch
             val current = state.value
-            val reconciled = if (removing && result == PairingChange.Unavailable &&
-                current.listed && !current.failed &&
-                current.targets.none { it.pairingId == pairingId }
+            mutableAction.value = if (current.owner == expected.owner &&
+                current.generation == completed.generation
             ) {
-                PairingChange.Removed
-            } else {
-                result
-            }
-            mutableAction.value = if (current.owner == expected.owner) {
-                pending.copy(pending = false, result = reconciled)
+                pending.copy(
+                    pending = false,
+                    result = pending.reconcileResult(result, completed, current)
+                )
             } else {
                 TargetAction()
             }
         }
+    }
+
+    private fun TargetAction.reconcileResult(
+        result: PairingChange,
+        completed: HomeState,
+        current: HomeState
+    ): PairingChange = when {
+        result == PairingChange.Renamed &&
+            current.targets.find { it.pairingId == pairingId }?.alias !=
+            completed.targets.find { it.pairingId == pairingId }?.alias -> PairingChange.Unavailable
+
+        removing && result == PairingChange.Unavailable && current.listed && !current.failed &&
+            current.targets.none { it.pairingId == pairingId } -> PairingChange.Removed
+
+        else -> result
     }
 }
 

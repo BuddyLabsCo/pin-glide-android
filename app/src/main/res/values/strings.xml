@@ -108,6 +108,13 @@
     <string name="home_key_recovery">密钥丢失或损坏，已关闭此设备转发。请移除此设备的配对，然后重新添加设备。其他设备不受影响。</string>
     <string name="home_rename">重命名设备</string>
     <string name="home_alias_help">请输入 1–40 个字符的设备名称，不能与其他已配对设备重名。</string>
+    <string name="home_alias_scope">别名只对当前发送设备可见。</string>
+    <string name="home_alias_label">设备名称</string>
+    <string name="home_alias_blank">请填写设备名称。</string>
+    <string name="home_alias_too_long">设备名称最多 40 个字符。</string>
+    <string name="home_alias_invalid_characters">名称包含无效字符，请重新输入。</string>
+    <string name="home_alias_duplicate">已有一台同名设备，请换一个名称。</string>
+    <string name="home_saving">正在保存</string>
     <string name="home_save">保存</string>
     <string name="home_remove">移除这台设备的配对</string>
     <string name="home_remove_title">移除“%1$s”？</string>

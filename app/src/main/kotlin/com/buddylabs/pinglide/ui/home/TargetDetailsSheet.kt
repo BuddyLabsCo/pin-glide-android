@@ -3,6 +3,7 @@ package com.buddylabs.pinglide.ui.home
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -28,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -37,15 +39,18 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
+import com.buddylabs.pinglide.domain.pairing.PairingAliasError
 import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.domain.pairing.TargetDevice
-import com.buddylabs.pinglide.domain.pairing.validPairingAlias
+import com.buddylabs.pinglide.domain.pairing.pairingAliasError
+import kotlinx.coroutines.launch
 
 private enum class DetailsPage { Details, Rename, Remove }
 
@@ -64,7 +69,12 @@ internal fun TargetDetailsSheet(
     var page by rememberSaveable(target.pairingId) { mutableStateOf(DetailsPage.Details) }
     var draft by rememberSaveable(target.pairingId) { mutableStateOf(target.alias) }
     val pending by rememberUpdatedState(action.pending)
-    val removalFocus = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
+    val returnToDetails: () -> Unit = {
+        draft = target.alias
+        onClearAction()
+        page = DetailsPage.Details
+    }
     val sheet = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
         confirmValueChange = { it != SheetValue.Hidden || !pending }
@@ -72,28 +82,37 @@ internal fun TargetDetailsSheet(
     LaunchedEffect(action.result) {
         if (action.result == PairingChange.Renamed) page = DetailsPage.Details
     }
-    LaunchedEffect(page) {
-        if (page == DetailsPage.Remove) removalFocus.requestFocus()
-    }
     val name = target.alias.ifBlank { stringResource(R.string.home_target_device) }
+    val title = if (page == DetailsPage.Rename) stringResource(R.string.home_rename) else name
     ModalBottomSheet(
-        onDismissRequest = { if (!pending) onDismiss() },
+        onDismissRequest = {
+            if (!pending) {
+                if (page == DetailsPage.Rename) {
+                    returnToDetails()
+                    scope.launch { sheet.show() }
+                } else {
+                    onDismiss()
+                }
+            }
+        },
         sheetState = sheet,
         sheetGesturesEnabled = !pending,
         contentWindowInsets = { WindowInsets.safeDrawing },
-        modifier = Modifier.imePadding().semantics { paneTitle = name }
+        modifier = Modifier.imePadding().semantics { paneTitle = title }
     ) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                name,
+                title,
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.semantics { heading() }
             )
-            Text(targetPresence(target), style = MaterialTheme.typography.bodySmall)
-            if (!target.keyUsable) KeyFailureNotice()
+            if (page != DetailsPage.Rename) {
+                Text(targetPresence(target), style = MaterialTheme.typography.bodySmall)
+                if (!target.keyUsable) KeyFailureNotice()
+            }
             when (page) {
                 DetailsPage.Details -> {
                     Text(
@@ -135,21 +154,11 @@ internal fun TargetDetailsSheet(
 
                 DetailsPage.Rename -> RenameTarget(draft, otherAliases, pending, {
                     draft = it
-                }, onRename)
+                    onClearAction()
+                }, onRename, returnToDetails)
 
                 DetailsPage.Remove -> {
-                    Text(
-                        if (pending) {
-                            stringResource(R.string.home_removing)
-                        } else {
-                            stringResource(R.string.home_remove_title, name)
-                        },
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.focusRequester(removalFocus).focusable().semantics {
-                            heading()
-                            liveRegion = LiveRegionMode.Polite
-                        }
-                    )
+                    RemovalTitle(name, pending)
                     Text(stringResource(R.string.home_remove_copy))
                     Button(
                         onClick = onRemove,
@@ -173,23 +182,40 @@ internal fun TargetDetailsSheet(
                 }
             }
             ActionNotice(action, page, target.enabled)
-            if (page != DetailsPage.Details) {
+            if (page == DetailsPage.Remove) {
                 OutlinedButton(
-                    onClick = {
-                        onClearAction()
-                        page = DetailsPage.Details
-                    },
+                    onClick = returnToDetails,
                     enabled = !pending,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 ) { Text(stringResource(R.string.setup_cancel)) }
             }
-            OutlinedButton(
-                onClick = onDismiss,
-                enabled = !pending,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            ) { Text(stringResource(R.string.close)) }
+            if (page != DetailsPage.Rename) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    enabled = !pending,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                ) { Text(stringResource(R.string.close)) }
+            }
         }
     }
+}
+
+@Composable
+private fun RemovalTitle(name: String, pending: Boolean) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    Text(
+        if (pending) {
+            stringResource(R.string.home_removing)
+        } else {
+            stringResource(R.string.home_remove_title, name)
+        },
+        style = MaterialTheme.typography.titleLarge,
+        modifier = Modifier.focusRequester(focus).focusable().semantics {
+            heading()
+            liveRegion = LiveRegionMode.Polite
+        }
+    )
 }
 
 @Composable
@@ -198,26 +224,52 @@ private fun RenameTarget(
     otherAliases: List<String>,
     pending: Boolean,
     onDraft: (String) -> Unit,
-    onRename: (String) -> Unit
+    onRename: (String) -> Unit,
+    onCancel: () -> Unit
 ) {
     val focus = remember { FocusRequester() }
-    val valid = validPairingAlias(draft, otherAliases)
+    val validation = pairingAliasError(draft, otherAliases)
+    val message = stringResource(
+        when (validation) {
+            PairingAliasError.Blank -> R.string.home_alias_blank
+            PairingAliasError.TooLong -> R.string.home_alias_too_long
+            PairingAliasError.InvalidCharacters -> R.string.home_alias_invalid_characters
+            PairingAliasError.Duplicate -> R.string.home_alias_duplicate
+            null -> R.string.home_alias_help
+        }
+    )
     LaunchedEffect(Unit) { focus.requestFocus() }
+    Text(stringResource(R.string.home_alias_scope), style = MaterialTheme.typography.bodySmall)
     OutlinedTextField(
         value = draft,
         onValueChange = onDraft,
         enabled = !pending,
-        isError = !valid,
-        label = { Text(stringResource(R.string.home_rename)) },
-        supportingText = { Text(stringResource(R.string.home_alias_help)) },
+        isError = validation != null,
+        label = { Text(stringResource(R.string.home_alias_label)) },
+        supportingText = {
+            Text(message, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        },
         singleLine = true,
-        modifier = Modifier.fillMaxWidth().focusRequester(focus)
+        modifier = Modifier.fillMaxWidth().focusRequester(focus).semantics {
+            if (validation != null) error(message)
+        }
     )
-    Button(
-        onClick = { onRename(draft) },
-        enabled = valid && !pending,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-    ) { Text(stringResource(R.string.home_save)) }
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        OutlinedButton(
+            onClick = onCancel,
+            enabled = !pending,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+        ) { Text(stringResource(R.string.setup_cancel)) }
+        Button(
+            onClick = { onRename(draft) },
+            enabled = validation == null && !pending,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+        ) { Text(stringResource(if (pending) R.string.home_saving else R.string.home_save)) }
+    }
 }
 
 @Composable

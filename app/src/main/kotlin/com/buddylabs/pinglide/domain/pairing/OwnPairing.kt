@@ -54,12 +54,27 @@ enum class PairingFailure { Unavailable, LoginRequired, Gone }
 
 enum class PairingChange { Renamed, Removed, Gone, InvalidAlias, Unavailable }
 
+enum class PairingAliasError { Blank, TooLong, InvalidCharacters, Duplicate }
+
 class PairingServiceException(val failure: PairingFailure) :
     Exception("Pairing operation unavailable")
 
-fun validPairingAlias(alias: String, otherAliases: List<String>): Boolean {
+fun validPairingAlias(alias: String, otherAliases: List<String>): Boolean =
+    pairingAliasError(alias, otherAliases) == null
+
+fun pairingAliasError(alias: String, otherAliases: List<String>): PairingAliasError? {
     val trimmed = alias.trim()
-    return trimmed.isNotBlank() && trimmed.codePointCount(0, trimmed.length) in 1..40 &&
-        trimmed.codePoints().noneMatch { it in 0xD800..0xDFFF } &&
-        otherAliases.none { it.equals(trimmed, ignoreCase = true) }
+    return when {
+        trimmed.isBlank() -> PairingAliasError.Blank
+
+        trimmed.codePointCount(0, trimmed.length) > 40 -> PairingAliasError.TooLong
+
+        trimmed.codePoints().anyMatch {
+            it in 0xD800..0xDFFF
+        } -> PairingAliasError.InvalidCharacters
+
+        otherAliases.any { it.equals(trimmed, ignoreCase = true) } -> PairingAliasError.Duplicate
+
+        else -> null
+    }
 }
