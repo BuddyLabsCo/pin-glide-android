@@ -31,6 +31,7 @@ class OwnPairings(
     private var snapshot: PairingSnapshot? = null
     private var presence = emptyMap<String, RemotePairing>()
     private var presenceOwner: Pair<String, String>? = null
+    private val removals = mutableSetOf<String>()
 
     init {
         scope.launch {
@@ -111,6 +112,7 @@ class OwnPairings(
     suspend fun select(expectedState: HomeState, pairingId: String, enabled: Boolean) =
         stateGate.withLock {
             if (state.value !== expectedState) return@withLock
+            if (pairingId in removals) return@withLock
             val expected = snapshot ?: return@withLock
             val owner = expected.authority.identity ?: return@withLock
             val target = expected.items.find { it.pairingId == pairingId } ?: return@withLock
@@ -144,9 +146,11 @@ class OwnPairings(
         pairingId: String,
         alias: String?
     ): PairingChange {
+        var removalStarted = false
         try {
             val starting = beginChange(expected, pairingId, removing = alias == null)
                 ?: return PairingChange.Unavailable
+            removalStarted = alias == null
             val target = starting.items.find { it.pairingId == pairingId }
                 ?: return PairingChange.Gone
             return refreshGate.withLock { performChange(starting, target, alias) }
@@ -160,6 +164,12 @@ class OwnPairings(
             return PairingChange.Unavailable
         } catch (_: IdentityStorageException) {
             return PairingChange.Unavailable
+        } finally {
+            if (removalStarted) {
+                withContext(NonCancellable) {
+                    stateGate.withLock { removals.remove(pairingId) }
+                }
+            }
         }
     }
 
@@ -169,12 +179,17 @@ class OwnPairings(
         removing: Boolean
     ): PairingSnapshot? = stateGate.withLock {
         if (state.value !== expected) return@withLock null
+        if (pairingId in removals) return@withLock null
+        val displayed = snapshot ?: return@withLock null
+        val target = displayed.items.find { it.pairingId == pairingId } ?: return@withLock null
         val current = store.readPairings()
-        if (current.authority.identity?.let { it.accountId to it.senderId } != expected.owner) {
+        if (current.authority.identity?.let { it.accountId to it.senderId } != expected.owner ||
+            current.revision != displayed.revision || !current.contains(target)
+        ) {
             return@withLock null
         }
         if (removing && !store.select(current, pairingId, false)) return@withLock null
-        readCurrent()
+        readCurrent().also { if (removing) removals.add(pairingId) }
     }
 
     private suspend fun performChange(
@@ -202,13 +217,13 @@ class OwnPairings(
         alias: String?
     ): RemotePairing? = try {
         if (alias == null) {
-            service.remove(identity.management.token, pairingId)
+            submitRemoval(identity.management.token, pairingId)
             null
         } else {
             service.rename(identity.management.token, pairingId, alias)
         }
     } catch (failure: PairingServiceException) {
-        if (failure.failure != PairingFailure.Gone) {
+        if (failure.failure != PairingFailure.Gone || alias == null) {
             if (store.readPairings().authority.generation == requested.authority.generation) {
                 when (failure.failure) {
                     PairingFailure.LoginRequired -> renewal.rejectAccess(
@@ -224,8 +239,21 @@ class OwnPairings(
         null
     }
 
-    private fun PairingSnapshot.contains(target: OwnPairing): Boolean =
-        items.any { it.pairingId == target.pairingId && it.receiverId == target.receiverId }
+    private suspend fun submitRemoval(managementToken: String, pairingId: String) {
+        try {
+            service.remove(managementToken, pairingId)
+        } catch (failure: PairingServiceException) {
+            if (failure.failure != PairingFailure.Gone) throw failure
+            if (service.list(managementToken).any { it.pairingId == pairingId }) {
+                throw PairingServiceException(PairingFailure.Unavailable)
+            }
+        }
+    }
+
+    private fun PairingSnapshot.contains(target: OwnPairing): Boolean = items.any {
+        it.pairingId == target.pairingId && it.receiverId == target.receiverId &&
+            it.key.contentEquals(target.key)
+    }
 
     private suspend fun finishChange(
         requested: PairingSnapshot,

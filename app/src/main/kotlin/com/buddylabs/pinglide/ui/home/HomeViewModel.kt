@@ -29,6 +29,23 @@ class HomeViewModel(private val pairings: OwnPairings, private val restoration: 
     val pairingEntryOpen = mutablePairingEntryOpen.asStateFlow()
     private var recoveryGeneration = 0L
 
+    init {
+        viewModelScope.launch {
+            state.collect { current ->
+                val previous = action.value
+                if (previous.owner != current.owner) {
+                    mutableAction.value = TargetAction()
+                } else if (!previous.pending && previous.removing &&
+                    previous.result == PairingChange.Unavailable && current.listed &&
+                    !current.refreshing && !current.failed &&
+                    current.targets.none { it.pairingId == previous.pairingId }
+                ) {
+                    mutableAction.value = previous.copy(result = PairingChange.Removed)
+                }
+            }
+        }
+    }
+
     fun restoreLogin() {
         if (loginOperation?.isActive == true) return
         loginOperation = viewModelScope.launch {
@@ -116,25 +133,37 @@ class HomeViewModel(private val pairings: OwnPairings, private val restoration: 
     }
 
     fun remove(expected: HomeState, pairingId: String) {
-        change(expected, pairingId) { pairings.remove(expected, pairingId) }
+        change(expected, pairingId, removing = true) { pairings.remove(expected, pairingId) }
     }
 
     private fun change(
         expected: HomeState,
         pairingId: String,
+        removing: Boolean = false,
         operation: suspend () -> PairingChange
     ) {
         if (action.value.pending) return
-        val pending = TargetAction(pairingId, expected.owner, pending = true)
+        val pending = TargetAction(pairingId, expected.owner, pending = true, removing = removing)
         mutableAction.value = pending
         viewModelScope.launch {
             val result = operation()
-            mutableAction.value = if (state.value.owner == expected.owner) {
-                pending.copy(pending = false, result = result)
+            if (action.value !== pending) return@launch
+            if (result != PairingChange.InvalidAlias) pairings.synchronize()
+            if (action.value !== pending) return@launch
+            val current = state.value
+            val reconciled = if (removing && result == PairingChange.Unavailable &&
+                current.listed && !current.failed &&
+                current.targets.none { it.pairingId == pairingId }
+            ) {
+                PairingChange.Removed
+            } else {
+                result
+            }
+            mutableAction.value = if (current.owner == expected.owner) {
+                pending.copy(pending = false, result = reconciled)
             } else {
                 TargetAction()
             }
-            if (result != PairingChange.InvalidAlias) pairings.refresh()
         }
     }
 }
@@ -143,5 +172,6 @@ data class TargetAction(
     val pairingId: String? = null,
     val owner: Pair<String, String>? = null,
     val pending: Boolean = false,
+    val removing: Boolean = false,
     val result: PairingChange? = null
 )

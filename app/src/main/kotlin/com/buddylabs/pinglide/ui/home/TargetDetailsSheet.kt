@@ -1,5 +1,6 @@
 package com.buddylabs.pinglide.ui.home
 
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -62,12 +64,16 @@ internal fun TargetDetailsSheet(
     var page by rememberSaveable(target.pairingId) { mutableStateOf(DetailsPage.Details) }
     var draft by rememberSaveable(target.pairingId) { mutableStateOf(target.alias) }
     val pending by rememberUpdatedState(action.pending)
+    val removalFocus = remember { FocusRequester() }
     val sheet = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
         confirmValueChange = { it != SheetValue.Hidden || !pending }
     )
     LaunchedEffect(action.result) {
         if (action.result == PairingChange.Renamed) page = DetailsPage.Details
+    }
+    LaunchedEffect(page) {
+        if (page == DetailsPage.Remove) removalFocus.requestFocus()
     }
     val name = target.alias.ifBlank { stringResource(R.string.home_target_device) }
     ModalBottomSheet(
@@ -133,15 +139,37 @@ internal fun TargetDetailsSheet(
 
                 DetailsPage.Remove -> {
                     Text(
-                        stringResource(R.string.home_remove_title, name),
-                        style = MaterialTheme.typography.titleLarge
+                        if (pending) {
+                            stringResource(R.string.home_removing)
+                        } else {
+                            stringResource(R.string.home_remove_title, name)
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.focusRequester(removalFocus).focusable().semantics {
+                            heading()
+                            liveRegion = LiveRegionMode.Polite
+                        }
                     )
                     Text(stringResource(R.string.home_remove_copy))
                     Button(
                         onClick = onRemove,
                         enabled = !pending,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        ),
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    ) { Text(stringResource(R.string.home_remove_confirm)) }
+                    ) {
+                        Text(
+                            stringResource(
+                                if (action.result == PairingChange.Unavailable) {
+                                    R.string.home_remove_retry
+                                } else {
+                                    R.string.home_remove_confirm
+                                }
+                            )
+                        )
+                    }
                 }
             }
             ActionNotice(action, page, target.enabled)
