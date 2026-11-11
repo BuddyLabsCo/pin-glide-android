@@ -35,44 +35,52 @@ class AccountSession(
     val state = mutableState.asStateFlow()
     private var profile: Job? = null
     private var generation = 0L
-    private var opened = false
+    private var openedSession: Long? = null
 
     @Synchronized
     fun open() {
-        if (opened) return
+        val session = renewal.sessionGeneration
+        if (openedSession == session) return
         close()
-        opened = true
+        openedSession = session
         val expected = generation
         mutableState.value = AccountState()
         profile = scope.launch {
             val result = try {
-                AccountState(
-                    loading = false,
-                    nickname = renewal.withAccess(CredentialAccess.Upload, service::profile)
-                )
+                renewal.withAccess(CredentialAccess.Upload, ::readProfile)
             } catch (cancelled: CancellationException) {
                 throw cancelled
+            } catch (_: AuthorizationException) {
+                return@launch
             } catch (_: Exception) {
                 AccountState(loading = false, failed = true)
             }
             synchronized(this@AccountSession) {
-                if (generation == expected) mutableState.value = result
+                if (generation == expected && renewal.isSessionCurrent(session)) {
+                    mutableState.value = result
+                }
             }
+        }
+    }
+
+    private suspend fun readProfile(identity: SenderIdentity): AccountState = try {
+        AccountState(loading = false, nickname = service.profile(identity))
+    } catch (failure: Exception) {
+        when (failure) {
+            is CancellationException, is AccessExpiredException,
+            is CurrentSenderRevokedException -> throw failure
+
+            else -> AccountState(loading = false, failed = true)
         }
     }
 
     @Synchronized
     fun close() {
-        opened = false
+        openedSession = null
         generation++
         profile?.cancel()
         profile = null
         mutableState.value = AccountState()
-    }
-
-    fun retry() {
-        close()
-        open()
     }
 
     fun logout() {
