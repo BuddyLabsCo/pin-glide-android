@@ -66,6 +66,10 @@ class AccountSenders(
                         authorization == AuthorizationState.RegistrationClosed
                     ) {
                         close()
+                    } else if (authorization == AuthorizationState.Ready && opened &&
+                        !backgrounded && !state.value.fresh && !state.value.loading
+                    ) {
+                        refresh()
                     }
                 }
             }
@@ -184,7 +188,9 @@ class AccountSenders(
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (_: IdentityStorageException) {
-        synchronized(this) { mutableState.value = state.value.copy(fresh = false) }
+        synchronized(this) {
+            mutableState.value = state.value.copy(loading = false, failed = true, fresh = false)
+        }
         null
     }
 

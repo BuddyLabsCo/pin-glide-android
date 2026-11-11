@@ -30,6 +30,12 @@ and failures retain rows while disabling Revoke; only failure offers Retry. A
 successful fresh read restores selection. A selection rechecks protected identity
 generation, Account, acting Sender, session and current authorization, and rejects
 an obsolete UI snapshot. Old requests cannot replace a later read or closed view.
+Protected-storage failures during selection or absence checks publish the same
+retained-row failure state, including Retry. When shared authorization returns
+to Ready, an open foreground inventory starts a fresh read if none is already
+loading. Recovery alone never restores selection authority; backgrounded or
+closed management waits for foreground return or reentry. Inventory-owned
+renewal continues its existing read without starting a duplicate.
 
 SenderSelection contains only the stable Sender ID, displayed name, Account and
 authority/session/read generations. It is neither serializable nor saved UI
@@ -50,8 +56,13 @@ Account replacement/logout and late non-cancellable responses. Real local HTTP
 requests verify the generated endpoint, M header, ordering and rejection of
 missing/invalid/incomplete rows, 503 and expired credentials. All six probes pass;
 no automated tests or preview harness are added to tracked sources.
+Four additional disposable review probes cover protected-storage failure and
+Retry, shared renewal from the foreground authorization check, recovery while
+backgrounded or closed, and inventory-owned renewal without duplicate reads.
+The two reported failures were reproduced before their respective runtime fixes;
+all ten inventory probes and the focused LogoutRaceTest pass after the fixes.
 
-The final full host suite passes all 24 checks (18 repository tests and six
+The final full host suite passes all 28 checks (18 repository tests and ten
 disposable inventory probes), with no failures, errors or skips. Debug/Release
 Kotlin compilation, Debug APK assembly and all four repository static gates pass:
 
