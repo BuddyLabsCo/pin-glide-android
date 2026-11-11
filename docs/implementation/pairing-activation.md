@@ -54,6 +54,35 @@ process restart starts ordinary navigation without a handshake-resume screen.
 Existing Pairings/preferences survive failed attempts and missing keys are never
 manufactured.
 
+## Adding this Sender to a shared target
+
+Issue #25 uses the same entry, activation and host exits for add_sender. Its mode
+comes from the authorized session, never from QR/UI hints. Both authenticated
+confirmation flags and completed activate this mode; credential_ready and
+credential_issued do not. No Sender operation creates, redeems or replaces a
+Receiver credential, and the Pairing WSS connection is independent of the
+Receiver's delivery connection.
+
+Scan and consent submission share duplicate-target and capacity checks, including
+a final local check and alias validation after authorization returns. An existing
+target returns to Home with its three-second highlight, retaining its alias, key
+and receive switch.
+A changed Pairing ID is rejected along with mode/deadline changes. The serialized
+provisional-key writer refuses an existing active Receiver association even if
+it appeared after entry validation; it cannot authorize in-place replacement.
+Missing-key recovery remains ordinary removal followed by a fresh add.
+
+Uncertain completion keeps the protected provisional key. The shared recovery
+path reads authenticated session state and active own membership without replaying
+the handshake. The published service atomically activates membership with both
+confirmation reports; membership therefore also reconciles a lost completed event
+after the session channel has closed. Alias reconciliation precedes local success,
+the new Pairing defaults ON, and unrelated targets keep their keys and switches.
+
+On November 11, 2026, GitHub's latest published service release was still v1.0.2
+(published November 8, 2026), with openapi.yaml and asyncapi.yaml. The existing
+explicit pin is retained, and the normal pipeline regenerated both clients.
+
 ## Presentation and explicit test
 
 The four approved progress labels follow opening the channel, creating the HPKE

@@ -102,9 +102,9 @@ class ProtectedIdentityStore(context: Context) :
     override suspend fun saveProvisional(expected: PairingSnapshot, pairing: OwnPairing): Boolean =
         updatePairings(expected, expected.listed) { current ->
             require(pairing.provisionalSessionId != null && pairing.keyUsable)
-            require(
-                (current.items + current.provisional).none { it.pairingId == pairing.pairingId }
-            )
+            val retained = current.items + current.provisional
+            require(retained.none { it.pairingId == pairing.pairingId })
+            require(current.items.none { it.receiverId == pairing.receiverId })
             current.items + pairing
         }
 

@@ -8,7 +8,6 @@ import com.buddylabs.pinglide.domain.identity.IdentityStorageException
 import com.buddylabs.pinglide.domain.identity.RefreshState
 import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import java.time.Clock
-import java.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -84,20 +83,28 @@ class PairingEntry(
         }
         val snapshot = currentSnapshot() ?: return
         if (expected != epoch) return
-        val duplicate = snapshot.items.find { it.receiverId == scanned.receiverId }
+        if (!admitTarget(snapshot, scanned.receiverId)) return
+        requireReusable(scanned)
+        val same = qr?.matches(scanned) == true
+        if (!same) releaseCurrent()
+        authorizeScan(scanned, defaultAlias, expected, same)
+    }
+
+    private fun admitTarget(snapshot: PairingSnapshot, receiverId: String): Boolean {
+        val duplicate = snapshot.items.find { it.receiverId == receiverId }
         if (duplicate != null) {
             leave()
             mutableState.value = state.value.copy(
                 duplicatePairingId = duplicate.pairingId,
                 highlightUntil = clock.millis() + 3000
             )
-            return
+            return false
         }
-        if (snapshot.items.size >= 5) throw PairingEntryException(PairingEntryProblem.Capacity)
-        requireReusable(scanned)
-        val same = qr?.matches(scanned) == true
-        if (!same) releaseCurrent()
-        authorizeScan(scanned, defaultAlias, expected, same)
+        if (snapshot.items.size >= 5) {
+            fail(PairingEntryProblem.Capacity)
+            return false
+        }
+        return true
     }
 
     private suspend fun authorizeScan(
@@ -149,12 +156,15 @@ class PairingEntry(
     suspend fun confirm() {
         val current = qr ?: return
         if (state.value.pending || state.value.confirmed) return
+        val observed = epoch
         pairings.synchronize()
+        if (observed != epoch) return
         if (pairings.state.value.failed) {
             fail(PairingEntryProblem.Unavailable)
             return
         }
         val snapshot = currentSnapshot() ?: return
+        if (observed != epoch || !admitTarget(snapshot, current.receiverId)) return
         aliases = snapshot.items.map { it.alias }
         val alias = state.value.alias.trim()
         val error = pairingAliasError(alias, aliases)
@@ -169,9 +179,18 @@ class PairingEntry(
     private suspend fun confirmSession(current: PairingQr, alias: String, expected: Long) {
         try {
             val result = authorize(current.sessionId)
-            if (expected != epoch || currentSnapshot() == null) return
+            if (expected != epoch) return
+            val snapshot = currentSnapshot() ?: return
+            if (expected != epoch || !admitTarget(snapshot, current.receiverId)) return
             validate(result, current)
             session = result
+            aliases = snapshot.items.map { it.alias }
+            val error = pairingAliasError(alias, aliases)
+            if (error != null) {
+                mutableState.value = state.value.copy(pending = false, aliasError = error)
+                observe(expected)
+                return
+            }
             ticker?.cancel()
             mutableState.value = state.value.copy(
                 page = PairingEntryPage.Progress,
@@ -345,26 +364,7 @@ class PairingEntry(
     }
 
     private fun validate(result: PairingSession, scanned: PairingQr) {
-        val previous = session?.takeIf { it.sessionId == result.sessionId }
-        if (result.sessionId != scanned.sessionId || result.receiverId != scanned.receiverId ||
-            result.senderId != owner?.second || result.pairingId.isNullOrBlank()
-        ) {
-            throw PairingEntryException(PairingEntryProblem.InvalidQr)
-        }
-        if (result.mode !in setOf("new_receiver", "add_sender")) {
-            throw PairingEntryException(PairingEntryProblem.Unsupported)
-        }
-        if (previous != null &&
-            (previous.expiresAt != result.expiresAt || previous.mode != result.mode)
-        ) {
-            throw PairingEntryException(PairingEntryProblem.Closed)
-        }
-        if (result.senderConfirmed || result.receiverConfirmed ||
-            result.state != "awaiting_confirmation" || !result.expiresAt.isAfter(clock.instant()) ||
-            result.expiresAt.isAfter(clock.instant().plusSeconds(300))
-        ) {
-            throw PairingEntryException(PairingEntryProblem.Closed)
-        }
+        result.validateConsent(scanned, owner?.second, session, clock.instant())
     }
 
     private fun observe(expected: Long) {

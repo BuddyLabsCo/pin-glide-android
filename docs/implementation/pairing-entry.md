@@ -26,12 +26,17 @@ original deadline before consent appears. Repeated authorization cannot extend
 that deadline. Recovery, existing-target replacement and sessions that have
 already entered key confirmation are rejected by this entry flow.
 
-The existing own-Pairing synchronization runs before a valid scan is authorized.
+The existing own-Pairing synchronization runs before a valid scan is authorized
+and again before consent is submitted. Both points check duplicates and capacity;
+the returned authorization also rechecks the latest local target inventory and
+alias uniqueness. A new alias conflict keeps consent editable with inline feedback.
 An existing Receiver returns to Home and highlights its stable Pairing ID for
 three seconds without authorizing a replacement or editing its alias, key or
 receive switch. Local capacity prevents entry; authoritative reservation races
 also return a capacity result. The alias editor reuses the shared trimmed,
 1-40-Unicode-code-point, case-insensitive uniqueness validator.
+Leaving during the submission refresh invalidates that continuation. Repeated
+session metadata must retain its original Pairing ID as well as mode and deadline.
 
 ## Lifetime and exits
 
