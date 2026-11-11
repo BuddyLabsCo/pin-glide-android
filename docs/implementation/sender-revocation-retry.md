@@ -37,6 +37,10 @@ The published revoke body accepts qqCode, described as fresh and single-use.
 This change neither invents an endpoint nor claims reusable service authority.
 A consumed or expired code may be rejected; Retry then remains unconfirmed.
 No authorization lifetime is invented on Android.
+The review request to remove code replay conflicts with that explicit follow-up
+and is not adopted. A disposable service probe accepting the same code only
+verifies Android request behavior; it does not establish service acceptance or
+recoverable authorization.
 
 ## Operation lifetime
 
@@ -46,6 +50,16 @@ Settings host clears proof, cancels pending work and invalidates captured Retry
 and Return callbacks. A late response cannot affect a new selection. A fresh
 process has no operation, modal, journal, automatic mutation or QQ replay.
 
+Before a self Retry starts its inventory read, CredentialRenewal retains the
+exact selected Account, acting Sender and session as the active self-Retry
+context. Its closure registry classifies a definitive current-registration 409
+as RegistrationClosed before terminal persistence or navigation publication.
+This also applies if access renewal discovers revocation before the inventory
+request. The successful protected commit publishes Welcome directly, so UI
+disposal cannot cancel a later promotion from the generic Revoked destination.
+Leaving Retry or closing its operation removes the context. An obsolete or
+other-Sender operation keeps the ordinary RegistrationRevoked classification.
+
 ## Verification
 
 Disposable checks under ignored build/ticket-35 exercise the public inventory
@@ -54,12 +68,16 @@ failed/stale/backgrounded reads, storage failure, duplicate actions, rejected
 proof, self 204/409 completion, closed operations and fresh workflow startup.
 No test harness or debug seed is added to tracked sources.
 
-On November 12, 2026, all 46 host tests passed (28 existing tests and 18
-disposable behavioral checks). The focused run passed all 18 retry checks, 11
-logout/race tests and 3 service adapter tests. The final Gradle run passed
+On November 12, 2026, the review-fix run passed all 49 host tests (28 existing
+tests and 21 disposable behavioral checks). The focused run passed all 21 retry
+checks and 11 logout/race tests. A new suspended-persistence/navigation-disposal
+regression first failed with RegistrationRevoked instead of RegistrationClosed,
+then passed after the domain fix. Additional checks cover renewal-discovered
+409 and removal of self-Retry context on close. The final Gradle run passed
 qualityCheck, Debug/Release Kotlin compilation, assembleDebug and :app:test.
-Lint completed with no errors; it reported 30 warnings/2 hints for Debug and
-26 warnings/2 hints for Release. The file-size check passed all 90 files.
+Lint completed with no errors; it reported 30 warnings/2 hints for each variant.
+The file-size check passed all 91 files, including CredentialRenewal at 496
+lines after moving its closure registry to RegistrationClosures.
 
 An isolated API 37 emulator preview rendered the production screen in English
 light mode and Chinese dark mode with 200% text and a long Sender name. Retry
