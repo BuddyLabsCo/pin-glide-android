@@ -168,18 +168,33 @@ class AccountSenders(
         }
     }
 
-    suspend fun confirmsAbsence(selection: SenderSelection): Boolean {
-        val authority = currentAuthority() ?: return false
+    suspend fun confirmsAbsence(selection: SenderSelection): Boolean =
+        reconciled(selection)?.senders?.none {
+            it.senderId == selection.senderId
+        } == true
+
+    suspend fun reload(selection: SenderSelection): SenderInventoryState? {
+        val pending = synchronized(this) {
+            if (!opened || backgrounded || state.value.selection !== selection) return null
+            refresh()
+            generation to checkNotNull(request)
+        }
+        pending.second.join()
+        return reconciled(selection)?.takeIf { synchronized(this) { generation == pending.first } }
+    }
+
+    suspend fun reconciled(selection: SenderSelection): SenderInventoryState? {
+        val authority = currentAuthority() ?: return null
         return synchronized(this) {
             val current = state.value
-            val owner = current.owner ?: return false
-            current.selection === selection && generation > selection.readGeneration &&
-                current.canSelect && matches(owner, authority) &&
-                owner.accountId == selection.owner.accountId &&
-                owner.senderId == selection.owner.senderId &&
-                owner.session == selection.owner.session && current.senders?.none {
-                    it.senderId == selection.senderId
-                } == true
+            val owner = current.owner ?: return null
+            current.takeIf {
+                current.selection === selection && generation > selection.readGeneration &&
+                    current.canSelect && matches(owner, authority) &&
+                    owner.accountId == selection.owner.accountId &&
+                    owner.senderId == selection.owner.senderId &&
+                    owner.session == selection.owner.session
+            }
         }
     }
 

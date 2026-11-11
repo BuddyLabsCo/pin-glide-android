@@ -33,8 +33,7 @@ class CredentialRenewal(
     var sessionGeneration: Long = 0
         private set
 
-    @Volatile
-    private var closedSenders = emptyMap<Pair<String, String>, RegistrationClosure>()
+    private val closures = RegistrationClosures()
     private val mutableState = MutableStateFlow(AuthorizationState.Checking)
     val state = mutableState.asStateFlow()
     private val mutableLogoutState = MutableStateFlow(LogoutState.Ready)
@@ -45,7 +44,7 @@ class CredentialRenewal(
         logoutFlight?.takeUnless { it.isCompleted }?.let { return it }
         closureCommit.cancel()
         loggedOut = true
-        closedSenders = emptyMap()
+        closures.clear()
         sessionGeneration++
         flight = null
         publish(AuthorizationState.LoggedOut)
@@ -205,8 +204,14 @@ class CredentialRenewal(
         }
     }
 
-    fun isRegistrationClosed(identity: SenderIdentity): Boolean =
-        (identity.accountId to identity.senderId) in closedSenders
+    fun isRegistrationClosed(identity: SenderIdentity): Boolean = closures[identity] != null
+
+    @Synchronized
+    fun retrySelfRevocation(selection: SenderSelection) {
+        if (isSessionCurrent(selection.owner.session)) closures.retry(selection)
+    }
+
+    fun finishSelfRevocation(selection: SenderSelection) = closures.finish(selection)
 
     @Synchronized
     private fun retainRevocation(
@@ -216,22 +221,14 @@ class CredentialRenewal(
         session: Long = sessionGeneration
     ) {
         if (!isSessionCurrent(session) || !destination.closesRegistration) return
-        val owner = identity.accountId to identity.senderId
-        val retained = closedSenders[owner]
-        val closure = RegistrationClosure(
-            retained?.destination?.takeIf { it == RefreshState.RegistrationClosed } ?: destination,
-            retained?.terminalSnapshot ?: terminalSnapshot
-        )
-        closedSenders = closedSenders + (owner to closure)
+        closures.retain(identity, destination, terminalSnapshot, session)
     }
 
     private suspend fun readAuthority(): IdentitySnapshot {
         val current = store.read()
         if (loggedOut) return current
         if (current.refreshState == RefreshState.RegistrationRevoked &&
-            closedSenders.values.any {
-                it.destination == RefreshState.RegistrationClosed && it.terminalSnapshot == current
-            }
+            closures.retainsSelfSnapshot(current)
         ) {
             return withContext(NonCancellable) {
                 val next = current.copy(
@@ -255,7 +252,7 @@ class CredentialRenewal(
         ) {
             return
         }
-        val closure = closedSenders[expected.accountId to expected.senderId] ?: return
+        val closure = closures[expected] ?: return
         val destination = closure.destination
         val outcome = if (destination == RefreshState.RegistrationClosed) {
             AuthorizationState.RegistrationClosed

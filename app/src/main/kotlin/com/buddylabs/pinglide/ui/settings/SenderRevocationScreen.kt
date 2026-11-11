@@ -34,7 +34,7 @@ import com.buddylabs.pinglide.ui.components.QqEmblem
 
 @Composable
 internal fun SenderRevocationScreen(state: SenderRevocationState, revocation: SenderRevocation) {
-    val pending = state.step == RevocationStep.Submitting
+    val pending = state.step == RevocationStep.Submitting || state.step == RevocationStep.Retrying
     val proof = state.step == RevocationStep.Proof || state.step == RevocationStep.Verifying
     val focus = remember { FocusRequester() }
     val windowFocused = LocalWindowInfo.current.isWindowFocused
@@ -45,7 +45,7 @@ internal fun SenderRevocationScreen(state: SenderRevocationState, revocation: Se
         RevocationStep.Submitting ->
             R.string.senders_submitting to R.string.senders_submitting_description
 
-        RevocationStep.Unconfirmed ->
+        RevocationStep.Unconfirmed, RevocationStep.Retrying ->
             R.string.senders_unconfirmed to R.string.senders_unconfirmed_description
 
         RevocationStep.Revoked ->
@@ -57,7 +57,7 @@ internal fun SenderRevocationScreen(state: SenderRevocationState, revocation: Se
         stringResource(
             if (proof) R.string.senders_proof_title else R.string.settings_device_access
         ),
-        revocation::dismiss,
+        { revocation.dismiss(state) },
         backEnabled = !pending
     ) {
         if (proof) {
@@ -75,26 +75,11 @@ internal fun SenderRevocationScreen(state: SenderRevocationState, revocation: Se
         )
         Text(stringResource(description, state.selection.deviceName))
         OwnerProofFeedback(state.notice)
-        if (proof) {
-            Button(
-                onClick = revocation::verify,
-                enabled = state.step == RevocationStep.Proof,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            ) {
-                Text(
-                    stringResource(
-                        if (state.step == RevocationStep.Verifying) {
-                            R.string.senders_verifying
-                        } else {
-                            R.string.senders_verify_revoke
-                        }
-                    )
-                )
-            }
-        }
-        if (!pending) {
+        SenderRevocationAction(state, revocation)
+        if (state.step != RevocationStep.Submitting) {
             TextButton(
-                onClick = revocation::dismiss,
+                onClick = { revocation.dismiss(state) },
+                enabled = !pending,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
             ) {
                 Text(stringResource(if (proof) R.string.setup_cancel else R.string.senders_return))
@@ -103,6 +88,31 @@ internal fun SenderRevocationScreen(state: SenderRevocationState, revocation: Se
     }
     LaunchedEffect(state.step, state.notice, windowFocused) {
         if (windowFocused) focus.requestFocus()
+    }
+}
+
+@Composable
+private fun SenderRevocationAction(state: SenderRevocationState, revocation: SenderRevocation) {
+    val label = when (state.step) {
+        RevocationStep.Proof -> R.string.senders_verify_revoke
+        RevocationStep.Verifying -> R.string.senders_verifying
+        RevocationStep.Unconfirmed -> R.string.senders_revoke_retry
+        RevocationStep.Retrying -> R.string.senders_revoke_retrying
+        else -> return
+    }
+    Button(
+        onClick = {
+            if (state.step == RevocationStep.Proof) {
+                revocation.verify(state)
+            } else {
+                revocation.retry(state)
+            }
+        },
+        enabled = state.step == RevocationStep.Proof || state.step == RevocationStep.Unconfirmed,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .semantics { liveRegion = LiveRegionMode.Polite }
+    ) {
+        Text(stringResource(label))
     }
 }
 
