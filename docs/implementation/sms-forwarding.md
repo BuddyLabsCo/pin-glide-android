@@ -15,8 +15,11 @@ content. It uses shortService on API 34+ and foreground type zero on API 29–33
 There is no POST_NOTIFICATIONS request or failure-alert feature.
 
 Operations share the foreground notification but have independent coroutine
-lifetimes and a 150-second deadline. Completion releases the foreground state
-only when no operation remains and stopSelfResult accepts the latest start ID.
+lifetimes and a 150-second deadline. Each accepted broadcast calls
+startForeground again while its start exemption applies, renewing the API 34+
+shortService deadline so earlier work cannot cut short a newer operation.
+Completion releases the foreground state only when no operation remains and
+stopSelfResult accepts the latest start ID.
 The shortService timeout callbacks cancel all outstanding operations and stop
 the service; destruction cancels its scope and removes the notification. A new
 start received before destruction can re-enter the foreground. Exceptions,
@@ -79,3 +82,14 @@ the smoke check. API 29–36 device execution, real target arrival, overlapping
 in-flight uploads and forced timeout/process-death acceptance remain unverified
 on devices. No persistent tests, debug seeds or E2E harness are added by this
 production-only ticket.
+
+The review regression check used disposable instrumentation on API 37 with the
+system shortService timeout temporarily reduced from 180 to 20 seconds. Two
+synthetic delivery operations each suspended for 15 seconds, with the second
+starting 12 seconds after the first. Before the fix, the first completed and the
+system timeout cancelled the second. With foreground entry renewed on each
+start, both completed after the original system deadline. The system timeout
+override was removed after each run. This checks the actual Android service
+lifecycle with an in-memory delivery adapter; it does not establish live target
+delivery or execution on API 29–36. The instrumentation stays under ignored
+build output and is not part of the production change.

@@ -22,7 +22,6 @@ class SmsForwardingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var operations = 0
     private var latestStartId = 0
-    private var foreground = false
     private var stopping = false
 
     private fun enterForeground(): Boolean {
@@ -51,7 +50,6 @@ class SmsForwardingService : Service() {
                 0
             }
             startForeground(NOTIFICATION, notification, type)
-            foreground = true
             return true
         } catch (_: RuntimeException) {
             return false
@@ -61,7 +59,7 @@ class SmsForwardingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         latestStartId = startId
         val messages = intent?.getStringArrayListExtra(MESSAGES)
-        if (stopping || messages.isNullOrEmpty() || (!foreground && !enterForeground())) {
+        if (stopping || messages.isNullOrEmpty() || !enterForeground()) {
             finishIfIdle()
             return START_NOT_STICKY
         }
@@ -87,7 +85,6 @@ class SmsForwardingService : Service() {
     private fun finishIfIdle() {
         if (operations == 0 && stopSelfResult(latestStartId)) {
             stopForeground(STOP_FOREGROUND_REMOVE)
-            foreground = false
         }
     }
 
