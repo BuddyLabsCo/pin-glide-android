@@ -3,6 +3,7 @@ package com.buddylabs.pinglide.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
+import com.buddylabs.pinglide.domain.identity.AuthorizationState
 import com.buddylabs.pinglide.domain.identity.RestorationState
 import com.buddylabs.pinglide.domain.identity.SenderRestoration
 import com.buddylabs.pinglide.domain.pairing.HomeState
@@ -33,10 +34,24 @@ class HomeViewModel(
     private var recoveryGeneration = 0L
     val testMessage = TestMessageAction(viewModelScope, sendTest)
     private var testOrigin: HomeState? = null
+    private val mutableSettingsOpen = MutableStateFlow(false)
+    val settingsOpen = mutableSettingsOpen.asStateFlow()
+
+    fun showSettings(open: Boolean) {
+        mutableSettingsOpen.value = open
+    }
 
     init {
         viewModelScope.launch {
             state.collect { current ->
+                if (current.authorization in setOf(
+                        AuthorizationState.LoggedOut,
+                        AuthorizationState.RegistrationClosed,
+                        AuthorizationState.RegistrationRevoked
+                    )
+                ) {
+                    showSettings(false)
+                }
                 val origin = testOrigin
                 val target = testMessage.pairingId
                 val original = origin?.targets?.find { it.pairingId == target }

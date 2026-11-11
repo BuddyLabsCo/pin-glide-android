@@ -2,23 +2,27 @@ package com.buddylabs.pinglide.app
 
 import android.app.Application
 import com.buddylabs.pinglide.BuildConfig
+import com.buddylabs.pinglide.data.service.AccountSenderService
 import com.buddylabs.pinglide.data.service.CredentialRenewalService
 import com.buddylabs.pinglide.data.service.CurrentSenderAuthorizationService
 import com.buddylabs.pinglide.data.service.OwnPairingService
 import com.buddylabs.pinglide.data.service.PairingSessionService
 import com.buddylabs.pinglide.data.service.QqLoginService
 import com.buddylabs.pinglide.data.service.ServiceAccount
+import com.buddylabs.pinglide.data.service.ServiceSenderRevocation
 import com.buddylabs.pinglide.data.service.TestDeliveryService
 import com.buddylabs.pinglide.data.storage.ProtectedIdentityStore
 import com.buddylabs.pinglide.data.storage.SetupPreferences
 import com.buddylabs.pinglide.domain.forwarding.PairingTestMessage
 import com.buddylabs.pinglide.domain.forwarding.SmsForwarding
+import com.buddylabs.pinglide.domain.identity.AccountSenders
 import com.buddylabs.pinglide.domain.identity.AccountSession
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.CurrentSenderAuthorization
 import com.buddylabs.pinglide.domain.identity.ExplicitLogin
 import com.buddylabs.pinglide.domain.identity.QqAuthorization
 import com.buddylabs.pinglide.domain.identity.SenderRestoration
+import com.buddylabs.pinglide.domain.identity.SenderRevocation
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
 import com.buddylabs.pinglide.domain.pairing.PairingActivation
 import com.buddylabs.pinglide.domain.pairing.PairingEntry
@@ -103,6 +107,26 @@ class PinGlideApplication : Application() {
             identityStore,
             credentialRenewal,
             ServiceAccount(BuildConfig.SERVICE_URL, identityClient),
+            processScope
+        )
+    }
+
+    val accountSenders by lazy {
+        AccountSenders(
+            identityStore,
+            credentialRenewal,
+            AccountSenderService(BuildConfig.SERVICE_URL, identityClient),
+            processScope
+        )
+    }
+
+    val senderRevocation by lazy {
+        SenderRevocation(
+            identityStore,
+            accountSenders,
+            credentialRenewal,
+            authorization,
+            ServiceSenderRevocation(BuildConfig.SERVICE_URL, identityClient),
             processScope
         )
     }

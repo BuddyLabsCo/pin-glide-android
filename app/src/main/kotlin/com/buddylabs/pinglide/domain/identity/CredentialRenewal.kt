@@ -33,8 +33,7 @@ class CredentialRenewal(
     var sessionGeneration: Long = 0
         private set
 
-    @Volatile
-    private var closedSenders = emptyMap<Pair<String, String>, RegistrationClosure>()
+    private val closures = RegistrationClosures()
     private val mutableState = MutableStateFlow(AuthorizationState.Checking)
     val state = mutableState.asStateFlow()
     private val mutableLogoutState = MutableStateFlow(LogoutState.Ready)
@@ -45,7 +44,7 @@ class CredentialRenewal(
         logoutFlight?.takeUnless { it.isCompleted }?.let { return it }
         closureCommit.cancel()
         loggedOut = true
-        closedSenders = emptyMap()
+        closures.clear()
         sessionGeneration++
         flight = null
         publish(AuthorizationState.LoggedOut)
@@ -98,6 +97,7 @@ class CredentialRenewal(
         withContext(NonCancellable) {
             gate.withLock {
                 if (!isSessionCurrent(session)) return@withLock
+                retainRevocation(identity, failure, session = session)
                 val current = store.read()
                 if (!isSessionCurrent(session)) return@withLock
                 if (current.identity?.accountId != identity.accountId ||
@@ -106,7 +106,6 @@ class CredentialRenewal(
                     return@withLock
                 }
                 if (failure == RefreshState.RegistrationRevoked) {
-                    retainRevocation(identity, failure)
                     closeRegistration(current, identity)
                     requireAuthority(store.read())
                     return@withLock
@@ -165,19 +164,20 @@ class CredentialRenewal(
         return result
     }
 
-    suspend fun confirmSelfRevocation(expected: IdentitySnapshot, revokedSenderId: String) {
-        val identity = checkNotNull(expected.identity)
-        if (revokedSenderId != identity.senderId) return
+    suspend fun confirmSelfRevocation(identity: SenderIdentity, session: Long) {
         withContext(NonCancellable) {
             gate.withLock {
+                if (!isSessionCurrent(session)) return@withLock
+                retainRevocation(identity, RefreshState.RegistrationClosed, session = session)
+                val current = store.read()
+                if (!isSessionCurrent(session)) return@withLock
                 retainRevocation(
                     identity,
                     RefreshState.RegistrationClosed,
-                    IdentitySnapshot(
-                        generation = Math.addExact(expected.generation, 1),
-                        refreshState = RefreshState.RegistrationRevoked,
-                        closedSenderIds = expected.closedSenderIds + revokedSenderId
-                    )
+                    current.takeIf {
+                        it.refreshState == RefreshState.RegistrationRevoked &&
+                            identity.senderId in it.closedSenderIds
+                    }
                 )
                 readAuthority()
             }
@@ -204,34 +204,31 @@ class CredentialRenewal(
         }
     }
 
-    fun isRegistrationClosed(identity: SenderIdentity): Boolean =
-        (identity.accountId to identity.senderId) in closedSenders
+    fun isRegistrationClosed(identity: SenderIdentity): Boolean = closures[identity] != null
+
+    @Synchronized
+    fun retrySelfRevocation(selection: SenderSelection) {
+        if (isSessionCurrent(selection.owner.session)) closures.retry(selection)
+    }
+
+    fun finishSelfRevocation(selection: SenderSelection) = closures.finish(selection)
 
     @Synchronized
     private fun retainRevocation(
         identity: SenderIdentity,
         destination: RefreshState,
-        terminalSnapshot: IdentitySnapshot? = null
+        terminalSnapshot: IdentitySnapshot? = null,
+        session: Long = sessionGeneration
     ) {
-        if (loggedOut) return
-        val owner = identity.accountId to identity.senderId
-        val retained = closedSenders[owner]
-        if (retained?.destination != RefreshState.RegistrationClosed) {
-            val closure = RegistrationClosure(
-                destination,
-                retained?.terminalSnapshot ?: terminalSnapshot
-            )
-            closedSenders = closedSenders + (owner to closure)
-        }
+        if (!isSessionCurrent(session) || !destination.closesRegistration) return
+        closures.retain(identity, destination, terminalSnapshot, session)
     }
 
     private suspend fun readAuthority(): IdentitySnapshot {
         val current = store.read()
         if (loggedOut) return current
         if (current.refreshState == RefreshState.RegistrationRevoked &&
-            closedSenders.values.any {
-                it.destination == RefreshState.RegistrationClosed && it.terminalSnapshot == current
-            }
+            closures.retainsSelfSnapshot(current)
         ) {
             return withContext(NonCancellable) {
                 val next = current.copy(
@@ -255,9 +252,14 @@ class CredentialRenewal(
         ) {
             return
         }
-        publish(AuthorizationState.RegistrationRevoked)
-        val closure = closedSenders[expected.accountId to expected.senderId] ?: return
+        val closure = closures[expected] ?: return
         val destination = closure.destination
+        val outcome = if (destination == RefreshState.RegistrationClosed) {
+            AuthorizationState.RegistrationClosed
+        } else {
+            AuthorizationState.RegistrationRevoked
+        }
+        if (outcome == AuthorizationState.RegistrationRevoked) publish(outcome)
         val next = IdentitySnapshot(
             generation = Math.addExact(current.generation, 1),
             refreshState = destination,
@@ -270,13 +272,7 @@ class CredentialRenewal(
             requireAuthority(store.read())
             throw AuthorizationException(AuthorizationState.StorageUnavailable)
         }
-        publish(
-            if (destination == RefreshState.RegistrationClosed) {
-                AuthorizationState.RegistrationClosed
-            } else {
-                AuthorizationState.RegistrationRevoked
-            }
-        )
+        publish(outcome)
     }
 
     suspend fun authorize(

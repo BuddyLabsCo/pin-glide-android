@@ -128,6 +128,8 @@ class MainActivity : ComponentActivity() {
                                 onBatterySettings = permissions::openBatterySettings,
                                 installedVersion = DeviceInfo(this).installedVersion(),
                                 account = app.accountSession,
+                                senders = app.accountSenders,
+                                revocation = app.senderRevocation,
                                 onLogout = {
                                     app.accountSession.logout()
                                     login.leaveAccount()
@@ -169,9 +171,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        (application as PinGlideApplication).accountSenders.foreground()
         checkSmsPermission()
         (application as PinGlideApplication).checkCurrentSenderAuthorization()
         if (login.state.value == LoginState.FirstDevice) home.refresh()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) {
+            (application as PinGlideApplication).accountSenders.background()
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

@@ -104,3 +104,26 @@ before the fix; retry now persists Welcome and offline workflow restart restores
 it without service or QQ requests. Additional probes cover intervening credential
 renewal, a different terminal generation, and stale self-confirmation after a
 new Sender registration.
+
+## Issue #34 review corrections
+
+Confirmed self-revocation retains the originating Sender's closure and Welcome
+destination before storage access. Shared discovered-revocation handling also
+retains proof before reading storage. Both paths reject obsolete sessions, retry
+persistence on authorization, and preserve a different current Sender. Retained
+Welcome proof can acquire its terminal snapshot without losing that destination;
+promotion still requires the exact retained snapshot, including its generation.
+
+A self-target revoke response with HTTP 409 and a status-matched
+device_registration_revoked problem now enters shared RegistrationRevoked handling
+and the revoked destination. HTTP 204 keeps the explicit self-revocation Welcome
+outcome. Other-target 409, unknown codes and mismatched statuses remain unconfirmed.
+Neither closure path replays the proof-bearing POST.
+
+Host regressions cover read failure and recovery, proof retained during a pending
+read, logout precedence, exact terminal promotion, a later terminal generation,
+a different Sender, service response classification and one submission. The
+storage-loss and self-target discovery regressions fail before their fixes and
+pass afterward. These checks do not establish real QQ/service interaction or
+Android Keystore behavior; durability across process death still requires a
+successful protected-storage commit.
