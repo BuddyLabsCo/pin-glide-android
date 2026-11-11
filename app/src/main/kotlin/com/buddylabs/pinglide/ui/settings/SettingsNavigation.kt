@@ -1,6 +1,7 @@
 package com.buddylabs.pinglide.ui.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -14,6 +15,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -55,15 +57,27 @@ fun SettingsNavigation(
     onDismiss: () -> Unit
 ) {
     var destination by rememberSaveable { mutableStateOf(SettingsDestination.Root) }
-    val operation by revocation.state.collectAsState()
+    val operation = revocation.state.collectAsState().value
+    val activity = LocalActivity.current
+    DisposableEffect(revocation, senders, activity) {
+        onDispose {
+            if (activity?.isChangingConfigurations != true) {
+                revocation.close()
+                senders.close()
+            }
+        }
+    }
     LaunchedEffect(destination) {
         if (destination != SettingsDestination.Account) account.close()
-        if (destination != SettingsDestination.DeviceAccess) senders.close()
+        if (destination != SettingsDestination.DeviceAccess) {
+            revocation.close()
+            senders.close()
+        }
     }
     val stateHolder = rememberSaveableStateHolder()
     val back = {
         if (destination == SettingsDestination.DeviceAccess && operation != null) {
-            revocation.dismiss()
+            revocation.dismiss(operation)
         } else if (destination == SettingsDestination.Root) {
             onDismiss()
         } else {

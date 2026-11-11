@@ -70,10 +70,11 @@ internal fun SenderInventoryScreen(inventory: AccountSenders, revocation: Sender
             scope.launch { inventory.select(state, sender.senderId)?.let(revocation::select) }
         }
     }
-    operation?.takeIf { it.step == RevocationStep.Confirmation }?.selection?.let { selection ->
+    operation?.takeIf { it.step == RevocationStep.Confirmation }?.let { confirmation ->
+        val selection = confirmation.selection
         val cancelFocus = remember { FocusRequester() }
         AlertDialog(
-            onDismissRequest = revocation::dismiss,
+            onDismissRequest = { revocation.dismiss(confirmation) },
             title = { Text(stringResource(R.string.senders_revoke_title, selection.deviceName)) },
             text = {
                 Text(
@@ -83,7 +84,7 @@ internal fun SenderInventoryScreen(inventory: AccountSenders, revocation: Sender
             },
             confirmButton = {
                 TextButton(
-                    onClick = revocation::confirm,
+                    onClick = { revocation.confirm(confirmation) },
                     modifier = Modifier.heightIn(min = 48.dp),
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error
@@ -92,7 +93,7 @@ internal fun SenderInventoryScreen(inventory: AccountSenders, revocation: Sender
             },
             dismissButton = {
                 TextButton(
-                    onClick = revocation::dismiss,
+                    onClick = { revocation.dismiss(confirmation) },
                     modifier = Modifier.heightIn(min = 48.dp).focusRequester(cancelFocus)
                 ) { Text(stringResource(R.string.setup_cancel)) }
             }

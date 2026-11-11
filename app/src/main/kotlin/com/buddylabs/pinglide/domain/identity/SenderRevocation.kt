@@ -15,7 +15,15 @@ fun interface SenderRevocationService {
     suspend fun revoke(identity: SenderIdentity, senderId: String, code: String): RevocationReply
 }
 
-enum class RevocationStep { Confirmation, Proof, Verifying, Submitting, Unconfirmed, Revoked }
+enum class RevocationStep {
+    Confirmation,
+    Proof,
+    Verifying,
+    Submitting,
+    Unconfirmed,
+    Retrying,
+    Revoked
+}
 
 enum class OwnerProofNotice { None, Cancelled, Failed, WrongAccount }
 
@@ -36,6 +44,8 @@ class SenderRevocation(
     private val mutableState = MutableStateFlow<SenderRevocationState?>(null)
     val state = mutableState.asStateFlow()
     private var request: Job? = null
+    private var proofCode: String? = null
+    private var proofIdentity: SenderIdentity? = null
 
     init {
         scope.launch {
@@ -59,16 +69,18 @@ class SenderRevocation(
     }
 
     @Synchronized
-    fun confirm() {
+    fun confirm(expected: SenderRevocationState? = state.value) {
         val current = state.value ?: return
+        if (current !== expected) return
         if (current.step == RevocationStep.Confirmation) {
             mutableState.value = current.copy(step = RevocationStep.Proof)
         }
     }
 
     @Synchronized
-    fun verify() {
+    fun verify(expected: SenderRevocationState? = state.value) {
         val current = state.value ?: return
+        if (current !== expected) return
         if (current.step != RevocationStep.Proof) return
         mutableState.value = current.copy(
             step = RevocationStep.Verifying,
@@ -92,7 +104,11 @@ class SenderRevocation(
             check(current.identity?.management?.token == identity.management.token)
             check(current.refreshState == RefreshState.Active)
             check(!renewal.isRegistrationClosed(identity))
-            if (!transition(selection, RevocationStep.Submitting)) return
+            synchronized(this) {
+                if (!transition(selection, RevocationStep.Submitting)) return
+                proofCode = code
+                proofIdentity = identity
+            }
             val reply = withTimeout(30_000) { service.revoke(identity, selection.senderId, code) }
             acceptReply(selection, identity, reply)
         } catch (_: TimeoutCancellationException) {
@@ -109,21 +125,82 @@ class SenderRevocation(
         }
     }
 
+    @Synchronized
+    fun retry(expected: SenderRevocationState) {
+        if (state.value !== expected || expected.step != RevocationStep.Unconfirmed) return
+        val code = proofCode ?: return
+        val identity = proofIdentity ?: return
+        if (!transition(expected.selection, RevocationStep.Retrying)) return
+        request = scope.launch { retryAndSubmit(expected.selection, identity, code) }
+    }
+
+    private suspend fun retryAndSubmit(
+        selection: SenderSelection,
+        originalIdentity: SenderIdentity,
+        code: String
+    ) {
+        try {
+            val read = withTimeout(30_000) { inventory.reload(selection) }
+            if (!isCurrent(selection)) return
+            if (read == null) {
+                if (selection.senderId == selection.owner.senderId &&
+                    renewal.isRegistrationClosed(originalIdentity)
+                ) {
+                    complete(selection, originalIdentity)
+                } else {
+                    transition(selection, RevocationStep.Unconfirmed)
+                }
+                return
+            }
+            val snapshot = store.read()
+            val identity = checkNotNull(snapshot.identity)
+            check(snapshot.generation == read.owner?.generation)
+            check(identity.accountId == selection.owner.accountId)
+            check(identity.senderId == selection.owner.senderId)
+            check(inventory.reconciled(selection) === read)
+            if (!isCurrent(selection)) return
+            if (checkNotNull(read.senders).none { it.senderId == selection.senderId }) {
+                complete(selection, identity)
+            } else {
+                val reply =
+                    withTimeout(30_000) { service.revoke(identity, selection.senderId, code) }
+                acceptReply(selection, identity, reply)
+            }
+        } catch (_: TimeoutCancellationException) {
+            transition(selection, RevocationStep.Unconfirmed)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            transition(selection, RevocationStep.Unconfirmed)
+        }
+    }
+
     private suspend fun acceptReply(
         selection: SenderSelection,
         identity: SenderIdentity,
         reply: RevocationReply
     ) {
         if (!isCurrent(selection)) return
+        val retrying = state.value?.step == RevocationStep.Retrying
+        if (retrying &&
+            (reply == RevocationReply.WrongAccount || reply == RevocationReply.ProofFailed)
+        ) {
+            transition(selection, RevocationStep.Unconfirmed)
+            return
+        }
         when (reply) {
             RevocationReply.Revoked -> complete(selection, identity)
 
             RevocationReply.CurrentSenderRevoked -> try {
-                renewal.rejectAccess(
-                    identity,
-                    RefreshState.RegistrationRevoked,
-                    selection.owner.session
-                )
+                if (retrying && selection.senderId == selection.owner.senderId) {
+                    renewal.confirmSelfRevocation(identity, selection.owner.session)
+                } else {
+                    renewal.rejectAccess(
+                        identity,
+                        RefreshState.RegistrationRevoked,
+                        selection.owner.session
+                    )
+                }
             } finally {
                 synchronized(this) {
                     if (isCurrent(selection)) clear()
@@ -144,8 +221,13 @@ class SenderRevocation(
             synchronized(this) {
                 if (isCurrent(selection)) clear()
             }
-        } else if (transition(selection, RevocationStep.Revoked)) {
-            inventory.refresh()
+        } else {
+            synchronized(this) {
+                if (!transition(selection, RevocationStep.Revoked)) return
+                proofCode = null
+                proofIdentity = null
+                inventory.refresh()
+            }
         }
     }
 
@@ -162,6 +244,8 @@ class SenderRevocation(
     @Synchronized
     private fun proofFailed(selection: SenderSelection, notice: OwnerProofNotice) {
         if (!isCurrent(selection)) return
+        proofCode = null
+        proofIdentity = null
         mutableState.value = SenderRevocationState(selection, RevocationStep.Proof, notice)
     }
 
@@ -177,15 +261,27 @@ class SenderRevocation(
     }
 
     @Synchronized
-    fun dismiss() {
-        if (state.value?.step == RevocationStep.Submitting) return
+    fun dismiss(expected: SenderRevocationState? = state.value) {
+        if (state.value !== expected) return
+        if (state.value?.step == RevocationStep.Submitting ||
+            state.value?.step == RevocationStep.Retrying
+        ) {
+            return
+        }
         clear()
         inventory.refresh()
     }
 
     @Synchronized
+    fun close() {
+        clear()
+    }
+
+    @Synchronized
     private fun clear() {
         mutableState.value = null
+        proofCode = null
+        proofIdentity = null
         request?.cancel()
         request = null
         inventory.clearSelection()

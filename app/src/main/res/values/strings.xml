@@ -216,7 +216,9 @@
     <string name="senders_submitting">正在提交撤销</string>
     <string name="senders_submitting_description">正在撤销“%1$s”…</string>
     <string name="senders_unconfirmed">撤销未确认</string>
-    <string name="senders_unconfirmed_description">暂时无法确认“%1$s”的撤销结果。请返回设备访问管理查看最新列表。</string>
+    <string name="senders_unconfirmed_description">暂时无法确认“%1$s”的撤销结果，请稍后重试。</string>
+    <string name="senders_revoke_retry">重试撤销</string>
+    <string name="senders_revoke_retrying">重试中…</string>
     <string name="senders_revoked">“%1$s”已撤销</string>
     <string name="senders_revoked_description">该发送端设备的旧注册已关闭，所有配对已移除。再次使用时，需要在该设备重新登录并重新配对。</string>
     <string name="senders_return">返回设备访问管理</string>
