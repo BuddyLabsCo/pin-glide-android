@@ -68,6 +68,35 @@ class PairingSession(
     val receiverConfirmed: Boolean
 )
 
+internal fun PairingSession.validateConsent(
+    scanned: PairingQr,
+    expectedSenderId: String?,
+    previous: PairingSession?,
+    now: Instant
+) {
+    if (sessionId != scanned.sessionId || receiverId != scanned.receiverId ||
+        senderId != expectedSenderId || pairingId.isNullOrBlank()
+    ) {
+        throw PairingEntryException(PairingEntryProblem.InvalidQr)
+    }
+    if (mode !in setOf("new_receiver", "add_sender")) {
+        throw PairingEntryException(PairingEntryProblem.Unsupported)
+    }
+    if (previous?.sessionId == sessionId &&
+        (
+            previous.expiresAt != expiresAt || previous.mode != mode ||
+                previous.pairingId != pairingId
+            )
+    ) {
+        throw PairingEntryException(PairingEntryProblem.Closed)
+    }
+    if (senderConfirmed || receiverConfirmed || state != "awaiting_confirmation" ||
+        !expiresAt.isAfter(now) || expiresAt.isAfter(now.plusSeconds(300))
+    ) {
+        throw PairingEntryException(PairingEntryProblem.Closed)
+    }
+}
+
 interface PairingSessionService {
     suspend fun authorize(token: String, sessionId: String): PairingSession
 

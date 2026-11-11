@@ -105,6 +105,7 @@ class ProtectedIdentityStore(context: Context) :
             require(
                 (current.items + current.provisional).none { it.pairingId == pairing.pairingId }
             )
+            require(current.items.none { it.receiverId == pairing.receiverId })
             current.items + pairing
         }
 
