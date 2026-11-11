@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.buddylabs.pinglide.R
+import com.buddylabs.pinglide.domain.identity.AccountSenders
 import com.buddylabs.pinglide.domain.identity.AccountSession
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PrivacyScreen
@@ -45,12 +46,14 @@ fun SettingsNavigation(
     onBatterySettings: () -> Boolean,
     installedVersion: String,
     account: AccountSession,
+    senders: AccountSenders,
     onLogout: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var destination by rememberSaveable { mutableStateOf(SettingsDestination.Root) }
     LaunchedEffect(destination) {
         if (destination != SettingsDestination.Account) account.close()
+        if (destination != SettingsDestination.DeviceAccess) senders.close()
     }
     val stateHolder = rememberSaveableStateHolder()
     val back = {
@@ -81,6 +84,7 @@ fun SettingsNavigation(
                     onLanguage(it)
                 },
                 account = account,
+                senders = senders,
                 onLogout = onLogout
             )
         }
@@ -97,6 +101,7 @@ private fun SettingsDestinationContent(
     onNavigate: (SettingsDestination) -> Unit,
     onLanguage: (AppLanguage) -> Unit,
     account: AccountSession,
+    senders: AccountSenders,
     onLogout: () -> Unit
 ) {
     if (destination == SettingsDestination.Root) {
@@ -115,12 +120,8 @@ private fun SettingsDestinationContent(
     SettingsPage(stringResource(title), onBack) {
         when (destination) {
             SettingsDestination.Language -> LanguageScreen(language, onLanguage)
-
             SettingsDestination.Account -> AccountScreen(account, onLogout)
-
-            SettingsDestination.DeviceAccess -> Text(
-                stringResource(R.string.settings_device_access_explanation)
-            )
+            SettingsDestination.DeviceAccess -> SenderInventoryScreen(senders)
         }
     }
 }
