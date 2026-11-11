@@ -165,19 +165,18 @@ class CredentialRenewal(
         return result
     }
 
-    suspend fun confirmSelfRevocation(expected: IdentitySnapshot, revokedSenderId: String) {
-        val identity = checkNotNull(expected.identity)
-        if (revokedSenderId != identity.senderId) return
+    suspend fun confirmSelfRevocation(identity: SenderIdentity, session: Long) {
         withContext(NonCancellable) {
             gate.withLock {
+                if (!isSessionCurrent(session)) return@withLock
+                val current = store.read()
                 retainRevocation(
                     identity,
                     RefreshState.RegistrationClosed,
-                    IdentitySnapshot(
-                        generation = Math.addExact(expected.generation, 1),
-                        refreshState = RefreshState.RegistrationRevoked,
-                        closedSenderIds = expected.closedSenderIds + revokedSenderId
-                    )
+                    current.takeIf {
+                        it.refreshState == RefreshState.RegistrationRevoked &&
+                            identity.senderId in it.closedSenderIds
+                    }
                 )
                 readAuthority()
             }
@@ -255,9 +254,14 @@ class CredentialRenewal(
         ) {
             return
         }
-        publish(AuthorizationState.RegistrationRevoked)
         val closure = closedSenders[expected.accountId to expected.senderId] ?: return
         val destination = closure.destination
+        val outcome = if (destination == RefreshState.RegistrationClosed) {
+            AuthorizationState.RegistrationClosed
+        } else {
+            AuthorizationState.RegistrationRevoked
+        }
+        if (outcome == AuthorizationState.RegistrationRevoked) publish(outcome)
         val next = IdentitySnapshot(
             generation = Math.addExact(current.generation, 1),
             refreshState = destination,
@@ -270,13 +274,7 @@ class CredentialRenewal(
             requireAuthority(store.read())
             throw AuthorizationException(AuthorizationState.StorageUnavailable)
         }
-        publish(
-            if (destination == RefreshState.RegistrationClosed) {
-                AuthorizationState.RegistrationClosed
-            } else {
-                AuthorizationState.RegistrationRevoked
-            }
-        )
+        publish(outcome)
     }
 
     suspend fun authorize(

@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,6 +34,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.identity.AccountSenders
 import com.buddylabs.pinglide.domain.identity.AccountSession
+import com.buddylabs.pinglide.domain.identity.RevocationStep
+import com.buddylabs.pinglide.domain.identity.SenderRevocation
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PrivacyScreen
 import com.buddylabs.pinglide.ui.components.ScreenLayout
@@ -47,17 +50,21 @@ fun SettingsNavigation(
     installedVersion: String,
     account: AccountSession,
     senders: AccountSenders,
+    revocation: SenderRevocation,
     onLogout: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var destination by rememberSaveable { mutableStateOf(SettingsDestination.Root) }
+    val operation by revocation.state.collectAsState()
     LaunchedEffect(destination) {
         if (destination != SettingsDestination.Account) account.close()
         if (destination != SettingsDestination.DeviceAccess) senders.close()
     }
     val stateHolder = rememberSaveableStateHolder()
     val back = {
-        if (destination == SettingsDestination.Root) {
+        if (destination == SettingsDestination.DeviceAccess && operation != null) {
+            revocation.dismiss()
+        } else if (destination == SettingsDestination.Root) {
             onDismiss()
         } else {
             destination = SettingsDestination.Root
@@ -85,6 +92,7 @@ fun SettingsNavigation(
                 },
                 account = account,
                 senders = senders,
+                revocation = revocation,
                 onLogout = onLogout
             )
         }
@@ -102,8 +110,16 @@ private fun SettingsDestinationContent(
     onLanguage: (AppLanguage) -> Unit,
     account: AccountSession,
     senders: AccountSenders,
+    revocation: SenderRevocation,
     onLogout: () -> Unit
 ) {
+    val operation by revocation.state.collectAsState()
+    if (destination == SettingsDestination.DeviceAccess && operation != null &&
+        operation?.step != RevocationStep.Confirmation
+    ) {
+        SenderRevocationScreen(checkNotNull(operation), revocation)
+        return
+    }
     if (destination == SettingsDestination.Root) {
         SettingsScreen(language, installedVersion, onBatterySettings, onNavigate, onBack)
         return
@@ -121,7 +137,7 @@ private fun SettingsDestinationContent(
         when (destination) {
             SettingsDestination.Language -> LanguageScreen(language, onLanguage)
             SettingsDestination.Account -> AccountScreen(account, onLogout)
-            SettingsDestination.DeviceAccess -> SenderInventoryScreen(senders)
+            SettingsDestination.DeviceAccess -> SenderInventoryScreen(senders, revocation)
         }
     }
 }
@@ -131,6 +147,7 @@ internal fun SettingsPage(
     title: String,
     onBack: () -> Unit,
     backModifier: Modifier = Modifier,
+    backEnabled: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
     ScreenLayout {
@@ -138,7 +155,7 @@ internal fun SettingsPage(
             Modifier.fillMaxWidth().padding(vertical = 8.dp).semantics { paneTitle = title },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBack, modifier = backModifier) {
+            IconButton(onClick = onBack, modifier = backModifier, enabled = backEnabled) {
                 Icon(painterResource(R.drawable.ic_back), stringResource(R.string.setup_back))
             }
             Text(

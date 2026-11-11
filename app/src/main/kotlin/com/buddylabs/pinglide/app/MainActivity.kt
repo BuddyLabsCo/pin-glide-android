@@ -129,6 +129,7 @@ class MainActivity : ComponentActivity() {
                                 installedVersion = DeviceInfo(this).installedVersion(),
                                 account = app.accountSession,
                                 senders = app.accountSenders,
+                                revocation = app.senderRevocation,
                                 onLogout = {
                                     app.accountSession.logout()
                                     login.leaveAccount()

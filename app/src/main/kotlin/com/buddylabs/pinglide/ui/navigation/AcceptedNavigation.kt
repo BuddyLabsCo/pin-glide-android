@@ -9,7 +9,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.buddylabs.pinglide.R
@@ -181,7 +180,7 @@ private fun HomeDestination(
     highlightedPairingId: String?,
     settings: @Composable (onDismiss: () -> Unit) -> Unit
 ) {
-    var settingsOpen by rememberSaveable(state.owner) { mutableStateOf(false) }
+    val settingsOpen by home.settingsOpen.collectAsState()
     val restoration by home.loginRestoration.collectAsState()
     when (restoration) {
         RestorationState.Loading, RestorationState.Cancelled,
@@ -200,10 +199,10 @@ private fun HomeDestination(
             onRestoreSms = onRestoreSms,
             onAdd = onAdd,
             highlightedPairingId = highlightedPairingId,
-            onSettings = { settingsOpen = true }
+            onSettings = { home.showSettings(true) }
         )
     }
     if (settingsOpen && state.authorization != AuthorizationState.RegistrationRevoked) {
-        settings { settingsOpen = false }
+        settings { home.showSettings(false) }
     }
 }

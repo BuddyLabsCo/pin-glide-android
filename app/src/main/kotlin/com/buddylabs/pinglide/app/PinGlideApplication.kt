@@ -9,6 +9,7 @@ import com.buddylabs.pinglide.data.service.OwnPairingService
 import com.buddylabs.pinglide.data.service.PairingSessionService
 import com.buddylabs.pinglide.data.service.QqLoginService
 import com.buddylabs.pinglide.data.service.ServiceAccount
+import com.buddylabs.pinglide.data.service.ServiceSenderRevocation
 import com.buddylabs.pinglide.data.service.TestDeliveryService
 import com.buddylabs.pinglide.data.storage.ProtectedIdentityStore
 import com.buddylabs.pinglide.data.storage.SetupPreferences
@@ -20,6 +21,7 @@ import com.buddylabs.pinglide.domain.identity.CurrentSenderAuthorization
 import com.buddylabs.pinglide.domain.identity.ExplicitLogin
 import com.buddylabs.pinglide.domain.identity.QqAuthorization
 import com.buddylabs.pinglide.domain.identity.SenderRestoration
+import com.buddylabs.pinglide.domain.identity.SenderRevocation
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
 import com.buddylabs.pinglide.domain.pairing.PairingActivation
 import com.buddylabs.pinglide.domain.pairing.PairingEntry
@@ -96,6 +98,17 @@ class PinGlideApplication : Application() {
             identityStore,
             credentialRenewal,
             AccountSenderService(BuildConfig.SERVICE_URL, identityClient),
+            processScope
+        )
+    }
+
+    val senderRevocation by lazy {
+        SenderRevocation(
+            identityStore,
+            accountSenders,
+            credentialRenewal,
+            authorization,
+            ServiceSenderRevocation(BuildConfig.SERVICE_URL, identityClient),
             processScope
         )
     }
