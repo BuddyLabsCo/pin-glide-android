@@ -24,20 +24,21 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
 
 @Composable
-internal fun QqEmblem() {
+internal fun QqEmblem(size: Dp = 92.dp) {
     val shape = RoundedCornerShape(percent = 31)
     Image(
         painterResource(R.drawable.ic_qq),
         contentDescription = null,
-        modifier = Modifier.size(92.dp).shadow(10.dp, shape)
+        modifier = Modifier.size(size).shadow(10.dp, shape)
             .background(
                 Brush.linearGradient(listOf(Color(0xFF1597DE), Color(0xFF075E9D))),
                 shape
-            ).padding(16.56.dp)
+            ).padding(size * 0.18f)
     )
 }
 
