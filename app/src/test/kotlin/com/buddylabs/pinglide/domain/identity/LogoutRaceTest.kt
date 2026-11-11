@@ -10,12 +10,164 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LogoutRaceTest {
+    @Test
+    fun discoveredSelfRevocationClosesAuthorityAndRestartsOnRevoked() = withSession {
+        var submissions = 0
+        val inventory = AccountSenders(
+            store,
+            renewal,
+            SenderInventoryService { listOf(AccountSender("sender", "Phone")) },
+            scope
+        )
+        val revocation = SenderRevocation(
+            store,
+            inventory,
+            renewal,
+            QqAuthorization { "fresh-proof" },
+            SenderRevocationService { _, _, _ ->
+                submissions++
+                RevocationReply.CurrentSenderRevoked
+            },
+            scope
+        )
+        inventory.open()
+        val available = inventory.state.first { it.canSelect }
+        revocation.select(checkNotNull(inventory.select(available, "sender")))
+        revocation.confirm()
+        revocation.verify()
+        renewal.state.first { it == AuthorizationState.RegistrationRevoked }
+
+        assertEquals(RefreshState.RegistrationRevoked, store.read().refreshState)
+        assertEquals(null, store.read().identity)
+        assertEquals(setOf("sender"), store.read().closedSenderIds)
+        assertEquals(emptyList<String>(), store.pairingKeys)
+        assertEquals(1, submissions)
+        val restarted = login()
+        restarted.restore()
+        assertEquals(LoginState.Revoked, restarted.state.value)
+    }
+
+    @Test
+    fun selfRevocationReadFailureRetainsClosureAndRetriesWelcomePersistence() = withSession {
+        store.failReads = 1
+
+        val failure = runCatching {
+            renewal.confirmSelfRevocation(identity, renewal.sessionGeneration)
+        }.exceptionOrNull()
+
+        assertTrue(failure is IdentityStorageException)
+        assertTrue(renewal.isRegistrationClosed(identity))
+        val authorization = runCatching {
+            renewal.authorize(CredentialAccess.Management)
+        }.exceptionOrNull() as AuthorizationException
+        assertEquals(AuthorizationState.RegistrationClosed, authorization.outcome)
+        assertEquals(RefreshState.RegistrationClosed, store.read().refreshState)
+        assertEquals(null, store.read().identity)
+        assertEquals(setOf("sender"), store.read().closedSenderIds)
+        assertEquals(emptyList<String>(), store.pairingKeys)
+        val restarted = login()
+        restarted.restore()
+        assertEquals(LoginState.Welcome, restarted.state.value)
+    }
+
+    @Test
+    fun pendingSelfRevocationRetainsProofButLogoutStillWins() = withSession {
+        val paused = Pause()
+        store.readPause = paused
+        val confirmation = scope.async(start = CoroutineStart.UNDISPATCHED) {
+            renewal.confirmSelfRevocation(identity, renewal.sessionGeneration)
+        }
+        paused.entered.await()
+        assertTrue(renewal.isRegistrationClosed(identity))
+
+        val local = renewal.logout(store)
+        paused.resume.complete(Unit)
+        confirmation.await()
+        local.await()
+
+        assertLoggedOut()
+    }
+
+    @Test
+    fun selfConfirmationReadFailurePromotesTheRetainedRevokedSnapshot() = withSession {
+        runCatching { renewal.rejectAccess(identity, RefreshState.RegistrationRevoked) }
+        store.failReads = 1
+        runCatching { renewal.confirmSelfRevocation(identity, renewal.sessionGeneration) }
+
+        val failure = runCatching {
+            renewal.authorize(CredentialAccess.Management)
+        }.exceptionOrNull() as AuthorizationException
+
+        assertEquals(AuthorizationState.RegistrationClosed, failure.outcome)
+        assertEquals(RefreshState.RegistrationClosed, store.read().refreshState)
+        val restarted = login()
+        restarted.restore()
+        assertEquals(LoginState.Welcome, restarted.state.value)
+    }
+
+    @Test
+    fun selfConfirmationCannotPromoteALaterTerminalSnapshot() = withSession {
+        runCatching { renewal.rejectAccess(identity, RefreshState.RegistrationRevoked) }
+        store.snapshot = store.snapshot.copy(
+            generation = store.snapshot.generation + 1,
+            closedSenderIds = setOf("sender", "later-sender")
+        )
+        store.failReads = 1
+        runCatching { renewal.confirmSelfRevocation(identity, renewal.sessionGeneration) }
+
+        val failure = runCatching {
+            renewal.authorize(CredentialAccess.Management)
+        }.exceptionOrNull() as AuthorizationException
+
+        assertEquals(AuthorizationState.RegistrationRevoked, failure.outcome)
+        assertEquals(RefreshState.RegistrationRevoked, store.read().refreshState)
+    }
+
+    @Test
+    fun delayedSelfConfirmationLeavesADifferentSenderAuthorized() = withSession {
+        val replacement = SenderIdentity(
+            identity.accountId,
+            "different-sender",
+            identity.management,
+            identity.upload,
+            identity.refresh
+        )
+        store.snapshot = IdentitySnapshot(generation = 2, identity = replacement)
+
+        renewal.confirmSelfRevocation(identity, renewal.sessionGeneration)
+
+        assertEquals(replacement, renewal.authorize(CredentialAccess.Management).identity)
+        assertEquals(AuthorizationState.Ready, renewal.state.value)
+        assertEquals(listOf("pairing-key"), store.pairingKeys)
+    }
+
+    @Test
+    fun discoveredRevocationReadFailureRetainsProofAndRetriesRevokedPersistence() = withSession {
+        store.failReads = 1
+        val failure = runCatching {
+            renewal.rejectAccess(identity, RefreshState.RegistrationRevoked)
+        }.exceptionOrNull()
+        assertTrue(failure is IdentityStorageException)
+        assertTrue(renewal.isRegistrationClosed(identity))
+
+        val authorization = runCatching {
+            renewal.authorize(CredentialAccess.Management)
+        }.exceptionOrNull() as AuthorizationException
+
+        assertEquals(AuthorizationState.RegistrationRevoked, authorization.outcome)
+        assertEquals(RefreshState.RegistrationRevoked, store.read().refreshState)
+        assertEquals(null, store.read().identity)
+        assertEquals(emptyList<String>(), store.pairingKeys)
+    }
+
     @Test
     fun currentSessionRevocationStillClosesTheSender() = withSession {
         runCatching { renewal.rejectAccess(identity, RefreshState.RegistrationRevoked) }
@@ -164,9 +316,14 @@ class LogoutRaceTest {
         var writePause: Pause? = null
         var logoutPause: Pause? = null
         var failLogout = false
+        var failReads = 0
         var pairingKeys = listOf("pairing-key")
 
         override suspend fun read(): IdentitySnapshot {
+            if (failReads > 0) {
+                failReads--
+                throw IdentityStorageException()
+            }
             val current = snapshot
             val paused = readPause
             readPause = null

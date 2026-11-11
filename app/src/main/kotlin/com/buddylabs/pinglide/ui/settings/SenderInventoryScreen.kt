@@ -40,12 +40,15 @@ import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.identity.AccountSender
 import com.buddylabs.pinglide.domain.identity.AccountSenders
+import com.buddylabs.pinglide.domain.identity.RevocationStep
 import com.buddylabs.pinglide.domain.identity.SenderInventoryState
+import com.buddylabs.pinglide.domain.identity.SenderRevocation
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun SenderInventoryScreen(inventory: AccountSenders) {
+internal fun SenderInventoryScreen(inventory: AccountSenders, revocation: SenderRevocation) {
     val state by inventory.state.collectAsState()
+    val operation by revocation.state.collectAsState()
     val scope = rememberCoroutineScope()
     LaunchedEffect(inventory) { inventory.open() }
     Card(
@@ -61,26 +64,35 @@ internal fun SenderInventoryScreen(inventory: AccountSenders) {
         val current = senders.filter { it.senderId == state.owner?.senderId }
         val others = senders.filterNot { it.senderId == state.owner?.senderId }
         SenderGroup(stringResource(R.string.senders_this_device), current, state) { sender ->
-            scope.launch { inventory.select(state, sender.senderId) }
+            scope.launch { inventory.select(state, sender.senderId)?.let(revocation::select) }
         }
         SenderGroup(stringResource(R.string.senders_other_devices), others, state) { sender ->
-            scope.launch { inventory.select(state, sender.senderId) }
+            scope.launch { inventory.select(state, sender.senderId)?.let(revocation::select) }
         }
     }
-    state.selection?.let { selection ->
+    operation?.takeIf { it.step == RevocationStep.Confirmation }?.selection?.let { selection ->
         val cancelFocus = remember { FocusRequester() }
         AlertDialog(
-            onDismissRequest = inventory::clearSelection,
+            onDismissRequest = revocation::dismiss,
             title = { Text(stringResource(R.string.senders_revoke_title, selection.deviceName)) },
             text = {
                 Text(
-                    stringResource(R.string.settings_device_access_explanation),
+                    stringResource(R.string.senders_revoke_consequences),
                     Modifier.verticalScroll(rememberScrollState())
                 )
             },
             confirmButton = {
                 TextButton(
-                    onClick = inventory::clearSelection,
+                    onClick = revocation::confirm,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) { Text(stringResource(R.string.senders_confirm_proof)) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = revocation::dismiss,
                     modifier = Modifier.heightIn(min = 48.dp).focusRequester(cancelFocus)
                 ) { Text(stringResource(R.string.setup_cancel)) }
             }

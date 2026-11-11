@@ -201,4 +201,21 @@
     <string name="senders_revoke">Revoke</string>
     <string name="senders_revoke_title">Revoke “%1$s”?</string>
     <string name="senders_revoke_description">Revoke %1$s</string>
+    <string name="senders_revoke_consequences">This permanently closes this Sender’s old registration and removes all its Pairings. To use it again, sign in and pair again on that device. Other Senders are unaffected.</string>
+    <string name="senders_confirm_proof">Confirm and verify QQ</string>
+    <string name="senders_proof_title">Verify QQ Account</string>
+    <string name="senders_proof_heading">Verify to revoke the device</string>
+    <string name="senders_proof_description">You confirmed revoking “%1$s”. Verify the QQ Account currently signed in. Successful verification immediately submits the revocation.</string>
+    <string name="senders_verify_revoke">Verify with QQ and revoke</string>
+    <string name="senders_verifying">Verifying QQ Account…</string>
+    <string name="senders_proof_cancelled">QQ verification was cancelled. Revocation has not been submitted. Verify again or return to device access management.</string>
+    <string name="senders_proof_failed">QQ verification did not complete. The selected device was not revoked. Please try again.</string>
+    <string name="senders_proof_wrong_account">Verify with the QQ Account currently signed in. The selected device was not revoked and your Account has not changed.</string>
+    <string name="senders_submitting">Submitting revocation</string>
+    <string name="senders_submitting_description">Revoking “%1$s”…</string>
+    <string name="senders_unconfirmed">Revocation unconfirmed</string>
+    <string name="senders_unconfirmed_description">Revocation of “%1$s” could not be confirmed. Return to device access management to view the latest list.</string>
+    <string name="senders_revoked">“%1$s” revoked</string>
+    <string name="senders_revoked_description">This Sender’s old registration is closed and all its Pairings are removed. To use it again, sign in and pair again on that device.</string>
+    <string name="senders_return">Return to device access management</string>
 </resources>

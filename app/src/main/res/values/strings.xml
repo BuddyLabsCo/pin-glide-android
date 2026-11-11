@@ -203,4 +203,21 @@
     <string name="senders_revoke">撤销</string>
     <string name="senders_revoke_title">撤销“%1$s”？</string>
     <string name="senders_revoke_description">撤销%1$s</string>
+    <string name="senders_revoke_consequences">这会永久关闭该发送端设备的旧注册并移除它的所有配对。再次使用时，需要在该设备重新登录并重新配对。其他发送端设备不受影响。</string>
+    <string name="senders_confirm_proof">确认，验证 QQ</string>
+    <string name="senders_proof_title">验证 QQ 账号</string>
+    <string name="senders_proof_heading">验证后撤销设备</string>
+    <string name="senders_proof_description">你已确认撤销“%1$s”。请验证当前登录的 QQ 账号，验证通过后将立即提交撤销。</string>
+    <string name="senders_verify_revoke">使用 QQ 验证并撤销</string>
+    <string name="senders_verifying">正在验证 QQ 账号…</string>
+    <string name="senders_proof_cancelled">已取消 QQ 验证。尚未提交撤销，请重新验证或返回设备访问管理。</string>
+    <string name="senders_proof_failed">QQ 验证未完成，所选设备未被撤销。请重试。</string>
+    <string name="senders_proof_wrong_account">请使用当前登录的 QQ 账号验证。所选设备未被撤销，当前账号未改变。</string>
+    <string name="senders_submitting">正在提交撤销</string>
+    <string name="senders_submitting_description">正在撤销“%1$s”…</string>
+    <string name="senders_unconfirmed">撤销未确认</string>
+    <string name="senders_unconfirmed_description">暂时无法确认“%1$s”的撤销结果。请返回设备访问管理查看最新列表。</string>
+    <string name="senders_revoked">“%1$s”已撤销</string>
+    <string name="senders_revoked_description">该发送端设备的旧注册已关闭，所有配对已移除。再次使用时，需要在该设备重新登录并重新配对。</string>
+    <string name="senders_return">返回设备访问管理</string>
 </resources>
