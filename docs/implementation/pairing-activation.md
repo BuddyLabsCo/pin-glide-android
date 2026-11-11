@@ -64,8 +64,9 @@ Receiver credential, and the Pairing WSS connection is independent of the
 Receiver's delivery connection.
 
 Scan and consent submission share duplicate-target and capacity checks, including
-a final local check after authorization returns. An existing target returns to
-Home with its three-second highlight, retaining its alias, key and receive switch.
+a final local check and alias validation after authorization returns. An existing
+target returns to Home with its three-second highlight, retaining its alias, key
+and receive switch.
 A changed Pairing ID is rejected along with mode/deadline changes. The serialized
 provisional-key writer refuses an existing active Receiver association even if
 it appeared after entry validation; it cannot authorize in-place replacement.

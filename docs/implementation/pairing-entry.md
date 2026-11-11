@@ -28,7 +28,8 @@ already entered key confirmation are rejected by this entry flow.
 
 The existing own-Pairing synchronization runs before a valid scan is authorized
 and again before consent is submitted. Both points check duplicates and capacity;
-the returned authorization also rechecks the latest local target inventory.
+the returned authorization also rechecks the latest local target inventory and
+alias uniqueness. A new alias conflict keeps consent editable with inline feedback.
 An existing Receiver returns to Home and highlights its stable Pairing ID for
 three seconds without authorizing a replacement or editing its alias, key or
 receive switch. Local capacity prevents entry; authoritative reservation races

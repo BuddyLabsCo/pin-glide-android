@@ -82,12 +82,7 @@ internal fun PairingSession.validateConsent(
     if (mode !in setOf("new_receiver", "add_sender")) {
         throw PairingEntryException(PairingEntryProblem.Unsupported)
     }
-    if (previous?.sessionId == sessionId &&
-        (
-            previous.expiresAt != expiresAt || previous.mode != mode ||
-                previous.pairingId != pairingId
-            )
-    ) {
+    if (previous?.sessionId == sessionId && !sameReservation(previous)) {
         throw PairingEntryException(PairingEntryProblem.Closed)
     }
     if (senderConfirmed || receiverConfirmed || state != "awaiting_confirmation" ||
@@ -96,6 +91,9 @@ internal fun PairingSession.validateConsent(
         throw PairingEntryException(PairingEntryProblem.Closed)
     }
 }
+
+private fun PairingSession.sameReservation(other: PairingSession): Boolean =
+    pairingId == other.pairingId && mode == other.mode && expiresAt == other.expiresAt
 
 interface PairingSessionService {
     suspend fun authorize(token: String, sessionId: String): PairingSession

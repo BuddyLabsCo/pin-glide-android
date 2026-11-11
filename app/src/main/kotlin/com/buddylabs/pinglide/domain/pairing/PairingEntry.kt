@@ -184,6 +184,13 @@ class PairingEntry(
             if (expected != epoch || !admitTarget(snapshot, current.receiverId)) return
             validate(result, current)
             session = result
+            aliases = snapshot.items.map { it.alias }
+            val error = pairingAliasError(alias, aliases)
+            if (error != null) {
+                mutableState.value = state.value.copy(pending = false, aliasError = error)
+                observe(expected)
+                return
+            }
             ticker?.cancel()
             mutableState.value = state.value.copy(
                 page = PairingEntryPage.Progress,
