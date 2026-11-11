@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -23,6 +24,18 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.PinGlide"
         android:usesCleartextTraffic="false">
+        <receiver
+            android:name=".platform.sms.IncomingSmsReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+        <service
+            android:name=".platform.sms.SmsForwardingService"
+            android:exported="false"
+            android:foregroundServiceType="shortService" />
         <activity
             android:name=".platform.qq.QqAuthorizationActivity"
             android:exported="false"

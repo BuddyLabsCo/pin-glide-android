@@ -36,13 +36,14 @@ enum class TestMessageResult {
 
 data class TestMessageOutcome(val targetAlias: String, val result: TestMessageResult)
 
+class DeliveryItem(val target: OwnPairing, val encrypted: TestCiphertext)
+
 fun interface TestDeliveryService {
     suspend fun send(
         token: String,
         messageId: String,
-        target: OwnPairing,
-        encrypted: TestCiphertext
-    ): TestMessageResult
+        selectItems: suspend () -> List<DeliveryItem>
+    ): List<TestMessageResult>?
 }
 
 class PairingTestMessage(
@@ -129,7 +130,10 @@ class PairingTestMessage(
         val messageId = UUID.randomUUID().toString()
         if (!current(initial, target, session)) return null
         val result = try {
-            service.send(token, messageId, target, encrypted)
+            val item = DeliveryItem(target, encrypted)
+            service.send(token, messageId) {
+                if (current(initial, target, session)) listOf(item) else emptyList()
+            }?.singleOrNull()
         } catch (_: AccessExpiredException) {
             TestMessageResult.LoginRequired
         } catch (failure: PairingServiceException) {
@@ -155,6 +159,7 @@ class PairingTestMessage(
             current.authority.identity?.accountId == initial.authority.identity?.accountId &&
             current.authority.identity?.senderId == initial.authority.identity?.senderId &&
             current.authority.refreshState == RefreshState.Active &&
+            current.authority.identity?.let { !renewal.isRegistrationClosed(it) } == true &&
             current.items.any { it.sameTarget(target) }
     }
 

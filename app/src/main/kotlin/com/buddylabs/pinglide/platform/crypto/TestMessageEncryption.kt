@@ -12,12 +12,18 @@ import kotlinx.serialization.json.Json
 @Serializable
 private class VerificationMessage(val type: String, val smsText: String, val otp: String)
 
-fun encryptTestMessage(key: ByteArray): TestCiphertext {
+fun encryptTestMessage(key: ByteArray): TestCiphertext = encryptMessage(
+    key,
+    "【鹊信】这是一条测试短信，验证码 482913。请勿用于真实登录。",
+    "482913"
+)
+
+fun encryptMessage(key: ByteArray, smsText: String, otp: String): TestCiphertext {
     val plaintext = Json.encodeToString(
         VerificationMessage(
             "verification_message",
-            "【鹊信】这是一条测试短信，验证码 482913。请勿用于真实登录。",
-            "482913"
+            smsText,
+            otp
         )
     ).toByteArray(Charsets.UTF_8)
     val nonce = randomBytes(12)
