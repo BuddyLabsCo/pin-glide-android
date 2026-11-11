@@ -2,17 +2,23 @@ package com.buddylabs.pinglide.app
 
 import android.app.Application
 import com.buddylabs.pinglide.BuildConfig
+import com.buddylabs.pinglide.data.bailian.BailianChat
+import com.buddylabs.pinglide.data.bailian.BailianCredentials
+import com.buddylabs.pinglide.data.bailian.BailianOtpInference
 import com.buddylabs.pinglide.data.service.AccountSenderService
 import com.buddylabs.pinglide.data.service.CredentialRenewalService
 import com.buddylabs.pinglide.data.service.CurrentSenderAuthorizationService
 import com.buddylabs.pinglide.data.service.OwnPairingService
 import com.buddylabs.pinglide.data.service.PairingSessionService
+import com.buddylabs.pinglide.data.service.ProviderCredentialService
 import com.buddylabs.pinglide.data.service.QqLoginService
 import com.buddylabs.pinglide.data.service.ServiceAccount
 import com.buddylabs.pinglide.data.service.ServiceSenderRevocation
 import com.buddylabs.pinglide.data.service.TestDeliveryService
 import com.buddylabs.pinglide.data.storage.ProtectedIdentityStore
+import com.buddylabs.pinglide.data.storage.ProviderCredentialCache
 import com.buddylabs.pinglide.data.storage.SetupPreferences
+import com.buddylabs.pinglide.domain.forwarding.OtpExtraction
 import com.buddylabs.pinglide.domain.forwarding.PairingTestMessage
 import com.buddylabs.pinglide.domain.forwarding.SmsForwarding
 import com.buddylabs.pinglide.domain.identity.AccountSenders
@@ -43,6 +49,7 @@ import okhttp3.OkHttpClient
 class PinGlideApplication : Application() {
     val qqAuthorization by lazy { QqConnectAuthorization(this) }
     private val identityStore by lazy { ProtectedIdentityStore(this) }
+    private val providerCache = ProviderCredentialCache()
     private val processScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val identityClient by lazy {
         OkHttpClient.Builder()
@@ -64,7 +71,8 @@ class PinGlideApplication : Application() {
                 BuildConfig.SERVICE_URL,
                 identityClient.newBuilder().callTimeout(10, TimeUnit.SECONDS).build()
             ),
-            processScope
+            processScope,
+            onAuthorityReset = providerCache::clear
         )
     }
 
@@ -81,6 +89,20 @@ class PinGlideApplication : Application() {
         TestDeliveryService(BuildConfig.SERVICE_URL, identityClient)
     }
 
+    private val otpInference by lazy {
+        val client = identityClient.newBuilder().callTimeout(20, TimeUnit.SECONDS).build()
+        BailianOtpInference(
+            BailianCredentials(
+                identityStore,
+                credentialRenewal,
+                ProviderCredentialService(BuildConfig.SERVICE_URL, client),
+                providerCache,
+                processScope
+            ),
+            BailianChat(client)
+        )
+    }
+
     val smsForwarding by lazy {
         SmsForwarding(
             identityStore,
@@ -89,7 +111,8 @@ class PinGlideApplication : Application() {
             ::encryptMessage,
             permitted = {
                 BuildConfig.SERVICE_URL.isNotBlank() && SetupPermissions(this).smsGranted
-            }
+            },
+            extraction = OtpExtraction(otpInference::infer)
         )
     }
 

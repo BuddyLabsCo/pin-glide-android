@@ -19,7 +19,8 @@ class SmsForwarding(
     private val renewal: CredentialRenewal,
     private val service: TestDeliveryService,
     private val encrypt: (ByteArray, String, String) -> TestCiphertext,
-    private val permitted: () -> Boolean
+    private val permitted: () -> Boolean,
+    private val extraction: OtpExtraction
 ) {
     suspend fun forward(smsText: String) {
         val session = renewal.sessionGeneration
@@ -28,12 +29,14 @@ class SmsForwarding(
             val origin = store.readPairings()
             val targets = origin.items.filter { it.enabled && it.keyUsable }
             if (targets.isEmpty()) return
+            val otp = extraction.extract(smsText)
+            if (!permitted() || !renewal.isSessionCurrent(session)) return
             renewal.withAccess(CredentialAccess.Upload) { identity ->
                 if (identity.accountId == origin.authority.identity?.accountId &&
                     identity.senderId == origin.authority.identity.senderId &&
                     renewal.isSessionCurrent(session)
                 ) {
-                    deliver(smsText, targets, identity, session)
+                    deliver(smsText, otp, targets, identity, session)
                 }
             }
         } catch (_: AuthorizationException) {
@@ -47,6 +50,7 @@ class SmsForwarding(
 
     private suspend fun deliver(
         smsText: String,
+        otp: String,
         targets: List<OwnPairing>,
         identity: SenderIdentity,
         session: Long
@@ -61,7 +65,7 @@ class SmsForwarding(
             if (!store.reserveEncryption(current, usable.pairingId)) return@mapNotNull null
             val key = checkNotNull(usable.key).copyOf()
             try {
-                DeliveryItem(target, encrypt(key, smsText, ""))
+                DeliveryItem(target, encrypt(key, smsText, otp))
             } catch (_: IdentityStorageException) {
                 null
             } finally {

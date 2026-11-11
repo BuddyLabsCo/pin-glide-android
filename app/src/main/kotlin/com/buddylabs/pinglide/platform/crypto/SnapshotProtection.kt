@@ -18,7 +18,7 @@ class ProtectedSnapshot(
     val ciphertext: ByteArray
 )
 
-class SnapshotProtection {
+class SnapshotProtection(private val stableAlias: String? = null) {
     private val keyStore: KeyStore
         get() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
@@ -50,7 +50,9 @@ class SnapshotProtection {
     private fun aad(alias: String) = "PinGlide:snapshot:1:$alias".toByteArray(Charsets.UTF_8)
 
     private fun createKey(): String {
-        val alias = "pinglide.snapshot.${UUID.randomUUID()}"
+        val alias = stableAlias ?: "pinglide.snapshot.${UUID.randomUUID()}"
+        require(alias.startsWith("pinglide.snapshot."))
+        if (keyStore.containsAlias(alias)) return alias
         KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
             init(
                 KeyGenParameterSpec.Builder(
