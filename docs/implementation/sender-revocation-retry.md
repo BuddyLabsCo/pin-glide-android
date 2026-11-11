@@ -42,6 +42,10 @@ and is not adopted. A disposable service probe accepting the same code only
 verifies Android request behavior; it does not establish service acceptance or
 recoverable authorization.
 
+The operator explicitly reaffirmed this behavior after the follow-up review.
+The review's consumed-proof concern remains an accepted limitation; this
+clarification changes no runtime behavior and does not resolve that concern.
+
 ## Operation lifetime
 
 Proof and selected/unconfirmed/Retry state live only in the process-owned domain
