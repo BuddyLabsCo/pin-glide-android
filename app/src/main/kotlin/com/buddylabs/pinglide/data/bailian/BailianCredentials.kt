@@ -28,8 +28,6 @@ class BailianCredentials(
     private var flight: Deferred<ProviderLease>? = null
     private var flightSession = -1L
 
-    val sessionGeneration: Long get() = renewal.sessionGeneration
-
     internal suspend fun acquire(session: Long): ProviderLease {
         check(renewal.isSessionCurrent(session))
         val authority = renewal.authorize(CredentialAccess.Upload)

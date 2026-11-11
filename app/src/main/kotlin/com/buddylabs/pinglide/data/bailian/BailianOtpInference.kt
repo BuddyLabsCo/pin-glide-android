@@ -7,8 +7,8 @@ class BailianOtpInference(
     private val credentials: BailianCredentials,
     private val chat: BailianChat
 ) {
-    suspend fun infer(smsText: String): String? = try {
-        extract(smsText)
+    suspend fun infer(smsText: String, session: Long): String? = try {
+        extract(smsText, session)
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (_: Exception) {
@@ -16,13 +16,12 @@ class BailianOtpInference(
         null
     }
 
-    private suspend fun extract(smsText: String): String? {
-        val session = credentials.sessionGeneration
+    private suspend fun extract(smsText: String, session: Long): String? {
         repeat(2) { attempt ->
             val lease = credentials.acquire(session)
             check(credentials.isCurrent(lease))
             try {
-                val otp = chat.complete(lease.value, smsText)
+                val otp = chat.complete(lease.value, smsText) { credentials.isCurrent(lease) }
                 return otp.takeIf { credentials.isCurrent(lease) }
             } catch (expired: ProviderKeyExpiredException) {
                 credentials.invalidate(lease)

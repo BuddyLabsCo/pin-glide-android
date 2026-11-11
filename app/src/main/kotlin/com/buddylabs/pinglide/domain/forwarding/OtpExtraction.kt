@@ -2,11 +2,11 @@ package com.buddylabs.pinglide.domain.forwarding
 
 import kotlinx.coroutines.CancellationException
 
-class OtpExtraction(private val infer: suspend (String) -> String?) {
-    suspend fun extract(smsText: String): String {
+class OtpExtraction(private val infer: suspend (String, Long) -> String?) {
+    suspend fun extract(smsText: String, session: Long): String {
         if (!candidate.containsMatchIn(smsText)) return ""
         return try {
-            infer(smsText)?.trim()?.takeIf { otp ->
+            infer(smsText, session)?.trim()?.takeIf { otp ->
                 result.matches(otp) && smsText.contains(otp)
             }.orEmpty()
         } catch (cancelled: CancellationException) {

@@ -27,9 +27,10 @@ class SmsForwarding(
         try {
             if (!permitted() || !renewal.isSessionCurrent(session)) return
             val origin = store.readPairings()
+            if (!renewal.isSessionCurrent(session)) return
             val targets = origin.items.filter { it.enabled && it.keyUsable }
             if (targets.isEmpty()) return
-            val otp = extraction.extract(smsText)
+            val otp = extraction.extract(smsText, session)
             if (!permitted() || !renewal.isSessionCurrent(session)) return
             renewal.withAccess(CredentialAccess.Upload) { identity ->
                 if (identity.accountId == origin.authority.identity?.accountId &&

@@ -27,34 +27,39 @@ import okhttp3.Response
 
 class BailianChat(client: Call.Factory) {
     private val client = identityCalls(client)
-    internal suspend fun complete(value: ModelCredential, smsText: String): String? =
-        withContext(Dispatchers.IO) {
-            val request = Request.Builder()
-                .url(value.configuration.endpoint())
-                .header("Authorization", "Bearer ${value.credential.apiKey}")
-                .post(payload(value, smsText).toRequestBody("application/json".toMediaType()))
-                .build()
-            await(client.newCall(request)).use { response ->
-                if (response.code == 401) throw ProviderKeyExpiredException()
-                val source = checkNotNull(response.body).source()
-                check(!source.request(65_537))
-                val document = Json.parseToJsonElement(source.readUtf8()).jsonObject
-                if (response.code in setOf(400, 403) &&
-                    document["error"]?.jsonObject?.get("code")?.jsonPrimitive?.content in
-                    setOf("ApiKeyExpired", "ExpiredApiKey", "api_key_expired", "TokenExpired")
-                ) {
-                    throw ProviderKeyExpiredException()
-                }
-                check(response.isSuccessful)
-                val choice = document.getValue("choices").jsonArray.single().jsonObject
-                check(choice["finish_reason"]?.jsonPrimitive?.content == "stop")
-                val message = choice.getValue("message").jsonObject
-                check(message["refusal"] == null || message["refusal"] == JsonNull)
-                val content = message.getValue("content") as JsonPrimitive
-                check(content.isString)
-                Json.decodeFromString<OtpReply>(content.content).otp
+    internal suspend fun complete(
+        value: ModelCredential,
+        smsText: String,
+        isCurrent: suspend () -> Boolean
+    ): String? = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(value.configuration.endpoint())
+            .header("Authorization", "Bearer ${value.credential.apiKey}")
+            .post(payload(value, smsText).toRequestBody("application/json".toMediaType()))
+            .build()
+        val call = client.newCall(request)
+        check(isCurrent())
+        await(call).use { response ->
+            if (response.code == 401) throw ProviderKeyExpiredException()
+            val source = checkNotNull(response.body).source()
+            check(!source.request(65_537))
+            val document = Json.parseToJsonElement(source.readUtf8()).jsonObject
+            if (response.code in setOf(400, 403) &&
+                document["error"]?.jsonObject?.get("code")?.jsonPrimitive?.content in
+                setOf("ApiKeyExpired", "ExpiredApiKey", "api_key_expired", "TokenExpired")
+            ) {
+                throw ProviderKeyExpiredException()
             }
+            check(response.isSuccessful)
+            val choice = document.getValue("choices").jsonArray.single().jsonObject
+            check(choice["finish_reason"]?.jsonPrimitive?.content == "stop")
+            val message = choice.getValue("message").jsonObject
+            check(message["refusal"] == null || message["refusal"] == JsonNull)
+            val content = message.getValue("content") as JsonPrimitive
+            check(content.isString)
+            Json.decodeFromString<OtpReply>(content.content).otp
         }
+    }
 
     private fun payload(value: ModelCredential, smsText: String): String {
         val inference = Json.encodeToJsonElement(value.configuration.inference).jsonObject

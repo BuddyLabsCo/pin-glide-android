@@ -74,7 +74,11 @@ do not retain a plaintext credential as a second cache. Only the key/configurati
 never SMS/model content, belongs to the shared acquisition operation.
 
 Cache revisions, credential generations and session generations guard asynchronous
-results. Logout, accepted login/session replacement, revocation, bundle replacement
+results. Forwarding retains its initiating session across the Pairing read,
+candidate policy and inference; credential acquisition never adopts a later login.
+It rechecks that session after reading Pairings, and provider dispatch revalidates
+the acquired lease on the IO context immediately before enqueueing the request.
+Logout, accepted login/session replacement, revocation, bundle replacement
 and unavailable authority clear the encrypted cache. Pending issuance cannot refill
 a cleared revision, and pending inference cannot publish an obsolete result or
 retry under another login. Already-submitted provider requests cannot be recalled.
@@ -91,11 +95,19 @@ The focused `GeneratedWireTest` and `LogoutRaceTest` suites passed. Final
 `qualityCheck`, Debug/Release Kotlin compilation, Debug assembly and the full
 `:app:test` suite passed (28 tests, none failed or skipped). Debug and Release
 Android Lint each reported zero errors and 30 nonfatal warnings. The API 37
-emulator passed all 130 disposable assertions, including real Keystore cache
+emulator passed all 140 disposable assertions, including real Keystore cache
 roundtrips, 20 concurrent SMS operations sharing issuance across U renewal,
 actual-expiry boundaries, bounded provider-key recovery, logout/replacement/
 revocation/renewal races and decryption of full-SMS fallback payloads. The final
 ordinary Debug APK was checked to exclude the disposable verification classes.
+
+The review-fix regression first failed on the original implementation: a paused
+Pairing read resumed after logout/login and issued a key under the later login.
+After the fix, that old nonempty snapshot causes no credential issuance, provider
+submission or delivery. Direct extraction with the old session is also rejected;
+a fresh SMS under the new login still extracts and delivers. A second check
+replaces the session after the IO switch and Call creation, before enqueue, and
+confirms that the obsolete lease cannot submit to the provider.
 
 Live Bailian/QQ credentials, Android 10-16 device execution and real target-device
 arrival are outside these local checks. The emulator checks intercept external
