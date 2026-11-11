@@ -59,9 +59,7 @@ class ProtectedIdentityStore(context: Context) :
         writer.withLock {
             storageOperation {
                 val (document, authority, alias) = load()
-                if (authority.refreshState ==
-                    RefreshState.LoggedOut
-                ) {
+                if (authority.refreshState == RefreshState.LoggedOut) {
                     return@storageOperation PairingSnapshot(authority)
                 }
                 val current = pairings(document, authority)
@@ -111,9 +109,9 @@ class ProtectedIdentityStore(context: Context) :
         }
 
     override suspend fun reserveEncryption(expected: PairingSnapshot, pairingId: String): Boolean =
-        updatePairings(expected, expected.listed) { current ->
+        updatePairings(expected, expected.listed, advanceRevision = false) { current ->
             val target = current.items.single { it.pairingId == pairingId }
-            require(target.keyUsable && target.encryptions < 4294967296L)
+            require(target.keyUsable && target.encryptions in 2 until 4294967296L)
             current.items.map {
                 if (it.pairingId == pairingId) it.copy(encryptions = it.encryptions + 1) else it
             }
@@ -122,6 +120,7 @@ class ProtectedIdentityStore(context: Context) :
     private suspend fun updatePairings(
         expected: PairingSnapshot,
         listed: Boolean,
+        advanceRevision: Boolean = true,
         transform: (PairingSnapshot) -> List<OwnPairing>
     ): Boolean = withContext(Dispatchers.IO) {
         writer.withLock {
@@ -138,7 +137,7 @@ class ProtectedIdentityStore(context: Context) :
                     return@storageOperation false
                 }
                 persist(
-                    pairingDocument(document, current, transform(current), listed),
+                    pairingDocument(document, current, transform(current), listed, advanceRevision),
                     alias,
                     LoginAttempt()
                 )
@@ -182,7 +181,8 @@ class ProtectedIdentityStore(context: Context) :
         document: JsonObject,
         current: PairingSnapshot,
         items: List<OwnPairing>,
-        listed: Boolean
+        listed: Boolean,
+        advanceRevision: Boolean = true
     ): JsonObject {
         val originals = document["pairings"]?.jsonArray?.associateBy {
             it.jsonObject.getValue("pairingId").jsonPrimitive.content
@@ -191,7 +191,8 @@ class ProtectedIdentityStore(context: Context) :
             document + mapOf(
                 "pairingsAccountId" to JsonPrimitive(current.authority.identity?.accountId),
                 "pairingsSenderId" to JsonPrimitive(current.authority.identity?.senderId),
-                "pairingsRevision" to JsonPrimitive(Math.addExact(current.revision, 1)),
+                "pairingsRevision" to
+                    JsonPrimitive(Math.addExact(current.revision, if (advanceRevision) 1 else 0)),
                 "pairingsListed" to JsonPrimitive(listed),
                 "pairings" to JsonArray(
                     (

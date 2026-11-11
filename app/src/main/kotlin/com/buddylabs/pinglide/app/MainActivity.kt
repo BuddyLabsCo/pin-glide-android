@@ -63,7 +63,11 @@ class MainActivity : ComponentActivity() {
                 override fun <Model : ViewModel> create(modelClass: Class<Model>): Model =
                     modelClass.cast(
                         (application as PinGlideApplication).let {
-                            HomeViewModel(it.ownPairings, it.senderRestoration())
+                            HomeViewModel(
+                                it.ownPairings,
+                                it.senderRestoration(),
+                                it.pairingTestMessage::send
+                            )
                         }
                     )!!
             }

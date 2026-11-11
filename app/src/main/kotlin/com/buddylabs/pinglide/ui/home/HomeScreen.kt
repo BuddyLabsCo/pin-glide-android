@@ -72,8 +72,18 @@ fun HomeScreen(
     val selectedAction = action.takeIf { it.pairingId == selectedId && it.owner == state.owner }
         ?: TargetAction()
     val dismiss = {
+        home.showTestTarget(null)
         selectedId = null
         restoreFocus = true
+    }
+    LaunchedEffect(
+        selectedId,
+        state.owner,
+        state.generation,
+        selected?.alias,
+        selected?.keyUsable
+    ) {
+        home.showTestTarget(selectedId)
     }
     LaunchedEffect(highlightedPairingId) {
         if (highlightedPairingId != null) {
@@ -128,7 +138,10 @@ fun HomeScreen(
         },
         onAdd,
         home::restoreLogin,
-        onSettings,
+        {
+            dismiss()
+            onSettings()
+        },
         lastSelectedId,
         rowFocus,
         headingFocus,
@@ -144,6 +157,7 @@ fun HomeScreen(
                 it.pairingId != selected.pairingId
             }.map { it.alias },
             action = selectedAction,
+            testMessage = home.testMessage,
             onSelect = { home.select(state, selected.pairingId, it) },
             onRename = { home.rename(state, selected.pairingId, it) },
             onRemove = { home.remove(state, selected.pairingId) },

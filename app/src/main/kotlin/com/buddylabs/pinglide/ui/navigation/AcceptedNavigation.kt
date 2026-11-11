@@ -149,7 +149,7 @@ private fun PairingEntryNotices(
         ) {
             pairing.abandon()
         } else {
-            pairing.foreground()
+            pairing.foreground(state)
         }
     }
     LaunchedEffect(entry.highlightUntil) {

@@ -13,6 +13,11 @@
     <string name="pairing_test_sending">正在发送…</string>
     <string name="pairing_test_received">测试消息已发送</string>
     <string name="pairing_test_offline">目标设备离线，测试消息未送达</string>
+    <string name="pairing_test_rejected">测试消息未发送：投递被拒绝</string>
+    <string name="pairing_test_send_failed">投递未确认：发送连接中断</string>
+    <string name="pairing_test_ack_timeout">投递未确认：等待设备确认超时</string>
+    <string name="pairing_test_interrupted">投递未确认：服务处理被中断</string>
+    <string name="pairing_test_request_error">测试消息未发送：请求参数无效</string>
     <string name="pairing_test_uncertain">无法确认测试消息是否送达</string>
     <string name="pairing_test_no_key">配对或本机密钥不可用</string>
     <string name="pairing_test_login">登录已失效，请返回首页重新登录</string>

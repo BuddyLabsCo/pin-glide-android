@@ -2,11 +2,13 @@ package com.buddylabs.pinglide.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.identity.RestorationState
 import com.buddylabs.pinglide.domain.identity.SenderRestoration
 import com.buddylabs.pinglide.domain.pairing.HomeState
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
 import com.buddylabs.pinglide.domain.pairing.PairingChange
+import com.buddylabs.pinglide.ui.components.TestMessageAction
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,8 +18,11 @@ import kotlinx.coroutines.withContext
 
 enum class SmsRecovery { Idle, Pending, Denied, Granted, SettingsUnavailable }
 
-class HomeViewModel(private val pairings: OwnPairings, private val restoration: SenderRestoration) :
-    ViewModel() {
+class HomeViewModel(
+    private val pairings: OwnPairings,
+    private val restoration: SenderRestoration,
+    sendTest: suspend (String) -> TestMessageOutcome?
+) : ViewModel() {
     val state = pairings.state
     val loginRestoration = restoration.state
     private var loginOperation: Job? = null
@@ -26,10 +31,24 @@ class HomeViewModel(private val pairings: OwnPairings, private val restoration: 
     private val mutableSmsRecovery = MutableStateFlow(SmsRecovery.Idle)
     val smsRecovery = mutableSmsRecovery.asStateFlow()
     private var recoveryGeneration = 0L
+    val testMessage = TestMessageAction(viewModelScope, sendTest)
+    private var testOrigin: HomeState? = null
 
     init {
         viewModelScope.launch {
             state.collect { current ->
+                val origin = testOrigin
+                val target = testMessage.pairingId
+                val original = origin?.targets?.find { it.pairingId == target }
+                val selected = current.targets.find { it.pairingId == target }
+                if (origin != null && (
+                        origin.owner != current.owner ||
+                            origin.generation != current.generation ||
+                            selected?.keyUsable != true || selected.alias != original?.alias
+                        )
+                ) {
+                    showTestTarget(null)
+                }
                 val previous = action.value
                 if (previous.owner != current.owner) {
                     mutableAction.value = TargetAction()
@@ -45,6 +64,7 @@ class HomeViewModel(private val pairings: OwnPairings, private val restoration: 
     }
 
     fun restoreLogin() {
+        showTestTarget(null)
         if (loginOperation?.isActive == true) return
         loginOperation = viewModelScope.launch {
             try {
@@ -65,6 +85,7 @@ class HomeViewModel(private val pairings: OwnPairings, private val restoration: 
     }
 
     fun leaveLogin() {
+        showTestTarget(null)
         restoration.leave()
         restoration.dismissNotice()
         loginOperation?.cancel()
@@ -80,6 +101,7 @@ class HomeViewModel(private val pairings: OwnPairings, private val restoration: 
     }
 
     fun beginPairing() {
+        showTestTarget(null)
         recoveryGeneration++
         mutableSmsRecovery.value = SmsRecovery.Idle
     }
@@ -123,6 +145,15 @@ class HomeViewModel(private val pairings: OwnPairings, private val restoration: 
 
     fun clearAction() {
         if (!action.value.pending) mutableAction.value = TargetAction()
+    }
+
+    fun showTestTarget(pairingId: String?) {
+        val current = state.value
+        if (testOrigin?.owner != current.owner || testOrigin?.generation != current.generation) {
+            testMessage.leave()
+        }
+        testOrigin = current.takeIf { pairingId != null }
+        testMessage.enter(pairingId)
     }
 
     fun rename(expected: HomeState, pairingId: String, alias: String) {
