@@ -1,8 +1,7 @@
 package com.buddylabs.pinglide.data.service
 
-import com.buddylabs.pinglide.domain.forwarding.TestCiphertext
+import com.buddylabs.pinglide.domain.forwarding.DeliveryItem
 import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
-import com.buddylabs.pinglide.domain.pairing.OwnPairing
 import com.buddylabs.pinglide.domain.pairing.PairingFailure
 import com.buddylabs.pinglide.domain.pairing.PairingServiceException
 import com.buddylabs.pinglide.generated.http.api.DeliveryApi
@@ -33,19 +32,20 @@ class TestDeliveryService(private val baseUrl: String, client: OkHttpClient) :
     override suspend fun send(
         token: String,
         messageId: String,
-        target: OwnPairing,
-        encrypted: TestCiphertext
-    ): TestMessageResult {
+        selectItems: suspend () -> List<DeliveryItem>
+    ): List<TestMessageResult>? {
+        val items = selectItems()
+        if (items.isEmpty()) return emptyList()
         val request = UploadRequest(
-            listOf(
+            items.map { item ->
                 UploadItem(
-                    encrypted.ciphertext,
+                    item.encrypted.ciphertext,
                     1,
-                    encrypted.nonce,
-                    target.pairingId,
-                    target.receiverId
+                    item.encrypted.nonce,
+                    item.target.pairingId,
+                    item.target.receiverId
                 )
-            ),
+            },
             messageId
         )
         val received = AtomicBoolean(false)
@@ -57,14 +57,15 @@ class TestDeliveryService(private val baseUrl: String, client: OkHttpClient) :
                 { token }
         }
         repeat(2) { attempt ->
+            if (attempt > 0 && selectItems() != items) return null
             received.set(false)
             val response = try {
                 api.postMessagesWithHttpInfo(request)
             } catch (_: IOException) {
                 if (attempt == 0 && !received.get()) return@repeat
-                return TestMessageResult.Uncertain
+                return List(items.size) { TestMessageResult.Uncertain }
             } catch (_: SerializationException) {
-                return TestMessageResult.Uncertain
+                return List(items.size) { TestMessageResult.Uncertain }
             }
             val code = responseCode(response)
             if (attempt == 0 && response.statusCode == 503 &&
@@ -72,15 +73,16 @@ class TestDeliveryService(private val baseUrl: String, client: OkHttpClient) :
             ) {
                 return@repeat
             }
-            if (response.statusCode in setOf(400, 422) &&
-                code in setOf("invalid_request", "validation_failed")
-            ) {
-                return TestMessageResult.RequestError
+            if (requestError(response.statusCode, code)) {
+                return List(items.size) { TestMessageResult.RequestError }
             }
             return result(response, request)
         }
-        return TestMessageResult.Uncertain
+        return List(items.size) { TestMessageResult.Uncertain }
     }
+
+    private fun requestError(status: Int, code: String?): Boolean =
+        status in setOf(400, 422) && code in setOf("invalid_request", "validation_failed")
 
     private fun responseCode(response: ApiResponse<UploadResponse?>): String? {
         val body = when (response) {
@@ -109,16 +111,27 @@ class TestDeliveryService(private val baseUrl: String, client: OkHttpClient) :
     private fun result(
         response: ApiResponse<UploadResponse?>,
         request: UploadRequest
-    ): TestMessageResult {
-        if (response !is Success || response.statusCode != 207) return TestMessageResult.Uncertain
-        val result = response.data ?: return TestMessageResult.Uncertain
-        val item = result.results.singleOrNull() ?: return TestMessageResult.Uncertain
-        if (result.messageId != request.messageId || item.index != 0L ||
-            item.receiverId != request.items.single().receiverId
+    ): List<TestMessageResult> {
+        val uncertain = List(request.items.size) { TestMessageResult.Uncertain }
+        if (response !is Success || response.statusCode != 207) return uncertain
+        val result = response.data ?: return uncertain
+        if (result.messageId != request.messageId || result.results.size != request.items.size ||
+            result.results.map { it.index }.toSet() !=
+            request.items.indices.map { it.toLong() }.toSet()
         ) {
-            return TestMessageResult.Uncertain
+            return uncertain
         }
-        return status(item)
+        val indexed = result.results.associateBy { it.index }
+        return request.items.mapIndexed { index, item ->
+            val outcome = indexed.getValue(index.toLong())
+            if (outcome.receiverId ==
+                item.receiverId
+            ) {
+                status(outcome)
+            } else {
+                TestMessageResult.Uncertain
+            }
+        }
     }
 
     private fun status(item: UploadResult): TestMessageResult = when (item.status) {

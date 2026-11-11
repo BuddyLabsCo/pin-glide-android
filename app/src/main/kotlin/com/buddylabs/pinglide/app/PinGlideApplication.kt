@@ -12,6 +12,7 @@ import com.buddylabs.pinglide.data.service.TestDeliveryService
 import com.buddylabs.pinglide.data.storage.ProtectedIdentityStore
 import com.buddylabs.pinglide.data.storage.SetupPreferences
 import com.buddylabs.pinglide.domain.forwarding.PairingTestMessage
+import com.buddylabs.pinglide.domain.forwarding.SmsForwarding
 import com.buddylabs.pinglide.domain.identity.AccountSession
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.CurrentSenderAuthorization
@@ -24,6 +25,7 @@ import com.buddylabs.pinglide.domain.pairing.PairingEntry
 import com.buddylabs.pinglide.platform.DeviceInfo
 import com.buddylabs.pinglide.platform.crypto.PairingCryptography
 import com.buddylabs.pinglide.platform.crypto.PairingQrReader
+import com.buddylabs.pinglide.platform.crypto.encryptMessage
 import com.buddylabs.pinglide.platform.crypto.encryptTestMessage
 import com.buddylabs.pinglide.platform.permissions.SetupPermissions
 import com.buddylabs.pinglide.platform.qq.QqConnectAuthorization
@@ -71,12 +73,28 @@ class PinGlideApplication : Application() {
         )
     }
 
+    private val deliveryService by lazy {
+        TestDeliveryService(BuildConfig.SERVICE_URL, identityClient)
+    }
+
+    val smsForwarding by lazy {
+        SmsForwarding(
+            identityStore,
+            credentialRenewal,
+            deliveryService,
+            ::encryptMessage,
+            permitted = {
+                BuildConfig.SERVICE_URL.isNotBlank() && SetupPermissions(this).smsGranted
+            }
+        )
+    }
+
     val pairingTestMessage by lazy {
         PairingTestMessage(
             identityStore,
             credentialRenewal,
             ::encryptTestMessage,
-            TestDeliveryService(BuildConfig.SERVICE_URL, identityClient)
+            deliveryService
         )
     }
 
