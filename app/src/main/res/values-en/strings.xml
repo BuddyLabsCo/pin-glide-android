@@ -192,4 +192,13 @@
     <string name="account_logout_storage_error">Forwarding has stopped, but the logout state could not be saved. Retry before closing the app.</string>
     <string name="account_restore_error">Could not restore the original Sender. Retry, or verify your QQ account again to register a new Sender. Existing Pairing keys are kept until the new login succeeds.</string>
     <string name="account_new_login">Register a Sender with fresh QQ authorization</string>
+    <string name="senders_this_device">This device</string>
+    <string name="senders_other_devices">Other Sender devices</string>
+    <string name="senders_no_others">No other Sender devices</string>
+    <string name="senders_loading">Getting device list…</string>
+    <string name="senders_error">Could not get the device list. Check your connection and try again.</string>
+    <string name="senders_retry">Retry</string>
+    <string name="senders_revoke">Revoke</string>
+    <string name="senders_revoke_title">Revoke “%1$s”?</string>
+    <string name="senders_revoke_description">Revoke %1$s</string>
 </resources>

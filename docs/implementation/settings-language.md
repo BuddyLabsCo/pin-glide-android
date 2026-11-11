@@ -12,9 +12,10 @@ focus owner, so configuration changes restore the actual focused control,
 including Back. Returning from a child still restores its originating row.
 Privacy uses the same read-only PrivacyScreen as Welcome.
 
-The Account and device-access destinations establish navigation only. Profile,
-logout, Sender inventory and revocation remain owned by issues #30-#35; these
-destinations do not fabricate account data, Sender rows or destructive actions.
+Account now reads its profile and provides ordinary logout. Device access reads
+the current Account's unrevoked Sender inventory and captures permitted targets;
+see sender-inventory.md. QQ owner proof and permanent revocation remain owned by
+issues #34-#35.
 
 ## Language and system entries
 

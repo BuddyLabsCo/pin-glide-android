@@ -2,6 +2,7 @@ package com.buddylabs.pinglide.app
 
 import android.app.Application
 import com.buddylabs.pinglide.BuildConfig
+import com.buddylabs.pinglide.data.service.AccountSenderService
 import com.buddylabs.pinglide.data.service.CredentialRenewalService
 import com.buddylabs.pinglide.data.service.CurrentSenderAuthorizationService
 import com.buddylabs.pinglide.data.service.OwnPairingService
@@ -12,6 +13,7 @@ import com.buddylabs.pinglide.data.service.TestDeliveryService
 import com.buddylabs.pinglide.data.storage.ProtectedIdentityStore
 import com.buddylabs.pinglide.data.storage.SetupPreferences
 import com.buddylabs.pinglide.domain.forwarding.PairingTestMessage
+import com.buddylabs.pinglide.domain.identity.AccountSenders
 import com.buddylabs.pinglide.domain.identity.AccountSession
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.CurrentSenderAuthorization
@@ -85,6 +87,15 @@ class PinGlideApplication : Application() {
             identityStore,
             credentialRenewal,
             ServiceAccount(BuildConfig.SERVICE_URL, identityClient),
+            processScope
+        )
+    }
+
+    val accountSenders by lazy {
+        AccountSenders(
+            identityStore,
+            credentialRenewal,
+            AccountSenderService(BuildConfig.SERVICE_URL, identityClient),
             processScope
         )
     }
