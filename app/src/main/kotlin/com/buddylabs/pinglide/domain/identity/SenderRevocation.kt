@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
-enum class RevocationReply { Revoked, WrongAccount, ProofFailed, Unconfirmed }
+enum class RevocationReply { Revoked, CurrentSenderRevoked, WrongAccount, ProofFailed, Unconfirmed }
 
 fun interface SenderRevocationService {
     suspend fun revoke(identity: SenderIdentity, senderId: String, code: String): RevocationReply
@@ -117,8 +117,23 @@ class SenderRevocation(
         if (!isCurrent(selection)) return
         when (reply) {
             RevocationReply.Revoked -> complete(selection, identity)
+
+            RevocationReply.CurrentSenderRevoked -> try {
+                renewal.rejectAccess(
+                    identity,
+                    RefreshState.RegistrationRevoked,
+                    selection.owner.session
+                )
+            } finally {
+                synchronized(this) {
+                    if (isCurrent(selection)) clear()
+                }
+            }
+
             RevocationReply.WrongAccount -> proofFailed(selection, OwnerProofNotice.WrongAccount)
+
             RevocationReply.ProofFailed -> proofFailed(selection, OwnerProofNotice.Failed)
+
             RevocationReply.Unconfirmed -> transition(selection, RevocationStep.Unconfirmed)
         }
     }

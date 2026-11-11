@@ -28,16 +28,22 @@ class ServiceSenderRevocation(private val baseUrl: String, private val client: C
             is ServerError -> response.body
             else -> null
         }
-        val problem = serviceProblem(response.statusCode, body)
-        return when {
-            response.statusCode == 403 && problem?.code == "fresh_identity_required" ->
-                RevocationReply.WrongAccount
+        return rejection(
+            response.statusCode,
+            serviceProblem(response.statusCode, body)?.code,
+            senderId == identity.senderId
+        )
+    }
 
-            (response.statusCode == 401 && problem?.code == "qq_authorization_invalid") ||
-                (response.statusCode == 502 && problem?.code == "identity_provider_error") ->
-                RevocationReply.ProofFailed
+    private fun rejection(status: Int, code: String?, isSelf: Boolean): RevocationReply = when {
+        isSelf && status == 409 && code == "device_registration_revoked" ->
+            RevocationReply.CurrentSenderRevoked
 
-            else -> RevocationReply.Unconfirmed
-        }
+        status == 403 && code == "fresh_identity_required" -> RevocationReply.WrongAccount
+
+        (status == 401 && code == "qq_authorization_invalid") ||
+            (status == 502 && code == "identity_provider_error") -> RevocationReply.ProofFailed
+
+        else -> RevocationReply.Unconfirmed
     }
 }
