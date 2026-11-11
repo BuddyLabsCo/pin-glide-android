@@ -50,8 +50,16 @@ class AccountSession(
                 renewal.withAccess(CredentialAccess.Upload, ::readProfile)
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: AuthorizationException) {
-                return@launch
+            } catch (failure: AuthorizationException) {
+                when (failure.outcome) {
+                    AuthorizationState.TemporarilyUnavailable,
+                    AuthorizationState.StorageUnavailable -> AccountState(
+                        loading = false,
+                        failed = true
+                    )
+
+                    else -> return@launch
+                }
             } catch (_: Exception) {
                 AccountState(loading = false, failed = true)
             }

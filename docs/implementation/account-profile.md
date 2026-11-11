@@ -34,12 +34,16 @@ AccountSession associates an open read with the login session generation. A new
 session starts a fresh read even if the previous Account page was not closed.
 Closing the page clears its transient profile state. Both successful reads and
 ordinary service failures pass through CredentialRenewal's identity-generation
-validation before publication; obsolete reads are discarded. Cancellation,
-expired access and current-Sender revocation keep their existing shared handling.
+validation before publication. Obsolete page/login reads are discarded; an
+identity-generation change within the current session settles as failure without
+publishing the obsolete nickname. Current-session temporary authorization or
+storage failures also settle as failure and trigger the approved Toast instead
+of leaving a completed read loading. Cancellation, expired access, terminal
+authorization outcomes and shared renewal limits keep their existing handling.
 A final session check also rejects obsolete failure results. No previous
 successful nickname substitutes for a subsequent failed or empty read.
 
-## Verification
+## Initial verification
 
 Debug Kotlin compilation and the existing LogoutRaceTest passed before editing.
 Temporary public-boundary probes under ignored build/ticket-32/ first reproduced
@@ -80,3 +84,27 @@ static map. No suppressions were added and the test gate is not claimed as passi
 Live QQ/service reads, physical devices, older Android versions and TalkBack
 speech were not exercised. Emulator and local HTTP checks do not establish live
 provider/service operation.
+
+## Review follow-up: completed renewal failures
+
+The review identified that a completed transient renewal failure was discarded
+like an obsolete read, leaving Account loading. A public AccountSession probe
+reproduced that failure before the fix and passed afterward. Current-session
+TemporarilyUnavailable and StorageUnavailable now produce the approved failure
+state. Page/login generation guards still discard obsolete work; terminal
+authorization outcomes remain with the shared authorization workflow.
+
+Four additional ignored probes cover an expired profile response, U expiry before
+the profile request, a delayed renewal failure after a new login, and unavailable
+identity storage. Both same-session identity-generation probes now require a
+settled failure without the obsolete nickname. The probes verify the existing
+two-attempt renewal limit and preserve login-required and Sender-revoked handling.
+
+Offline qualityCheck, Debug/Release Kotlin compilation, the focused AccountSession
+file (14 tests), and the final full :app:test suite passed. The final suite ran
+36 tests with zero failures, errors or skips: 18 repository tests and 18 ignored
+probes (14 AccountSession, four HTTP). Ripwire quality-delta passed with zero
+gating findings; its test gate still exits 4 for missing tracked coverage. No
+test/harness sources were committed. No fresh emulator or live-service run was
+performed for this domain-only correction; the initial UI evidence remains the
+presentation check.
