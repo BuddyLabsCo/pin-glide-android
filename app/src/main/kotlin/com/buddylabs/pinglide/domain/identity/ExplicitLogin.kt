@@ -2,8 +2,10 @@ package com.buddylabs.pinglide.domain.identity
 
 import java.time.Clock
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 
 enum class LoginState {
     Restoring,
@@ -95,16 +97,18 @@ class ExplicitLogin(
                     if (current.accepted) LoginState.FirstDevice else LoginState.Entry
             }
             throw cancelled
-        } catch (_: IdentityStorageException) {
-            if (attempt === current) mutableState.value = LoginState.StorageError
-        } catch (_: Exception) {
-            if (attempt ===
-                current
-            ) {
-                mutableState.value =
-                    if (retained == null) LoginState.Error else LoginState.RestorationError
+        } catch (failure: Exception) {
+            if (attempt === current) {
+                mutableState.value = loginFailure(failure, retained)
             }
         }
+    }
+
+    private fun loginFailure(failure: Exception, retained: SenderContext?): LoginState = when {
+        failure is IdentityStorageException -> LoginState.StorageError
+        failure is QqAuthorizationException && failure.cancelled -> LoginState.Entry
+        retained != null -> LoginState.RestorationError
+        else -> LoginState.Error
     }
 
     private fun senderName(): String = deviceName().also {
@@ -120,13 +124,19 @@ class ExplicitLogin(
         if (attempt !== current || renewal.sessionGeneration != expectedSession) return
         identity.validate(clock.instant(), requireFresh = true)
         require(
-            retained == null || retained == SenderContext(identity.accountId, identity.senderId)
+            retained == null || retained.accountId != identity.accountId ||
+                retained.senderId == identity.senderId
         )
         require(identity.senderId !in snapshot.closedSenderIds)
-        check(store.accept(snapshot.generation, identity, current))
-        if (renewal.sessionGeneration != expectedSession) return
-        renewal.resumeSession()
-        renewal.recover()
+        try {
+            check(store.accept(snapshot.generation, identity, current))
+        } finally {
+            if (current.accepted) {
+                withContext(NonCancellable) {
+                    if (renewal.resumeSession(expectedSession)) renewal.recover()
+                }
+            }
+        }
         if (attempt === current) mutableState.value = LoginState.FirstDevice
     }
 

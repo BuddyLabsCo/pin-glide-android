@@ -1,5 +1,6 @@
 package com.buddylabs.pinglide.domain.identity
 
+import java.time.DateTimeException
 import java.time.Instant
 import kotlinx.serialization.Serializable
 
@@ -70,6 +71,25 @@ data class RenewalOperation(
 }
 
 class RenewalReply(val operationId: String, val attempt: Long, val identity: SenderIdentity)
+
+internal fun RenewalReply.validate(
+    operation: RenewalOperation,
+    predecessor: SenderIdentity,
+    now: Instant
+) {
+    try {
+        require(operationId == operation.operationId && attempt == operation.attempt.toLong())
+        require(
+            identity.accountId == predecessor.accountId && identity.senderId == predecessor.senderId
+        )
+        identity.validate(now.plusSeconds(300), requireFresh = true)
+        require(identity.refresh.token != predecessor.refresh.token)
+    } catch (_: IllegalArgumentException) {
+        throw RenewalServiceException(RenewalFailure.Uncertain)
+    } catch (_: DateTimeException) {
+        throw RenewalServiceException(RenewalFailure.Uncertain)
+    }
+}
 
 fun interface RenewalService {
     suspend fun renew(credential: RefreshCredential, operation: RenewalOperation): RenewalReply
