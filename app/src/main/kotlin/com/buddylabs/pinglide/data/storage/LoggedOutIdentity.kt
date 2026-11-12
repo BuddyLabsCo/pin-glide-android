@@ -3,6 +3,7 @@ package com.buddylabs.pinglide.data.storage
 import com.buddylabs.pinglide.domain.identity.IdentitySnapshot
 import com.buddylabs.pinglide.domain.identity.RefreshState
 import com.buddylabs.pinglide.domain.identity.SenderContext
+import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -59,6 +60,33 @@ internal fun Json.logoutDocument(document: JsonObject, snapshot: IdentitySnapsho
             "restoration" to encodeToJsonElement(snapshot.restoration),
             "pairingsListed" to JsonPrimitive(false),
             "pairings" to JsonArray(pairings)
+        )
+    )
+}
+
+internal fun IdentitySnapshot.retainsSender(identity: SenderIdentity): Boolean =
+    (this.identity?.let { SenderContext(it.accountId, it.senderId) } ?: restoration) ==
+        SenderContext(identity.accountId, identity.senderId)
+
+internal fun Json.loginDocument(
+    document: JsonObject,
+    original: IdentitySnapshot,
+    identity: SenderIdentity
+): JsonObject {
+    val base = if (original.retainsSender(identity)) {
+        document
+    } else {
+        JsonObject(emptyMap())
+    }
+    return JsonObject(
+        base + mapOf(
+            "version" to JsonPrimitive(1),
+            "generation" to JsonPrimitive(Math.addExact(original.generation, 1)),
+            "identity" to encodeToJsonElement(identity),
+            "renewal" to JsonNull,
+            "restoration" to JsonNull,
+            "closedSenderIds" to encodeToJsonElement(original.closedSenderIds),
+            "refreshState" to encodeToJsonElement(RefreshState.Active)
         )
     )
 }

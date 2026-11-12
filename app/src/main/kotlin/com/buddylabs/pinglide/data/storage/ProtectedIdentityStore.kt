@@ -9,7 +9,6 @@ import com.buddylabs.pinglide.domain.identity.LogoutStore
 import com.buddylabs.pinglide.domain.identity.RefreshCredential
 import com.buddylabs.pinglide.domain.identity.RefreshState
 import com.buddylabs.pinglide.domain.identity.RenewalOperation
-import com.buddylabs.pinglide.domain.identity.SenderContext
 import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import com.buddylabs.pinglide.domain.pairing.OwnPairing
 import com.buddylabs.pinglide.domain.pairing.PairingSnapshot
@@ -223,11 +222,8 @@ class ProtectedIdentityStore(context: Context) :
             storageOperation {
                 val (document, original, alias) = load(applyLogout = false)
                 if (original.refreshState.closesRegistration) return@storageOperation null
-                FileOutputStream(logoutMarker).use { stream ->
-                    stream.write(1)
-                    stream.fd.sync()
-                }
                 val next = original.loggedOut()
+                logoutMarker.markLogout(next)
                 check(persist(json.logoutDocument(document, next), alias, LoginAttempt()))
                 original.identity?.refresh
             }
@@ -324,30 +320,15 @@ class ProtectedIdentityStore(context: Context) :
                     )
                 }
                 identity.validate(Instant.now(), requireFresh = true)
-                val retained = original.restoration
-                val sameSender = retained == null ||
-                    retained == SenderContext(identity.accountId, identity.senderId)
-                val base = if (sameSender) {
-                    document
-                } else {
-                    JsonObject(
-                        document.filterKeys {
-                            !it.startsWith("pairings")
-                        }
-                    )
+                val next = json.loginDocument(document, original, identity)
+                if (original.refreshState ==
+                    RefreshState.LoggedOut
+                ) {
+                    logoutMarker.markLogout(original)
                 }
-                val next = JsonObject(
-                    base + mapOf(
-                        "version" to JsonPrimitive(1),
-                        "generation" to JsonPrimitive(Math.addExact(original.generation, 1)),
-                        "identity" to json.encodeToJsonElement(identity),
-                        "renewal" to JsonNull,
-                        "restoration" to JsonNull,
-                        "refreshState" to json.encodeToJsonElement(RefreshState.Active)
-                    )
-                )
-                val accepted = persist(next, alias, attempt)
-                if (accepted && logoutMarker.exists()) check(logoutMarker.delete())
+                val accepted =
+                    persist(next, alias.takeIf { original.retainsSender(identity) }, attempt)
+                if (accepted && logoutMarker.exists()) logoutMarker.delete()
                 accepted
             }
         }
@@ -438,7 +419,7 @@ class ProtectedIdentityStore(context: Context) :
     }
 
     private fun logoutApplies(snapshot: IdentitySnapshot, enabled: Boolean): Boolean =
-        enabled && logoutMarker.exists() && !snapshot.refreshState.closesRegistration
+        enabled && !snapshot.refreshState.closesRegistration && logoutMarker.appliesTo(snapshot)
 
     private fun registrationDocument(snapshot: IdentitySnapshot) = JsonObject(
         mapOf(

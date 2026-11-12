@@ -1,7 +1,6 @@
 package com.buddylabs.pinglide.domain.identity
 
 import java.time.Clock
-import java.time.DateTimeException
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
@@ -64,13 +63,15 @@ class CredentialRenewal(
     }
 
     @Synchronized
-    fun resumeSession() {
+    fun resumeSession(expectedSession: Long): Boolean {
+        if (sessionGeneration != expectedSession) return false
         sessionGeneration++
         onAuthorityReset()
         closureCommit = LoginAttempt()
         loggedOut = false
         logoutFlight = null
         publish(AuthorizationState.Checking)
+        return true
     }
 
     fun finishLogout(operation: Deferred<RefreshCredential?>) {
@@ -400,7 +401,7 @@ class CredentialRenewal(
         return try {
             val reply = service.renew(identity.refresh, operation)
             requireSession(session)
-            validateReply(reply, operation, identity)
+            reply.validate(operation, identity, clock.instant())
             val accepted = pending.copy(
                 generation = Math.addExact(pending.generation, 1),
                 identity = reply.identity,
@@ -414,29 +415,6 @@ class CredentialRenewal(
         } catch (failure: RenewalServiceException) {
             requireSession(session)
             handleFailure(pending, failure.failure, session)
-        }
-    }
-
-    private fun validateReply(
-        reply: RenewalReply,
-        operation: RenewalOperation,
-        predecessor: SenderIdentity
-    ) {
-        try {
-            require(
-                reply.operationId == operation.operationId &&
-                    reply.attempt == operation.attempt.toLong()
-            )
-            require(
-                reply.identity.accountId == predecessor.accountId &&
-                    reply.identity.senderId == predecessor.senderId
-            )
-            reply.identity.validate(clock.instant().plusSeconds(300), requireFresh = true)
-            require(reply.identity.refresh.token != predecessor.refresh.token)
-        } catch (_: IllegalArgumentException) {
-            throw RenewalServiceException(RenewalFailure.Uncertain)
-        } catch (_: DateTimeException) {
-            throw RenewalServiceException(RenewalFailure.Uncertain)
         }
     }
 

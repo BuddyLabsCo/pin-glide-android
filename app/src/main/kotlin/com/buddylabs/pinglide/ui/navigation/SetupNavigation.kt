@@ -91,6 +91,7 @@ fun SetupNavigation(
         SetupDestination.Welcome -> WelcomeScreen(
             onStartSetup = {
                 if (logoutState == LogoutState.Ready) {
+                    onCheckSms()
                     onNewRegistration()
                     progress.start()
                     setup = progress.state
