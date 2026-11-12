@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.app.PinGlideApplication
@@ -58,7 +59,12 @@ class SmsForwardingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         latestStartId = startId
-        val messages = intent?.getStringArrayListExtra(MESSAGES)
+        val messages = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent?.getParcelableArrayListExtra(MESSAGES, Bundle::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent?.getParcelableArrayListExtra<Bundle>(MESSAGES)
+        }
         if (stopping || messages.isNullOrEmpty() || !enterForeground()) {
             finishIfIdle()
             return START_NOT_STICKY
@@ -68,7 +74,10 @@ class SmsForwardingService : Service() {
             try {
                 withTimeout(150_000) {
                     val forwarding = (application as PinGlideApplication).smsForwarding
-                    messages.forEach { forwarding.forward(it) }
+                    messages.forEach { message ->
+                        val body = message.getString(BODY) ?: return@forEach
+                        forwarding.forward(body, message.getLong(RECEIVED_AT).takeIf { it > 0 })
+                    }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -110,6 +119,8 @@ class SmsForwardingService : Service() {
 
     companion object {
         const val MESSAGES = "sms_messages"
+        const val BODY = "sms_body"
+        const val RECEIVED_AT = "sms_received_at"
         private const val CHANNEL = "sms_forwarding"
         private const val NOTIFICATION = 1
     }

@@ -13,6 +13,7 @@ import com.buddylabs.pinglide.domain.pairing.PairingFailure
 import com.buddylabs.pinglide.domain.pairing.PairingServiceException
 import com.buddylabs.pinglide.domain.pairing.PairingSnapshot
 import com.buddylabs.pinglide.domain.pairing.PairingStore
+import java.time.Clock
 import java.util.UUID
 
 class TestCiphertext(val nonce: String, val ciphertext: String)
@@ -49,10 +50,12 @@ fun interface TestDeliveryService {
 class PairingTestMessage(
     private val store: PairingStore,
     private val renewal: CredentialRenewal,
-    private val encrypt: (ByteArray) -> TestCiphertext,
-    private val service: TestDeliveryService
+    private val encrypt: (ByteArray, Long) -> TestCiphertext,
+    private val service: TestDeliveryService,
+    private val clock: Clock = Clock.systemUTC()
 ) {
     suspend fun send(pairingId: String): TestMessageOutcome? {
+        val receivedAt = clock.millis()
         val session = renewal.sessionGeneration
         var alias = ""
         var authorized = false
@@ -67,7 +70,7 @@ class PairingTestMessage(
                     return@withAccess null
                 }
                 authorized = true
-                sendAuthorized(origin, pairingId, identity, session)
+                sendAuthorized(origin, pairingId, identity, session, receivedAt)
             }
         } catch (failure: AuthorizationException) {
             when {
@@ -99,7 +102,8 @@ class PairingTestMessage(
         origin: PairingSnapshot,
         pairingId: String,
         identity: SenderIdentity,
-        session: Long
+        session: Long,
+        receivedAt: Long
     ): TestMessageResult? {
         val initial = store.readPairings()
         if (initial.authority.identity?.upload?.token != identity.upload.token) return null
@@ -113,7 +117,7 @@ class PairingTestMessage(
         }
         val key = checkNotNull(target.key).copyOf()
         val encrypted = try {
-            encrypt(key)
+            encrypt(key, receivedAt)
         } finally {
             key.fill(0)
         }

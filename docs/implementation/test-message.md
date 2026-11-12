@@ -16,7 +16,12 @@ Pairing's available 256-bit key is used, even when its receive switch is OFF or
 its target is offline. Other Pairings are never included.
 
 VerificationMessage supplies the typed verification_message JSON payload with
-smsText and string otp. Encryption uses the shared AES-256-GCM primitive with
+smsText, string otp and optional receivedAt. Issue #64 captures this test message's
+creation time once at the start of send, before reading credentials or suspending.
+It uses the same UTC RFC 3339 formatting and omission policy as incoming SMS.
+Credential delays and HTTP recovery retain that captured value; a later deliberate
+send captures a new creation time. It does not represent a real SMS arrival time.
+Encryption uses the shared AES-256-GCM primitive with
 UTF-8, a fresh secure 96-bit nonce, a 128-bit appended authentication tag, empty
 AAD and standard padded Base64. Each operation gets a secure random UUID
 messageId. Plaintext, encrypted items and upload requests stay in operation
@@ -70,7 +75,7 @@ status text. Only confirmed received shows exactly 测试消息已发送 in Chin
 (Test message sent in English), with one consumable arrival notice. Receipt
 confirms arrival only; it does not establish decryption, display or copying.
 
-## Verification
+## Earlier test-message verification
 
 The existing focused OwnPairingsTest and GeneratedWireTest suites passed with
 Debug Kotlin compilation. Final qualityCheck, Debug/Release Kotlin compilation,
@@ -95,3 +100,14 @@ they do not establish native Keystore behavior.
 
 Android device execution, TalkBack/font/IME/theme visual acceptance, Keystore
 crash atomicity and live target arrival require device/service acceptance.
+
+## Timestamp verification (issue #64)
+
+The persistent VerificationMessageTest and ForwardingTimestampTest suites pass.
+Independent payload decryption verifies the approved SMS/OTP and captured UTC
+creation time. A suspended credential renewal advances an injected clock before
+encryption: the first send retains its original creation time, and the next
+deliberate send uses the advanced time. Shared SMS delivery coverage also verifies
+that HTTP recovery submits identical frozen ciphertext. See
+[SMS forwarding](sms-forwarding.md#timestamp-verification-issue-64) for source-time
+coverage and the remaining physical-device/live-receiver acceptance limits.
