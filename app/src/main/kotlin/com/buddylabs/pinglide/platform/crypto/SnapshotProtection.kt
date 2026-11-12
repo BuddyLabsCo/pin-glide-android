@@ -22,23 +22,35 @@ class SnapshotProtection(private val stableAlias: String? = null) {
     private val keyStore: KeyStore
         get() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
-    fun seal(plaintext: ByteArray, existingAlias: String?): ProtectedSnapshot {
+    fun seal(
+        plaintext: ByteArray,
+        existingAlias: String?,
+        context: String = ""
+    ): ProtectedSnapshot {
         val alias = existingAlias ?: createKey()
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key(alias))
-        cipher.updateAAD(aad(alias))
-        return ProtectedSnapshot(1, alias, cipher.iv, cipher.doFinal(plaintext))
+        cipher.updateAAD(aad(2, alias, context))
+        val snapshot = ProtectedSnapshot(2, alias, cipher.iv, cipher.doFinal(plaintext))
+        val verified = open(snapshot, context)
+        try {
+            check(plaintext.contentEquals(verified))
+        } finally {
+            verified.fill(0)
+        }
+        return snapshot
     }
 
-    fun open(snapshot: ProtectedSnapshot): ByteArray {
-        require(snapshot.version == 1 && snapshot.nonce.size == 12)
+    fun open(snapshot: ProtectedSnapshot, context: String = ""): ByteArray {
+        require(snapshot.version in 1..2 && snapshot.nonce.size == 12)
+        require(snapshot.ciphertext.size >= 16)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(
             Cipher.DECRYPT_MODE,
             key(snapshot.keyAlias),
             GCMParameterSpec(128, snapshot.nonce)
         )
-        cipher.updateAAD(aad(snapshot.keyAlias))
+        cipher.updateAAD(aad(snapshot.version, snapshot.keyAlias, context))
         return cipher.doFinal(snapshot.ciphertext)
     }
 
@@ -47,7 +59,11 @@ class SnapshotProtection(private val stableAlias: String? = null) {
         return checkNotNull(keyStore.getKey(alias, null) as? SecretKey)
     }
 
-    private fun aad(alias: String) = "PinGlide:snapshot:1:$alias".toByteArray(Charsets.UTF_8)
+    private fun aad(version: Int, alias: String, context: String) = if (version == 1) {
+        "PinGlide:snapshot:1:$alias"
+    } else {
+        "PinGlide:snapshot:2:$alias:$context"
+    }.toByteArray(Charsets.UTF_8)
 
     private fun createKey(): String {
         val alias = stableAlias ?: "pinglide.snapshot.${UUID.randomUUID()}"

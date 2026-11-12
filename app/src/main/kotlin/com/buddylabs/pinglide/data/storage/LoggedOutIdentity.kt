@@ -45,13 +45,16 @@ internal fun Json.logoutDocument(document: JsonObject, snapshot: IdentitySnapsho
         JsonObject(
             entry.jsonObject.filterKeys {
                 it in
-                    setOf("pairingId", "receiverId", "alias", "enabled", "key", "keyFailed")
+                    setOf(
+                        "pairingId", "receiverId", "alias", "enabled", "key", "keyFailed",
+                        "protectedKey", "provisionalSessionId", "encryptions"
+                    )
             }
         )
     }
     return JsonObject(
         retained + mapOf(
-            "version" to JsonPrimitive(1),
+            "version" to JsonPrimitive(IDENTITY_SNAPSHOT_VERSION),
             "generation" to JsonPrimitive(snapshot.generation),
             "identity" to JsonNull,
             "renewal" to JsonNull,
@@ -80,7 +83,7 @@ internal fun Json.loginDocument(
     }
     return JsonObject(
         base + mapOf(
-            "version" to JsonPrimitive(1),
+            "version" to JsonPrimitive(IDENTITY_SNAPSHOT_VERSION),
             "generation" to JsonPrimitive(Math.addExact(original.generation, 1)),
             "identity" to encodeToJsonElement(identity),
             "renewal" to JsonNull,

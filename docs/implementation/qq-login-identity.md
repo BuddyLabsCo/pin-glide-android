@@ -37,25 +37,27 @@ explicit authorization. The service owns QQ AppKey, code exchange and provider t
 
 ## Protected snapshot
 
-`data/storage/ProtectedIdentityStore` serializes reads and writes with one mutex.
-Its version-1 JSON envelope contains a version-1 encrypted document with a
-generation and the complete identity. AES-256-GCM uses an Android Keystore key, a
-fresh nonce and authenticated version/key-alias context. Key creation finishes
+`data/storage/ProtectedIdentityStore` serializes reads and writes with a mutex shared
+by stores for the same snapshot path. Its version-2 JSON envelope contains a
+version-3 encrypted document with identity and Pairing state; see
+[storage format upgrades](storage-format-upgrades.md) for supported migrations.
+AES-256-GCM uses an Android Keystore key, a fresh nonce and authenticated
+version/key-alias/purpose context. Key creation and encryption verification finish
 before a file can reference that alias. Plaintext byte buffers are cleared after
 use; credentials are never written to preferences.
 
-Acceptance validates the expected generation and absence of an existing identity.
+Acceptance validates the expected generation, Sender ownership and fresh credentials.
 It encrypts a complete replacement, writes and syncs a sibling temporary file,
 then atomically renames it under the same cancellation gate that records successful
 acceptance. Cancellation before the rename prevents acceptance; cancellation after
 it preserves the accepted result. An abandoned temporary file is never restored.
 
-Unknown document fields survive a replacement. Corrupt authentication, missing
-keys, unsupported versions and invalid identity stop restoration or acceptance
-without resetting or replacing the original file. Existing identity and nonzero
-identity-free generations cannot be enrolled over by this first-login writer.
-Later renewal, restoration, logout and Pairing tickets extend this authority; they
-must keep generation checks and preserve unrelated context. Old keys are retained
+Unknown document fields survive a replacement. Corrupt outer authentication, missing
+outer keys, unsupported versions and invalid identity stop restoration or acceptance
+without resetting or replacing the original file. Unreadable target keys use the
+per-Pairing recovery described in the format-upgrade notes. Same-Sender restoration
+preserves retained Pairings; a different identity cannot inherit them. Renewal,
+restoration, logout and Pairing writes keep generation checks. Old keys are retained
 instead of being deleted during a failed or partial operation. The snapshot lives
 in `noBackupFilesDir`; existing manifest and cloud/device-transfer exclusions also
 exclude all private application domains.

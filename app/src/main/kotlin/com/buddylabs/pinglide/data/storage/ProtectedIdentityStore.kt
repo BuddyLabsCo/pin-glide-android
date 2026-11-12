@@ -8,7 +8,6 @@ import com.buddylabs.pinglide.domain.identity.LoginAttempt
 import com.buddylabs.pinglide.domain.identity.LogoutStore
 import com.buddylabs.pinglide.domain.identity.RefreshCredential
 import com.buddylabs.pinglide.domain.identity.RefreshState
-import com.buddylabs.pinglide.domain.identity.RenewalOperation
 import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import com.buddylabs.pinglide.domain.pairing.OwnPairing
 import com.buddylabs.pinglide.domain.pairing.PairingSnapshot
@@ -21,6 +20,7 @@ import java.io.FileOutputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -33,7 +33,6 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
-import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -48,7 +47,7 @@ class ProtectedIdentityStore(context: Context) :
     private val file = File(context.noBackupFilesDir, "identity.snapshot")
     private val logoutMarker = File(context.noBackupFilesDir, "identity.logged-out")
     private val protection = SnapshotProtection()
-    private val writer = Mutex()
+    private val writer = writers.computeIfAbsent(file.canonicalPath) { Mutex() }
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
@@ -62,8 +61,9 @@ class ProtectedIdentityStore(context: Context) :
                     return@storageOperation PairingSnapshot(authority)
                 }
                 val current = pairings(document, authority)
-                if (current.items.any { !it.keyUsable && (it.enabled || !it.keyFailed) }) {
-                    val items = current.items.map {
+                val retained = current.items + current.provisional
+                if (retained.any { !it.keyUsable && (it.enabled || !it.keyFailed) }) {
+                    val items = retained.map {
                         if (it.keyUsable) it else it.copy(enabled = false, keyFailed = true)
                     }
                     val next = pairingDocument(document, current, items, current.listed)
@@ -146,16 +146,7 @@ class ProtectedIdentityStore(context: Context) :
 
     private fun pairings(document: JsonObject, authority: IdentitySnapshot): PairingSnapshot {
         val items = document["pairings"]?.jsonArray?.map { entry ->
-            val fields = entry.jsonObject
-            val metadata = json.decodeFromJsonElement<OwnPairing>(
-                JsonObject(fields + ("key" to JsonNull))
-            )
-            val key = try {
-                fields["key"]?.let { json.decodeFromJsonElement<ByteArray?>(it) }
-            } catch (_: IllegalArgumentException) {
-                null
-            }
-            metadata.copy(key = key)
+            json.readPairing(document, entry.jsonObject, protection)
         }.orEmpty()
         if (items.isNotEmpty()) {
             require(
@@ -337,55 +328,42 @@ class ProtectedIdentityStore(context: Context) :
     private fun load(applyLogout: Boolean = true): Triple<JsonObject, IdentitySnapshot, String?> {
         if (!file.exists()) return Triple(JsonObject(emptyMap()), IdentitySnapshot(), null)
         val envelope = json.decodeFromString<ProtectedSnapshot>(file.readText(Charsets.UTF_8))
-        val plaintext = protection.open(envelope)
-        val document = try {
+        val plaintext = protection.open(envelope, "identity")
+        var document = try {
             json.decodeFromString<JsonObject>(plaintext.toString(Charsets.UTF_8))
         } finally {
             plaintext.fill(0)
         }
-        require(document.getValue("version").jsonPrimitive.int == 1)
-        val generation = document.getValue("generation").jsonPrimitive.long
-        require(generation > 0)
-        val identity = document.getValue("identity").let {
-            if (it == JsonNull) null else json.decodeFromJsonElement<SenderIdentity>(it)
+        val snapshot = json.snapshotAuthority(document)
+        val version = document.getValue("version").jsonPrimitive.int
+        if (version >= 2) json.validateSnapshotFields(document)
+        if (version == IDENTITY_SNAPSHOT_VERSION) json.validateKeyReferences(document)
+        if (version == 1) document = json.normalizeSnapshot(document)
+        if (document.getValue("version").jsonPrimitive.int == 2) {
+            document = json.protectPairingKeys(document, protection)
         }
-        identity?.validate(Instant.now(), requireFresh = false)
-        val renewal = document["renewal"]?.let { json.decodeFromJsonElement<RenewalOperation?>(it) }
-        val refreshState = document["refreshState"]?.let {
-            json.decodeFromJsonElement<RefreshState>(it)
-        } ?: RefreshState.Active
-        val closedSenderIds = document["closedSenderIds"]?.let {
-            json.decodeFromJsonElement<Set<String>>(it)
-        }.orEmpty()
-        require(closedSenderIds.none { it.isBlank() })
-        renewal?.validate(checkNotNull(identity), generation)
-        val restoration = json.readRestoration(document)
-        val snapshot =
-            IdentitySnapshot(
-                generation,
-                identity,
-                renewal,
-                refreshState,
-                closedSenderIds,
-                restoration
-            )
+        if (version != IDENTITY_SNAPSHOT_VERSION || envelope.version != 2) {
+            check(persist(document, null, LoginAttempt()))
+            return load(applyLogout)
+        }
         if (logoutApplies(snapshot, applyLogout)) {
             val loggedOut = snapshot.loggedOut()
             return Triple(json.logoutDocument(document, loggedOut), loggedOut, envelope.keyAlias)
         }
-        if (refreshState.closesRegistration && identity != null) {
+        val identity = snapshot.identity
+        if (snapshot.refreshState.closesRegistration && identity != null) {
             val closed = snapshot.copy(
-                generation = Math.addExact(generation, 1),
+                generation = Math.addExact(snapshot.generation, 1),
                 identity = null,
                 renewal = null,
-                closedSenderIds = closedSenderIds + identity.senderId
+                closedSenderIds = snapshot.closedSenderIds + identity.senderId
             )
             val migrated = registrationDocument(closed)
             check(persist(migrated, envelope.keyAlias, LoginAttempt()))
             return Triple(migrated, closed, envelope.keyAlias)
         }
-        require(identity == null || identity.senderId !in closedSenderIds)
-        require(!refreshState.closesRegistration || closedSenderIds.isNotEmpty())
+        require(identity == null || identity.senderId !in snapshot.closedSenderIds)
+        require(!snapshot.refreshState.closesRegistration || snapshot.closedSenderIds.isNotEmpty())
         return Triple(
             document,
             snapshot,
@@ -423,7 +401,7 @@ class ProtectedIdentityStore(context: Context) :
 
     private fun registrationDocument(snapshot: IdentitySnapshot) = JsonObject(
         mapOf(
-            "version" to JsonPrimitive(1),
+            "version" to JsonPrimitive(IDENTITY_SNAPSHOT_VERSION),
             "generation" to JsonPrimitive(snapshot.generation),
             "identity" to JsonNull,
             "renewal" to JsonNull,
@@ -438,9 +416,12 @@ class ProtectedIdentityStore(context: Context) :
         attempt: LoginAttempt,
         registrationRevoked: Boolean = false
     ): Boolean {
-        val plaintext = json.encodeToString(document).toByteArray(Charsets.UTF_8)
+        val complete = json.protectPairingKeys(json.normalizeSnapshot(document), protection)
+        json.validateSnapshotFields(complete)
+        json.validateKeyReferences(complete)
+        val plaintext = json.encodeToString(complete).toByteArray(Charsets.UTF_8)
         val protected = try {
-            protection.seal(plaintext, alias)
+            protection.seal(plaintext, alias, "identity")
         } finally {
             plaintext.fill(0)
         }
@@ -477,5 +458,9 @@ class ProtectedIdentityStore(context: Context) :
         throw cancelled
     } catch (_: Exception) {
         throw IdentityStorageException()
+    }
+
+    private companion object {
+        val writers = ConcurrentHashMap<String, Mutex>()
     }
 }
