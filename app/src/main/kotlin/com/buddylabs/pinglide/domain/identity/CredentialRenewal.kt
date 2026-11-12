@@ -19,7 +19,8 @@ class CredentialRenewal(
     private val store: IdentityStore,
     private val service: RenewalService,
     private val scope: CoroutineScope,
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
+    private val onAuthorityReset: () -> Unit = {}
 ) {
     private val gate = Mutex()
     private var flight: Deferred<IdentitySnapshot>? = null
@@ -46,6 +47,7 @@ class CredentialRenewal(
         loggedOut = true
         closures.clear()
         sessionGeneration++
+        onAuthorityReset()
         flight = null
         publish(AuthorizationState.LoggedOut)
         mutableLogoutState.value = LogoutState.Pending
@@ -64,6 +66,7 @@ class CredentialRenewal(
     @Synchronized
     fun resumeSession() {
         sessionGeneration++
+        onAuthorityReset()
         closureCommit = LoginAttempt()
         loggedOut = false
         logoutFlight = null
@@ -76,9 +79,8 @@ class CredentialRenewal(
 
     fun isSessionCurrent(generation: Long): Boolean = !loggedOut && generation == sessionGeneration
 
-    private fun requireSession(generation: Long) {
-        if (isSessionCurrent(generation)) return
-        throw AuthorizationException(AuthorizationState.LoggedOut)
+    private fun requireSession(session: Long) {
+        if (!isSessionCurrent(session)) throw AuthorizationException(AuthorizationState.LoggedOut)
     }
 
     suspend fun recover() {
@@ -222,6 +224,7 @@ class CredentialRenewal(
     ) {
         if (!isSessionCurrent(session) || !destination.closesRegistration) return
         closures.retain(identity, destination, terminalSnapshot, session)
+        onAuthorityReset()
     }
 
     private suspend fun readAuthority(): IdentitySnapshot {
@@ -405,6 +408,7 @@ class CredentialRenewal(
             )
             gate.withLock {
                 requireAuthority(store.read())
+                onAuthorityReset()
                 if (store.updateRenewal(pending, accepted)) accepted else store.read()
             }
         } catch (failure: RenewalServiceException) {
@@ -492,5 +496,5 @@ class CredentialRenewal(
     }
 
     private fun unavailable(outcome: AuthorizationState): Nothing =
-        throw AuthorizationException(publish(outcome))
+        throw AuthorizationException(publish(outcome)).also { onAuthorityReset() }
 }

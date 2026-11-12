@@ -34,8 +34,9 @@ upload access. Presence never excludes a selected target. It checks current
 Account/Sender authority, session and key identity while preparing each target,
 reserves a protected encryption use and erases each temporary key copy. Exhausted
 or unusable keys cannot authorize encryption. Original text, including whitespace
-and non-OTP messages, is encrypted with otp=""; OTP extraction is outside this
-ticket.
+and non-OTP messages, is encrypted unchanged. Issue #28 adds optional validated
+OTP enrichment before upload authorization; absent candidates or failed extraction
+use otp="". See [OTP extraction](otp-extraction.md) for its provider/cache policy.
 
 The existing AES-GCM implementation now accepts the original text and OTP. Each
 target gets independent encryption with a fresh nonce. The explicit test-message
