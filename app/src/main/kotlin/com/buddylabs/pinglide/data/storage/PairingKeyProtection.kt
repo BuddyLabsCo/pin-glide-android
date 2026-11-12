@@ -14,6 +14,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -94,7 +95,7 @@ internal fun Json.validateKeyReferences(document: JsonObject) {
         val fields = entry.jsonObject
         require("key" !in fields)
         val reference = fields["protectedKey"] as? JsonObject ?: continue
-        val version = reference["version"]?.jsonPrimitive?.int ?: continue
+        val version = (reference["version"] as? JsonPrimitive)?.intOrNull ?: continue
         require(version <= 2)
     }
 }

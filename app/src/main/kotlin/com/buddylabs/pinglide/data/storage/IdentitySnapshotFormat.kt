@@ -92,7 +92,8 @@ private fun Json.validatePairingOwnership(
     document["pairingsListed"]?.jsonPrimitive?.boolean
     val items = document["pairings"]?.jsonArray.orEmpty().map { pairingMetadata(it.jsonObject) }
     require(items.map { it.pairingId }.distinct().size == items.size)
-    require(items.map { it.receiverId }.distinct().size == items.size)
+    val active = items.filter { it.provisionalSessionId == null }
+    require(active.map { it.receiverId }.distinct().size == active.size)
     if (items.isNotEmpty()) {
         require(accountId != null && senderId != null)
         require(document["pairingsAccountId"]?.jsonPrimitive?.content == accountId)

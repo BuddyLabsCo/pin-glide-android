@@ -15,8 +15,10 @@ provisional Pairings still commit in one encrypted `identity.snapshot` under
 | 3 | Complete state with separately protected `protectedKey` envelopes per Pairing | Current |
 
 Document validation checks complete credentials and expiries, renewal ownership,
-positive generations, registration/logout invariants, unique Pairing/Receiver IDs,
-aliases, encryption counters, provisional markers and Account/Sender ownership.
+positive generations, registration/logout invariants, unique Pairing IDs and
+unique Receiver IDs among active Pairings, aliases, encryption counters,
+provisional markers and Account/Sender ownership. Distinct provisional Pairings
+may retain the same Receiver, including after another Pairing becomes active.
 Only version 1 may omit fields that older writers supplied through defaults.
 Expired credentials remain readable so the existing renewal/login policy can act.
 
@@ -41,9 +43,10 @@ generation and Pairing revision before applying changes.
 
 Unreadable outer protection, malformed authority or Pairing metadata, unsupported
 document/envelope versions, future key versions and failed migration leave the committed bytes
-untouched and surface the existing storage error. A malformed supported Pairing
-key or missing target Keystore key retains its original protected material, marks
-only that target's key failed and switches it off. Healthy targets remain usable
+untouched and surface the existing storage error. For a malformed Pairing key
+envelope, including an unreadable version field, or a missing target Keystore key,
+the store retains the original protected material, marks only that target's key
+failed and switches it off. Healthy targets remain usable
 through the existing key-error UI. No recovery silently enrolls over a snapshot.
 
 Logout retains Pairing key references, encryption counts and provisional markers
@@ -63,8 +66,9 @@ test infrastructure or debug seeds to the production change. It exercises the pu
 with real Android Keystore protection on an API 37 emulator. It checks both legacy
 versions and restart, renewal/generation/Pairing preservation, failed migration,
 concurrent stale writers, cancelled replacement, missing outer/target keys,
-corruption, future formats, swapped references, logout/restoration, registration
-closure and Account separation. Existing host tests and repository quality checks
+corruption, future formats, swapped references, retained provisional Receiver
+history, malformed key-envelope versions, logout/restoration, registration closure
+and Account separation. Existing host tests and repository quality checks
 provide the remaining regression checks.
 
 This upgrade is forward-only: older application builds that understand only
