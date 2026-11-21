@@ -54,12 +54,12 @@ fun RegistrationRevokedScreen(onNewRegistration: () -> Unit) {
         ) {
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = colorResource(R.color.registration_error_container)
+                color = colorResource(R.color.error_emblem_container)
             ) {
                 Icon(
                     painterResource(R.drawable.ic_lock),
                     contentDescription = null,
-                    tint = colorResource(R.color.registration_error),
+                    tint = colorResource(R.color.error_emblem),
                     modifier = Modifier.padding(21.dp).size(30.dp)
                 )
             }
