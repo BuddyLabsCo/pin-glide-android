@@ -84,3 +84,14 @@ check logs are under ignored `build/ticket-12/fix-*`.
 
 Physical devices, TalkBack speech, older Android versions and signed Release
 installation were not exercised. Settings navigation is outside this slice.
+
+### Issue #68 visual evidence
+
+The comparisons show the approved prototype on the left and the corrected API 37
+Android screen on the right at the same idle point in the animation. Both use
+Simplified Chinese and a comparable 366 × 820 viewport.
+
+| Theme | Side-by-side comparison | Forwarding animation |
+| --- | --- | --- |
+| Light | [Comparison](welcome-evidence/light-comparison.png) | [Recording](welcome-evidence/light-loop.mp4) |
+| Dark | [Comparison](welcome-evidence/dark-comparison.png) | [Recording](welcome-evidence/dark-loop.mp4) |
