@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -123,11 +124,44 @@ fun SmsPermissionScreen(
 
 @Composable
 private fun IncomingSmsSetupScreen(requestPending: Boolean, onRequest: () -> Unit) {
-    val title = stringResource(R.string.setup_sms_title)
+    CompactSetupStepScreen(
+        step = 1,
+        title = R.string.setup_sms_title,
+        description = R.string.setup_sms_description,
+        emblem = {
+            RingedSetupEmblem(RoundedCornerShape(44.dp)) {
+                Icon(
+                    painterResource(R.drawable.ic_sms),
+                    contentDescription = null,
+                    modifier = Modifier.size(54.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+    ) {
+        CompactSetupButton(
+            R.string.setup_allow_sms,
+            R.drawable.ic_check,
+            onRequest,
+            enabled = !requestPending
+        )
+    }
+}
+
+@Composable
+internal fun CompactSetupStepScreen(
+    step: Int,
+    @StringRes title: Int,
+    @StringRes description: Int,
+    emblem: @Composable () -> Unit,
+    notice: @Composable () -> Unit = {},
+    action: @Composable () -> Unit
+) {
+    val pane = stringResource(title)
     SetupStepFrame(
-        pane = title,
+        pane = pane,
         modifier = Modifier.windowInsetsPadding(WindowInsets(top = 32.dp, bottom = 22.dp)),
-        header = { CompactSetupStepHeader(step = 1) },
+        header = { CompactSetupStepHeader(step) },
         body = {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(
@@ -138,9 +172,9 @@ private fun IncomingSmsSetupScreen(requestPending: Boolean, onRequest: () -> Uni
                 ),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                RingedSmsEmblem()
+                emblem()
                 Text(
-                    title,
+                    pane,
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontSize = 26.sp,
                         lineHeight = 30.sp,
@@ -151,7 +185,7 @@ private fun IncomingSmsSetupScreen(requestPending: Boolean, onRequest: () -> Uni
                     modifier = Modifier.padding(top = 7.dp).semantics { heading() }
                 )
                 Text(
-                    stringResource(R.string.setup_sms_description),
+                    stringResource(description),
                     style = MaterialTheme.typography.bodyMedium.copy(
                         lineHeight = 22.sp,
                         letterSpacing = 0.sp
@@ -160,23 +194,33 @@ private fun IncomingSmsSetupScreen(requestPending: Boolean, onRequest: () -> Uni
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 12.dp).widthIn(max = 305.dp)
                 )
+                notice()
             }
-        }
+        },
+        actions = action
+    )
+}
+
+@Composable
+internal fun CompactSetupButton(
+    @StringRes label: Int,
+    @DrawableRes icon: Int,
+    onClick: () -> Unit,
+    enabled: Boolean = true
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp)
     ) {
-        Button(
-            onClick = onRequest,
-            enabled = !requestPending,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp)
-        ) {
-            Icon(painterResource(R.drawable.ic_check), null, Modifier.size(22.dp))
-            Spacer(Modifier.size(8.dp))
-            Text(
-                stringResource(R.string.setup_allow_sms),
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.14.sp
-            )
-        }
+        Icon(painterResource(icon), null, Modifier.size(22.dp))
+        Spacer(Modifier.size(8.dp))
+        Text(
+            stringResource(label),
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.14.sp
+        )
     }
 }
 
@@ -220,7 +264,6 @@ internal fun SetupStepScreen(
     @StringRes description: Int,
     onBack: () -> Unit,
     error: Boolean = false,
-    emblem: (@Composable () -> Unit)? = null,
     notice: @Composable () -> Unit = {},
     actions: @Composable ColumnScope.() -> Unit
 ) {
@@ -234,7 +277,7 @@ internal fun SetupStepScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                if (emblem == null) SetupEmblem(icon, error) else emblem()
+                SetupEmblem(icon, error)
                 Text(
                     pane,
                     style = MaterialTheme.typography.headlineLarge,
@@ -373,7 +416,7 @@ private fun SetupStepIndicator(step: Int, label: String, modifier: Modifier) {
 }
 
 @Composable
-private fun RingedSmsEmblem() {
+internal fun RingedSetupEmblem(shape: Shape, content: @Composable () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val ring = colors.primary.copy(alpha = 0.22f)
     Box(
@@ -384,16 +427,11 @@ private fun RingedSmsEmblem() {
         Box(
             modifier = Modifier.size(148.dp).background(
                 Brush.linearGradient(listOf(colors.primaryContainer, colors.secondaryContainer)),
-                RoundedCornerShape(44.dp)
+                shape
             ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                painterResource(R.drawable.ic_sms),
-                contentDescription = null,
-                modifier = Modifier.size(54.dp),
-                tint = colors.onPrimaryContainer
-            )
+            content()
         }
     }
 }
