@@ -131,7 +131,7 @@ private class PushDelivery(
     val width: Float,
     val height: Float,
     val confirmation: Offset,
-    val targetEdge: Float,
+    val targetLeft: Float,
     route: String
 ) {
     val route = PathMeasure().apply { setPath(path(route), false) }
@@ -257,7 +257,7 @@ private fun DrawScope.highlightRoute(
     if (alpha <= 0f) return
     routeHighlight.rewind()
     if (delivery.route.getSegment(0f, distance, routeHighlight, startWithMoveTo = true)) {
-        clipRect(left = 268f, right = delivery.targetEdge, bottom = 600f) {
+        clipRect(left = 268f, right = delivery.targetLeft, bottom = 600f) {
             drawPath(routeHighlight, color, alpha, Stroke(2.3f, cap = StrokeCap.Round))
         }
     }

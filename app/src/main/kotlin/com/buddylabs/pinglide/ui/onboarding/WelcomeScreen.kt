@@ -24,6 +24,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -38,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -144,6 +148,7 @@ fun WelcomeScreen(
 
 @Composable
 private fun Brand() {
+    val tileShape = RoundedCornerShape(11.dp)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -151,7 +156,17 @@ private fun Brand() {
         Image(
             painterResource(R.mipmap.ic_launcher),
             contentDescription = null,
-            modifier = Modifier.align(Alignment.Top).size(38.dp).clip(RoundedCornerShape(11.dp))
+            modifier = Modifier.align(Alignment.Top).size(38.dp)
+                .dropShadow(
+                    shape = tileShape,
+                    shadow = Shadow(
+                        radius = 12.dp,
+                        color = Color(0xFF0A1210),
+                        offset = DpOffset(0.dp, 5.dp),
+                        alpha = 0.12f
+                    )
+                )
+                .clip(tileShape)
         )
         Column {
             Text(
