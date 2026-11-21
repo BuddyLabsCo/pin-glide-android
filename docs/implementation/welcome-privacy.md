@@ -11,7 +11,8 @@ whose Welcome, privacy, icon and illustration assets match this checkout.
   screen and routes. `WelcomePushVisual` draws the notifications with Compose,
   using the source SVG's day/night palette, 6.4-second loop, cubic routes, easing
   and keyframes: the notification slides into the source, copies travel to both
-  targets, expand into banners and display confirmations, then the cycle resets.
+  targets along highlighted routes, expand into banners and display confirmations,
+  then the cycle resets.
 - Compose's system motion-duration scale controls the loop. Disabling animations
   selects the meaningful settled still with the source notification, both target
   banners and confirmations. Changing the setting while Welcome is open switches
@@ -21,8 +22,8 @@ whose Welcome, privacy, icon and illustration assets match this checkout.
 - Default strings are Simplified Chinese, with English translations. Unsupported
   locales fall back to Chinese. All text uses scalable Compose typography.
 - `ScreenLayout` handles safe drawing insets and limits content width to 560dp.
-  Text can scroll while the main action remains reachable. Actions are at least
-  48dp high; the main action is at least 56dp high.
+  Text can scroll while the main action remains reachable. Both Welcome actions
+  are at least 48dp high.
 - Native Material controls provide focus and touch behavior. Headings and pane
   titles expose screen context to accessibility services; decorative images have
   no duplicate descriptions.
@@ -83,3 +84,14 @@ check logs are under ignored `build/ticket-12/fix-*`.
 
 Physical devices, TalkBack speech, older Android versions and signed Release
 installation were not exercised. Settings navigation is outside this slice.
+
+### Issue #68 visual evidence
+
+The comparisons show the approved prototype on the left and the corrected API 37
+Android screen on the right at the same idle point in the animation. Both use
+Simplified Chinese and a comparable 366 × 820 viewport.
+
+| Theme | Side-by-side comparison | Forwarding animation |
+| --- | --- | --- |
+| Light | [Comparison](welcome-evidence/light-comparison.png) | [Recording](welcome-evidence/light-loop.mp4) |
+| Dark | [Comparison](welcome-evidence/dark-comparison.png) | [Recording](welcome-evidence/dark-loop.mp4) |
