@@ -50,7 +50,7 @@
     <string name="setup_identity_unavailable_title">受保护的身份暂时不可用</string>
     <string name="setup_identity_unavailable_description">无法安全读取或保存身份，原有数据已保留。请再次检查，不要通过清除应用数据重试。</string>
     <string name="setup_first_device_title">连接第一台设备</string>
-    <string name="setup_first_device_description">在目标设备打开鹊信并显示二维码，然后扫描并确认。完成后，当前设备就可以开始转发短信。</string>
+    <string name="setup_first_device_description">在接收端打开鹊信并显示二维码，然后扫描并确认。完成后，当前设备就可以开始转发短信。</string>
     <string name="setup_later">稍后配对</string>
     <string name="home_devices">我的设备</string>
     <string name="home_target_device">目标设备</string>
