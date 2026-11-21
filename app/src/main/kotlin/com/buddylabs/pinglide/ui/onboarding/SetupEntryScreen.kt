@@ -154,6 +154,7 @@ internal fun CompactSetupStepScreen(
     @StringRes title: Int,
     @StringRes description: Int,
     emblem: @Composable () -> Unit,
+    notice: @Composable () -> Unit = {},
     action: @Composable () -> Unit
 ) {
     val pane = stringResource(title)
@@ -193,6 +194,7 @@ internal fun CompactSetupStepScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 12.dp).widthIn(max = 305.dp)
                 )
+                notice()
             }
         },
         actions = action

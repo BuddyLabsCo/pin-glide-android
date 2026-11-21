@@ -107,7 +107,15 @@ private fun QqSignInScreen(onLogin: () -> Unit) {
         step = 3,
         title = R.string.setup_qq_title,
         description = R.string.setup_qq_description,
-        emblem = { RingedSetupEmblem(CircleShape) { QqEmblem() } }
+        emblem = { RingedSetupEmblem(CircleShape) { QqEmblem() } },
+        notice = {
+            Text(
+                stringResource(R.string.setup_qq_privacy),
+                modifier = Modifier.padding(top = 20.dp),
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center
+            )
+        }
     ) {
         CompactSetupButton(R.string.setup_qq_sign_in, R.drawable.ic_chevron, onLogin)
     }

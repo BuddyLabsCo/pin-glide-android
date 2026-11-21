@@ -41,6 +41,7 @@
     <string name="setup_qq_title">连接你的 QQ</string>
     <string name="setup_qq_description">使用 QQ 登录账号、管理设备和授权加密转发。</string>
     <string name="setup_qq_sign_in">使用 QQ 登录</string>
+    <string name="setup_qq_privacy">点击登录即授权腾讯 QQ 互联使用设备型号及 QQ/TIM 安装信息完成授权。鹊信只向服务发送新的一次性授权码，QQ 平台凭据由服务持有。</string>
     <string name="setup_qq_loading">正在登录 QQ</string>
     <string name="setup_qq_error_title">登录未完成</string>
     <string name="setup_qq_error_description">QQ 授权已取消或登录结果未确认。请重新登录。</string>
