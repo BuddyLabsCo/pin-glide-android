@@ -43,7 +43,7 @@
     <string name="setup_qq_sign_in">使用 QQ 登录</string>
     <string name="setup_qq_loading">正在登录 QQ</string>
     <string name="setup_qq_error_title">登录未完成</string>
-    <string name="setup_qq_error_description">QQ 授权已取消或登录结果未确认。请重新登录。</string>
+    <string name="setup_qq_error_description">QQ 授权已取消或服务暂时不可用。当前设备未成功注册。</string>
     <string name="setup_qq_retry">重新登录</string>
     <string name="setup_cancel">取消</string>
     <string name="setup_identity_loading">正在读取受保护的身份</string>

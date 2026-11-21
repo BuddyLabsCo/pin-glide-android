@@ -6,17 +6,23 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
@@ -49,7 +55,7 @@ fun QqLoginScreen(
 
         LoginState.Loading -> {
             val title = stringResource(R.string.setup_qq_loading)
-            LoginProgressLayout(
+            LoginStatusLayout(
                 title = title,
                 spacing = 44.dp,
                 contentPadding = PaddingValues(top = 20.dp, bottom = 8.dp),
@@ -65,7 +71,7 @@ fun QqLoginScreen(
                 }
             ) {
                 QqLoadingEmblem()
-                LoginBusyHeading(
+                LoginStatusHeading(
                     title,
                     MaterialTheme.typography.headlineMedium.copy(
                         fontSize = 26.sp,
@@ -79,7 +85,7 @@ fun QqLoginScreen(
 
         LoginState.Restoring -> {
             val title = stringResource(R.string.setup_identity_loading)
-            LoginProgressLayout(
+            LoginStatusLayout(
                 title = title,
                 spacing = 24.dp,
                 action = {
@@ -91,13 +97,16 @@ fun QqLoginScreen(
                 }
             ) {
                 CircularProgressIndicator()
-                LoginBusyHeading(title, MaterialTheme.typography.headlineLarge)
+                LoginStatusHeading(title, MaterialTheme.typography.headlineLarge)
             }
         }
 
-        LoginState.FirstDevice -> Unit
+        LoginState.Error -> QqSignInFailureScreen(onLogin, onCancel)
 
-        else -> LoginErrorScreen(state, onLogin, onNewAccount, onCancel, onRetryStorage, onBack)
+        LoginState.RestorationError, LoginState.StorageError ->
+            LoginErrorScreen(state, onLogin, onNewAccount, onRetryStorage, onBack)
+
+        LoginState.FirstDevice, LoginState.Welcome, LoginState.Revoked -> Unit
     }
 }
 
@@ -114,11 +123,63 @@ private fun QqSignInScreen(onLogin: () -> Unit) {
 }
 
 @Composable
+private fun QqSignInFailureScreen(onRetry: () -> Unit, onBack: () -> Unit) {
+    val title = stringResource(R.string.setup_qq_error_title)
+    LoginStatusLayout(
+        title = title,
+        spacing = 0.dp,
+        contentPadding = PaddingValues(bottom = 34.dp),
+        action = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CompactSetupButton(R.string.setup_qq_retry, R.drawable.ic_refresh, onRetry)
+                LoginBusyAction(
+                    label = stringResource(R.string.setup_back),
+                    onClick = onBack,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.14.sp
+                    )
+                )
+            }
+        }
+    ) {
+        RingedSetupEmblem(RoundedCornerShape(44.dp), error = true) {
+            Icon(
+                painterResource(R.drawable.ic_error_filled),
+                contentDescription = null,
+                modifier = Modifier.size(54.dp),
+                tint = colorResource(R.color.error_emblem)
+            )
+        }
+        Text(
+            title,
+            modifier = Modifier.padding(top = 7.dp).semantics { heading() },
+            style = MaterialTheme.typography.headlineSmall.copy(
+                fontSize = 26.sp,
+                lineHeight = 30.sp,
+                fontWeight = FontWeight(750),
+                letterSpacing = (-1.17).sp
+            ),
+            textAlign = TextAlign.Center
+        )
+        Text(
+            stringResource(R.string.setup_qq_error_description),
+            modifier = Modifier.padding(top = 10.dp).widthIn(max = 286.dp),
+            style = MaterialTheme.typography.bodySmall.copy(
+                lineHeight = 18.sp,
+                letterSpacing = 0.sp
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
 private fun LoginErrorScreen(
     state: LoginState,
     onLogin: () -> Unit,
     onNewAccount: () -> Unit,
-    onCancel: () -> Unit,
     onRetryStorage: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -131,27 +192,25 @@ private fun LoginErrorScreen(
         } else {
             R.string.setup_qq_error_title
         },
-        description = when {
-            storageError -> R.string.setup_identity_unavailable_description
-            state == LoginState.RestorationError -> R.string.account_restore_error
-            else -> R.string.setup_qq_error_description
+        description = if (storageError) {
+            R.string.setup_identity_unavailable_description
+        } else {
+            R.string.account_restore_error
         },
         onBack = onBack,
         error = true
     ) {
-        LoginErrorActions(state, onLogin, onNewAccount, onCancel, onRetryStorage)
+        LoginErrorActions(storageError, onLogin, onNewAccount, onRetryStorage)
     }
 }
 
 @Composable
 private fun LoginErrorActions(
-    state: LoginState,
+    storageError: Boolean,
     onLogin: () -> Unit,
     onNewAccount: () -> Unit,
-    onCancel: () -> Unit,
     onRetryStorage: () -> Unit
 ) {
-    val storageError = state == LoginState.StorageError
     Button(
         onClick = if (storageError) onRetryStorage else onLogin,
         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
@@ -162,7 +221,7 @@ private fun LoginErrorActions(
             )
         )
     }
-    if (state == LoginState.RestorationError) {
+    if (!storageError) {
         TextButton(
             onClick = onNewAccount,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
@@ -170,18 +229,10 @@ private fun LoginErrorActions(
             Text(stringResource(R.string.account_new_login))
         }
     }
-    if (state == LoginState.Error) {
-        TextButton(
-            onClick = onCancel,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-        ) {
-            Text(stringResource(R.string.setup_back))
-        }
-    }
 }
 
 @Composable
-private fun LoginProgressLayout(
+private fun LoginStatusLayout(
     title: String,
     spacing: Dp,
     contentPadding: PaddingValues = PaddingValues(),
@@ -205,7 +256,7 @@ private fun LoginProgressLayout(
 }
 
 @Composable
-private fun LoginBusyHeading(title: String, style: TextStyle) {
+private fun LoginStatusHeading(title: String, style: TextStyle) {
     Text(
         title,
         modifier = Modifier.semantics { heading() },

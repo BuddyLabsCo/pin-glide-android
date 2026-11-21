@@ -1,8 +1,12 @@
 package com.buddylabs.pinglide.ui.onboarding
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
@@ -40,6 +44,42 @@ class OnboardingActionsTest {
             .performScrollTo()
             .performTouchInput { click() }
         compose.runOnIdle { assertEquals(1, loginRequests) }
+    }
+
+    @Test
+    fun qqSignInFailureShowsOneBackActionAndRoutesRetryAndBack() {
+        var loginRequests = 0
+        var cancellations = 0
+        compose.setContent {
+            PinGlideTheme {
+                QqLoginScreen(
+                    state = LoginState.Error,
+                    onLogin = { loginRequests++ },
+                    onNewAccount = { error("QQ sign-in failure cannot open new registration") },
+                    onCancel = { cancellations++ },
+                    onRetryStorage = { error("QQ sign-in failure cannot retry storage") },
+                    onBack = { error("QQ sign-in failure must return to QQ sign-in") }
+                )
+            }
+        }
+
+        compose.onNodeWithText(text(R.string.setup_qq_error_title)).assertExists()
+        compose.onNodeWithText(text(R.string.setup_qq_error_description)).assertExists()
+        compose.onNodeWithText(text(R.string.setup_title)).assertDoesNotExist()
+        val backLabel = text(R.string.setup_back)
+        compose.onAllNodes(
+            hasClickAction() and (hasText(backLabel) or hasContentDescription(backLabel))
+        ).assertCountEquals(1)
+        compose.onNodeWithText(backLabel).performTouchInput { click() }
+        compose.runOnIdle {
+            assertEquals(1, cancellations)
+            assertEquals(0, loginRequests)
+        }
+        compose.onNodeWithText(text(R.string.setup_qq_retry)).performTouchInput { click() }
+        compose.runOnIdle {
+            assertEquals(1, cancellations)
+            assertEquals(1, loginRequests)
+        }
     }
 
     @Test
