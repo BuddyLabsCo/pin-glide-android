@@ -31,15 +31,23 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
+import kotlin.math.cos
+import kotlin.math.sin
 
 @Composable
 internal fun QqEmblem(size: Dp = 92.dp) {
     val shape = RoundedCornerShape(percent = 31)
+    val side = with(LocalDensity.current) { size.toPx() }
+    val angle = Math.toRadians(145.0)
+    val direction = Offset(sin(angle).toFloat(), -cos(angle).toFloat())
+    val center = Offset(side / 2, side / 2)
+    val halfGradient = direction * (side * (direction.x + direction.y) / 2)
     Image(
         painterResource(R.drawable.ic_qq),
         contentDescription = null,
@@ -53,7 +61,11 @@ internal fun QqEmblem(size: Dp = 92.dp) {
             )
         )
             .background(
-                Brush.linearGradient(listOf(Color(0xFF1597DE), Color(0xFF075E9D))),
+                Brush.linearGradient(
+                    listOf(Color(0xFF1597DE), Color(0xFF075E9D)),
+                    start = center - halfGradient,
+                    end = center + halfGradient
+                ),
                 shape
             ).padding(size * 0.18f)
     )

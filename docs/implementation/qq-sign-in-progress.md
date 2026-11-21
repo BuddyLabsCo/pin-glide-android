@@ -2,7 +2,8 @@
 
 The approved reference for issue #73 is the [QQ loading capture](../ui-prototype/shots/01-08-qq-loading.png).
 The Android comparisons show Simplified Chinese at 366 × 820 dp on API 37.
-Android supplies the status and navigation bars.
+Android supplies the status and navigation bars. The progress ring is centered
+at y=351 dp in both the approved and Android viewports.
 
 | Theme | Approved and Android comparison | Active motion recording |
 | --- | --- | --- |
@@ -20,3 +21,8 @@ rotation around the stationary emblem and that the ring stayed pixel-identical
 with the animator scale set to zero. The accessibility hierarchy exposed an
 indeterminate progress indicator, the localized heading and a bottom Cancel
 target at least 48 dp tall in Simplified Chinese and in English at 200% font scale.
+
+Run `./gradlew :app:connectedDebugAndroidTest` with an emulator or device attached
+to repeat the shared emblem check. It advances the Compose clock with motion
+enabled, then at zero animator scale, and checks that a visible arc stays
+stationary while progress remains indeterminate. The test requires no sign-in.

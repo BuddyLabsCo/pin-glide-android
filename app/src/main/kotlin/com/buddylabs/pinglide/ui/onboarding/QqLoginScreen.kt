@@ -2,6 +2,7 @@ package com.buddylabs.pinglide.ui.onboarding
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -21,8 +22,10 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
@@ -41,8 +44,56 @@ fun QqLoginScreen(
     onBack: () -> Unit
 ) {
     when (state) {
-        LoginState.Restoring, LoginState.Loading -> LoginBusyScreen(state, onCancel, onBack)
+        LoginState.Loading -> {
+            val title = stringResource(R.string.setup_qq_loading)
+            LoginProgressLayout(
+                title = title,
+                spacing = 44.dp,
+                contentPadding = PaddingValues(top = 20.dp, bottom = 8.dp),
+                action = {
+                    LoginBusyAction(
+                        label = stringResource(R.string.setup_cancel),
+                        onClick = onCancel,
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.14.sp
+                        )
+                    )
+                }
+            ) {
+                QqLoadingEmblem()
+                LoginBusyHeading(
+                    title,
+                    MaterialTheme.typography.headlineMedium.copy(
+                        fontSize = 26.sp,
+                        lineHeight = 30.sp,
+                        fontWeight = FontWeight(750),
+                        letterSpacing = (-1.17).sp
+                    )
+                )
+            }
+        }
+
+        LoginState.Restoring -> {
+            val title = stringResource(R.string.setup_identity_loading)
+            LoginProgressLayout(
+                title = title,
+                spacing = 24.dp,
+                action = {
+                    LoginBusyAction(
+                        label = stringResource(R.string.setup_back),
+                        onClick = onBack,
+                        verticalPadding = 16.dp
+                    )
+                }
+            ) {
+                CircularProgressIndicator()
+                LoginBusyHeading(title, MaterialTheme.typography.headlineLarge)
+            }
+        }
+
         LoginState.FirstDevice -> Unit
+
         else -> LoginActionScreen(state, onLogin, onNewAccount, onCancel, onRetryStorage, onBack)
     }
 }
@@ -136,56 +187,50 @@ private fun LoginActions(
 }
 
 @Composable
-private fun LoginBusyScreen(state: LoginState, onCancel: () -> Unit, onBack: () -> Unit) {
-    val signingIn = state == LoginState.Loading
-    val title = stringResource(
-        if (signingIn) R.string.setup_qq_loading else R.string.setup_identity_loading
-    )
+private fun LoginProgressLayout(
+    title: String,
+    spacing: Dp,
+    contentPadding: PaddingValues = PaddingValues(),
+    action: @Composable () -> Unit,
+    content: @Composable () -> Unit
+) {
     ScreenLayout {
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
-                .then(if (signingIn) Modifier.padding(top = 20.dp, bottom = 26.dp) else Modifier)
+                .padding(contentPadding)
                 .semantics {
                     paneTitle = title
                     liveRegion = LiveRegionMode.Polite
                 },
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(
-                if (signingIn) 44.dp else 24.dp,
-                Alignment.CenterVertically
-            )
-        ) {
-            if (signingIn) {
-                QqLoadingEmblem()
-            } else {
-                CircularProgressIndicator()
-            }
-            Text(
-                title,
-                style = if (signingIn) {
-                    MaterialTheme.typography.headlineMedium.copy(
-                        fontSize = 26.sp,
-                        lineHeight = 30.sp,
-                        fontWeight = FontWeight(750),
-                        letterSpacing = (-1.17).sp
-                    )
-                } else {
-                    MaterialTheme.typography.headlineLarge
-                },
-                textAlign = TextAlign.Center,
-                modifier = Modifier.semantics { heading() }
-            )
-        }
-        TextButton(
-            onClick = if (signingIn) onCancel else onBack,
-            modifier = Modifier.fillMaxWidth().padding(vertical = if (signingIn) 0.dp else 16.dp)
-                .heightIn(min = 48.dp)
-        ) {
-            Text(
-                stringResource(if (signingIn) R.string.setup_cancel else R.string.setup_back),
-                fontWeight = if (signingIn) FontWeight.Bold else FontWeight.Medium,
-                letterSpacing = if (signingIn) 0.14.sp else 0.1.sp
-            )
-        }
+            verticalArrangement = Arrangement.spacedBy(spacing, Alignment.CenterVertically),
+            content = { content() }
+        )
+        action()
+    }
+}
+
+@Composable
+private fun LoginBusyHeading(title: String, style: TextStyle) {
+    Text(
+        title,
+        modifier = Modifier.semantics { heading() },
+        style = style.copy(textAlign = TextAlign.Center)
+    )
+}
+
+@Composable
+private fun LoginBusyAction(
+    label: String,
+    onClick: () -> Unit,
+    style: TextStyle = MaterialTheme.typography.labelLarge,
+    verticalPadding: Dp = 0.dp
+) {
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(vertical = verticalPadding)
+            .heightIn(min = 48.dp)
+    ) {
+        Text(label, style = style)
     }
 }
