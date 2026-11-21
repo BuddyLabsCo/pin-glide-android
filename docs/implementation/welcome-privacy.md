@@ -21,8 +21,9 @@ whose Welcome, privacy, icon and illustration assets match this checkout.
 - Default strings are Simplified Chinese, with English translations. Unsupported
   locales fall back to Chinese. All text uses scalable Compose typography.
 - `ScreenLayout` handles safe drawing insets and limits content width to 560dp.
-  Text can scroll while the main action remains reachable. Actions are at least
-  48dp high; the main action is at least 56dp high.
+  Text can scroll while the main action remains reachable. Welcome's Start setup
+  button has a 56dp minimum height. The approved privacy acknowledgment has a
+  48dp minimum height, consistent with the touch target minimum.
 - Native Material controls provide focus and touch behavior. Headings and pane
   titles expose screen context to accessibility services; decorative images have
   no duplicate descriptions.
@@ -48,6 +49,13 @@ recreation. Settings can use the same screen and supply its own dismiss action;
 As of issue #69, the shared privacy body follows the approved prototype: an
 introduction, four icon-and-text rows, and a notice about losing local identity
 and Pairing keys on reinstall or app data clearing.
+
+The issue #69 review verified the shared body from the production Settings
+navigation in a temporary debug preview on API 37. All Simplified Chinese
+privacy strings were visible at the default font scale in both themes. Got it
+and system Back returned to Settings. Local evidence is in
+`build/ticket-69/settings-light.png` and `build/ticket-69/settings-dark.png`.
+Issue #139 tracks the Settings-specific header and footer.
 
 ## Verification
 
