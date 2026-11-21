@@ -11,7 +11,8 @@ whose Welcome, privacy, icon and illustration assets match this checkout.
   screen and routes. `WelcomePushVisual` draws the notifications with Compose,
   using the source SVG's day/night palette, 6.4-second loop, cubic routes, easing
   and keyframes: the notification slides into the source, copies travel to both
-  targets, expand into banners and display confirmations, then the cycle resets.
+  targets along highlighted routes, expand into banners and display confirmations,
+  then the cycle resets.
 - Compose's system motion-duration scale controls the loop. Disabling animations
   selects the meaningful settled still with the source notification, both target
   banners and confirmations. Changing the setting while Welcome is open switches
@@ -21,8 +22,8 @@ whose Welcome, privacy, icon and illustration assets match this checkout.
 - Default strings are Simplified Chinese, with English translations. Unsupported
   locales fall back to Chinese. All text uses scalable Compose typography.
 - `ScreenLayout` handles safe drawing insets and limits content width to 560dp.
-  Text can scroll while the main action remains reachable. Actions are at least
-  48dp high; the main action is at least 56dp high.
+  Text can scroll while the main action remains reachable. Both Welcome actions
+  are at least 48dp high.
 - Native Material controls provide focus and touch behavior. Headings and pane
   titles expose screen context to accessibility services; decorative images have
   no duplicate descriptions.

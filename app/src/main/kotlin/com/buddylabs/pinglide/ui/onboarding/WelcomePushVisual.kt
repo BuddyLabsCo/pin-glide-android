@@ -7,8 +7,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -18,10 +18,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -30,10 +32,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
 
 @Composable
@@ -56,6 +60,7 @@ internal fun WelcomePushVisual() {
         remember { mutableStateOf(3840f) }
     }
     val backdrop = painterResource(R.drawable.welcome_push)
+    val routeHighlight = remember { Path() }
     val palette = PushPalette(
         colorResource(R.color.primary),
         colorResource(R.color.hero_container),
@@ -64,12 +69,20 @@ internal fun WelcomePushVisual() {
         colorResource(R.color.hero_white),
         colorResource(R.color.hero_wing)
     )
-    Canvas(Modifier.fillMaxWidth().aspectRatio(4f / 3f)) {
-        with(backdrop) { draw(size) }
-        scale(size.width / 800f, size.height / 600f, pivot = Offset.Zero) {
+    Canvas(Modifier.fillMaxWidth().height(300.dp).clipToBounds()) {
+        val artworkScale = maxOf(size.width / 800f, size.height / 600f)
+            .coerceAtMost(size.width / 640f)
+        withTransform({
+            translate(
+                (size.width - 800f * artworkScale) / 2f,
+                (size.height - 600f * artworkScale) / 2f
+            )
+            scale(artworkScale, artworkScale, pivot = Offset.Zero)
+        }) {
+            with(backdrop) { draw(Size(800f, 600f)) }
             sourceNotification(time.value, palette)
-            delivery(time.value, UpperDelivery, palette)
-            delivery(time.value, LowerDelivery, palette)
+            delivery(time.value, UpperDelivery, palette, routeHighlight)
+            delivery(time.value, LowerDelivery, palette, routeHighlight)
         }
     }
 }
@@ -90,6 +103,7 @@ private val UpperDelivery = PushDelivery(
     156f,
     64f,
     Offset(567f, 156f),
+    371f,
     "M190 258 C292 187 375 174 492 187"
 )
 private val LowerDelivery = PushDelivery(
@@ -98,6 +112,7 @@ private val LowerDelivery = PushDelivery(
     174f,
     66f,
     Offset(634f, 388f),
+    415f,
     "M190 258 C330 258 330 444 550 420"
 )
 
@@ -116,6 +131,7 @@ private class PushDelivery(
     val width: Float,
     val height: Float,
     val confirmation: Offset,
+    val targetEdge: Float,
     route: String
 ) {
     val route = PathMeasure().apply { setPath(path(route), false) }
@@ -168,10 +184,17 @@ private fun DrawScope.sourceNotification(time: Float, palette: PushPalette) {
     }
 }
 
-private fun DrawScope.delivery(time: Float, delivery: PushDelivery, palette: PushPalette) {
+private fun DrawScope.delivery(
+    time: Float,
+    delivery: PushDelivery,
+    palette: PushPalette,
+    routeHighlight: Path
+) {
     val alpha = visibility(time, delivery.departure - 10f, delivery.departure + 55f)
-    val distance = RouteEasing.transform(progress(time, delivery.departure, delivery.arrival))
-    val position = delivery.route.getPosition(delivery.route.length * distance)
+    val distance = delivery.route.length *
+        RouteEasing.transform(progress(time, delivery.departure, delivery.arrival))
+    val position = delivery.route.getPosition(distance)
+    highlightRoute(time, delivery, palette.primary, distance, routeHighlight)
     val shape = BannerShape(time, delivery)
     val sourceColor =
         1f - ShapeEasing.transform(progress(time, delivery.arrival + 60f, delivery.arrival + 480f))
@@ -215,6 +238,29 @@ private fun DrawScope.delivery(time: Float, delivery: PushDelivery, palette: Pus
         )
     }
     confirmation(time, delivery, palette)
+}
+
+private fun DrawScope.highlightRoute(
+    time: Float,
+    delivery: PushDelivery,
+    color: Color,
+    distance: Float,
+    routeHighlight: Path
+) {
+    val alpha = .32f * visibility(
+        time,
+        delivery.departure,
+        delivery.departure + 160f,
+        delivery.arrival,
+        delivery.arrival + 480f
+    )
+    if (alpha <= 0f) return
+    routeHighlight.rewind()
+    if (delivery.route.getSegment(0f, distance, routeHighlight, startWithMoveTo = true)) {
+        clipRect(left = 268f, right = delivery.targetEdge, bottom = 600f) {
+            drawPath(routeHighlight, color, alpha, Stroke(2.3f, cap = StrokeCap.Round))
+        }
+    }
 }
 
 private fun DrawScope.confirmation(time: Float, delivery: PushDelivery, palette: PushPalette) {
