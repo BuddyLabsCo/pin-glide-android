@@ -51,13 +51,15 @@ class BatterySetupScreenTest {
                 SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
             )
 
+        settings.performScrollTo().performTouchInput { click() }
+        compose.runOnIdle { assertEquals(2, settingsAttempts) }
+        feedback.assertDoesNotExist()
+
+        settings.performScrollTo().performTouchInput { click() }
+        feedback.performScrollTo().assertIsDisplayed()
         compose.onNodeWithText(context.getString(R.string.setup_next))
             .performScrollTo()
             .performTouchInput { click() }
         compose.runOnIdle { assertEquals(1, nextRequests) }
-
-        settings.performScrollTo().performTouchInput { click() }
-        compose.runOnIdle { assertEquals(2, settingsAttempts) }
-        feedback.assertDoesNotExist()
     }
 }
