@@ -60,6 +60,7 @@ private enum class DetailsPage { Details, Rename, Remove }
 @Composable
 internal fun TargetDetailsSheet(
     target: TargetDevice,
+    presenceLabel: String,
     otherAliases: List<String>,
     action: TargetAction,
     testMessage: TestMessageAction,
@@ -116,7 +117,7 @@ internal fun TargetDetailsSheet(
                 modifier = Modifier.semantics { heading() }
             )
             if (page != DetailsPage.Rename) {
-                Text(targetPresence(target), style = MaterialTheme.typography.bodySmall)
+                Text(presenceLabel, style = MaterialTheme.typography.bodySmall)
                 if (!target.keyUsable) KeyFailureNotice()
             }
             when (page) {

@@ -159,7 +159,7 @@ private fun TargetRowPresence(target: TargetDevice, now: Instant) {
 }
 
 @Composable
-internal fun targetPresence(target: TargetDevice, now: Instant? = null): String {
+internal fun targetPresence(target: TargetDevice, now: Instant): String {
     if (target.presence == Presence.Unknown || target.stateChangedAt == null) {
         return stringResource(R.string.home_awaiting_update)
     }
@@ -167,7 +167,7 @@ internal fun targetPresence(target: TargetDevice, now: Instant? = null): String 
         if (target.presence == Presence.Online) R.string.home_online else R.string.home_offline
     )
     val timestamp = Instant.parse(target.stateChangedAt)
-    val changed = if (now == null) presenceDate(timestamp) else recentPresence(timestamp, now)
+    val changed = recentPresence(timestamp, now)
     return stringResource(R.string.home_presence, status, changed)
 }
 

@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +52,7 @@ import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.HomeReadiness
 import com.buddylabs.pinglide.domain.pairing.HomeState
 import com.buddylabs.pinglide.domain.pairing.PairingChange
+import com.buddylabs.pinglide.domain.pairing.TargetDevice
 import com.buddylabs.pinglide.ui.components.BrandIcon
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 import java.time.Instant
@@ -134,6 +136,7 @@ fun HomeScreen(
         })
         return
     }
+    val now by rememberPresenceTime(state.targets)
     HomeContent(
         state, readiness, action, smsGranted, smsRecovery, onRestoreSms,
         home::refresh, { pairingId, enabled ->
@@ -154,13 +157,15 @@ fun HomeScreen(
         rowFocus,
         headingFocus,
         listState,
-        highlightedPairingId
+        highlightedPairingId,
+        now
     )
     LoginRestorationNotice(restoration, state.refreshing, home::dismissLoginNotice)
     SmsRecoveryNotice(state, smsGranted, smsRecovery, home::dismissSmsFeedback)
     if (selected != null) {
         TargetDetailsSheet(
             selected,
+            presenceLabel = targetPresence(selected, now),
             otherAliases = state.targets.filter {
                 it.pairingId != selected.pairingId
             }.map { it.alias },
@@ -174,6 +179,15 @@ fun HomeScreen(
         )
     }
 }
+
+@Composable
+private fun rememberPresenceTime(targets: List<TargetDevice>): State<Instant> =
+    produceState(Instant.now(), targets) {
+        while (targets.isNotEmpty()) {
+            value = Instant.now()
+            delay(60_000)
+        }
+    }
 
 @Composable
 private fun HomeContent(
@@ -193,18 +207,13 @@ private fun HomeContent(
     rowFocus: FocusRequester,
     headingFocus: FocusRequester,
     listState: LazyListState,
-    highlightedPairingId: String?
+    highlightedPairingId: String?,
+    now: Instant
 ) {
     LaunchedEffect(Unit) { headingFocus.requestFocus() }
     ScreenLayout {
         HomeHeader(headingFocus, onSettings)
         HomeRefreshContainer(state, onRefresh, Modifier.weight(1f)) {
-            val now by produceState(Instant.now(), state.targets) {
-                while (state.targets.isNotEmpty()) {
-                    value = Instant.now()
-                    delay(60_000)
-                }
-            }
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
