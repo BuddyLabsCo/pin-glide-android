@@ -42,7 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -73,31 +72,28 @@ fun SmsPermissionScreen(
 ) {
     var settingsUnavailable by rememberSaveable { mutableStateOf(false) }
     var permissionStillDenied by rememberSaveable { mutableStateOf(false) }
+    if (!denied) {
+        IncomingSmsSetupScreen(requestPending, onRequest)
+        return
+    }
     SetupStepScreen(
         step = 1,
         icon = R.drawable.ic_sms,
-        title = if (denied) R.string.setup_sms_denied_title else R.string.setup_sms_title,
-        description = if (denied) {
-            R.string.setup_sms_denied_description
-        } else {
-            R.string.setup_sms_description
-        },
+        title = R.string.setup_sms_denied_title,
+        description = R.string.setup_sms_denied_description,
         onBack = onBack,
-        error = denied,
-        compact = !denied,
+        error = true,
         notice = {
-            if (denied) {
-                Surface(
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    shape = MaterialTheme.shapes.medium
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Row(
+                    Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(
-                        Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(painterResource(R.drawable.ic_info), contentDescription = null)
-                        Text(stringResource(R.string.setup_sms_denied_hint))
-                    }
+                    Icon(painterResource(R.drawable.ic_info), contentDescription = null)
+                    Text(stringResource(R.string.setup_sms_denied_hint))
                 }
             }
         }
@@ -109,35 +105,77 @@ fun SmsPermissionScreen(
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
             )
         }
-        if (denied) {
-            Button(
-                onClick = { settingsUnavailable = !onSettings() },
-                enabled = !requestPending,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
-            ) { Text(stringResource(R.string.setup_open_application_settings)) }
-            TextButton(
-                onClick = {
-                    settingsUnavailable = false
-                    permissionStillDenied = !onCheckAgain()
-                },
-                enabled = !requestPending,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            ) { Text(stringResource(R.string.setup_check_again)) }
-        } else {
-            Button(
-                onClick = onRequest,
-                enabled = !requestPending,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp)
+        Button(
+            onClick = { settingsUnavailable = !onSettings() },
+            enabled = !requestPending,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+        ) { Text(stringResource(R.string.setup_open_application_settings)) }
+        TextButton(
+            onClick = {
+                settingsUnavailable = false
+                permissionStillDenied = !onCheckAgain()
+            },
+            enabled = !requestPending,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        ) { Text(stringResource(R.string.setup_check_again)) }
+    }
+}
+
+@Composable
+private fun IncomingSmsSetupScreen(requestPending: Boolean, onRequest: () -> Unit) {
+    val title = stringResource(R.string.setup_sms_title)
+    SetupStepFrame(
+        pane = title,
+        modifier = Modifier.windowInsetsPadding(WindowInsets(top = 32.dp, bottom = 22.dp)),
+        header = { CompactSetupStepHeader(step = 1) },
+        body = {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(
+                    start = 2.dp,
+                    top = 12.dp,
+                    end = 2.dp,
+                    bottom = 62.dp
+                ),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(painterResource(R.drawable.ic_check), null, Modifier.size(22.dp))
-                Spacer(Modifier.size(8.dp))
+                RingedSmsEmblem()
                 Text(
-                    stringResource(R.string.setup_allow_sms),
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.14.sp
+                    title,
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontSize = 26.sp,
+                        lineHeight = 30.sp,
+                        fontWeight = FontWeight(750),
+                        letterSpacing = (-0.045).em
+                    ),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 7.dp).semantics { heading() }
+                )
+                Text(
+                    stringResource(R.string.setup_sms_description),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        lineHeight = 22.sp,
+                        letterSpacing = 0.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 12.dp).widthIn(max = 305.dp)
                 )
             }
+        }
+    ) {
+        Button(
+            onClick = onRequest,
+            enabled = !requestPending,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp)
+        ) {
+            Icon(painterResource(R.drawable.ic_check), null, Modifier.size(22.dp))
+            Spacer(Modifier.size(8.dp))
+            Text(
+                stringResource(R.string.setup_allow_sms),
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.14.sp
+            )
         }
     }
 }
@@ -182,95 +220,65 @@ internal fun SetupStepScreen(
     @StringRes description: Int,
     onBack: () -> Unit,
     error: Boolean = false,
-    compact: Boolean = false,
     emblem: (@Composable () -> Unit)? = null,
     notice: @Composable () -> Unit = {},
     actions: @Composable ColumnScope.() -> Unit
 ) {
     val pane = stringResource(title)
-    ScreenLayout {
-        val screenInsets = if (compact) {
-            Modifier.windowInsetsPadding(WindowInsets(top = 32.dp, bottom = 22.dp))
-        } else {
-            Modifier
-        }
-        BoxWithConstraints(Modifier.weight(1f).then(screenInsets)) {
+    SetupStepFrame(
+        pane = pane,
+        header = { SetupStepHeader(step, onBack) },
+        body = {
             Column(
-                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                    .heightIn(min = maxHeight).semantics { paneTitle = pane }
+                modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                if (compact) CompactSetupStepHeader(step) else SetupStepHeader(step, onBack)
-                Spacer(Modifier.weight(1f))
-                SetupStepContent(pane, description, icon, error, compact, emblem, notice)
-                Spacer(Modifier.weight(1f))
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(
-                        vertical = if (compact) 0.dp else 16.dp
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    content = actions
+                if (emblem == null) SetupEmblem(icon, error) else emblem()
+                Text(
+                    pane,
+                    style = MaterialTheme.typography.headlineLarge,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.semantics { heading() }
                 )
+                Text(
+                    stringResource(description),
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
+                )
+                notice()
             }
         }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = actions
+        )
     }
 }
 
 @Composable
-private fun SetupStepContent(
-    title: String,
-    @StringRes description: Int,
-    @DrawableRes icon: Int,
-    error: Boolean,
-    compact: Boolean,
-    emblem: (@Composable () -> Unit)?,
-    notice: @Composable () -> Unit
+private fun SetupStepFrame(
+    pane: String,
+    modifier: Modifier = Modifier,
+    header: @Composable () -> Unit,
+    body: @Composable () -> Unit,
+    actions: @Composable () -> Unit
 ) {
-    val contentPadding = if (compact) {
-        PaddingValues(start = 2.dp, top = 12.dp, end = 2.dp, bottom = 62.dp)
-    } else {
-        PaddingValues(vertical = 32.dp)
-    }
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(contentPadding),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 20.dp)
-    ) {
-        when {
-            emblem != null -> emblem()
-            compact -> RingedSetupEmblem(icon)
-            else -> SetupEmblem(icon, error)
-        }
-        Text(
-            title,
-            style = if (compact) {
-                MaterialTheme.typography.headlineSmall.copy(
-                    fontSize = 26.sp,
-                    lineHeight = 30.sp,
-                    fontWeight = FontWeight(750),
-                    letterSpacing = (-0.045).em
-                )
-            } else {
-                MaterialTheme.typography.headlineLarge
-            },
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = if (compact) 7.dp else 0.dp).semantics { heading() }
-        )
-        Text(
-            stringResource(description),
-            style = if (compact) {
-                MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp, letterSpacing = 0.sp)
-            } else {
-                MaterialTheme.typography.bodyLarge
-            },
-            color = if (compact) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified,
-            textAlign = TextAlign.Center,
-            modifier = if (compact) {
-                Modifier.padding(top = 12.dp).widthIn(max = 305.dp)
-            } else {
-                Modifier
+    ScreenLayout {
+        BoxWithConstraints(Modifier.weight(1f).then(modifier)) {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    .heightIn(min = maxHeight).semantics { paneTitle = pane }
+            ) {
+                header()
+                Spacer(Modifier.weight(1f))
+                body()
+                Spacer(Modifier.weight(1f))
+                actions()
             }
-        )
-        notice()
+        }
     }
 }
 
@@ -300,7 +308,11 @@ private fun CompactSetupStepHeader(step: Int) {
                 letterSpacing = 0.08.em
             )
         }
-        SetupStepIndicator(step, Modifier.widthIn(max = 130.dp))
+        SetupStepIndicator(
+            step,
+            label = stringResource(R.string.setup_step, step),
+            modifier = Modifier.widthIn(max = 130.dp)
+        )
     }
 }
 
@@ -332,13 +344,12 @@ private fun SetupStepHeader(step: Int, onBack: () -> Unit) {
                 )
             }
         }
-        SetupStepIndicator(step, Modifier.padding(vertical = 8.dp))
+        SetupStepIndicator(step, label = setupTitle, modifier = Modifier.padding(vertical = 8.dp))
     }
 }
 
 @Composable
-private fun SetupStepIndicator(step: Int, modifier: Modifier) {
-    val label = stringResource(R.string.setup_step, step)
+private fun SetupStepIndicator(step: Int, label: String, modifier: Modifier) {
     Row(
         modifier = modifier.fillMaxWidth().semantics {
             contentDescription = label
@@ -362,7 +373,7 @@ private fun SetupStepIndicator(step: Int, modifier: Modifier) {
 }
 
 @Composable
-private fun RingedSetupEmblem(@DrawableRes icon: Int) {
+private fun RingedSmsEmblem() {
     val colors = MaterialTheme.colorScheme
     val ring = colors.primary.copy(alpha = 0.22f)
     Box(
@@ -377,7 +388,12 @@ private fun RingedSetupEmblem(@DrawableRes icon: Int) {
             ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(painterResource(icon), null, Modifier.size(54.dp), colors.onPrimaryContainer)
+            Icon(
+                painterResource(R.drawable.ic_sms),
+                contentDescription = null,
+                modifier = Modifier.size(54.dp),
+                tint = colors.onPrimaryContainer
+            )
         }
     }
 }
