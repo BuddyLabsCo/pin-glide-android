@@ -43,6 +43,38 @@ class OnboardingActionsTest {
     }
 
     @Test
+    fun qqSignInFailureShowsOneBackActionAndRoutesRetryAndBack() {
+        var loginRequests = 0
+        var cancellations = 0
+        compose.setContent {
+            PinGlideTheme {
+                QqLoginScreen(
+                    state = LoginState.Error,
+                    onLogin = { loginRequests++ },
+                    onNewAccount = { error("QQ sign-in failure cannot open new registration") },
+                    onCancel = { cancellations++ },
+                    onRetryStorage = { error("QQ sign-in failure cannot retry storage") },
+                    onBack = { error("QQ sign-in failure must return to QQ sign-in") }
+                )
+            }
+        }
+
+        compose.onNodeWithText(text(R.string.setup_qq_error_title)).assertExists()
+        compose.onNodeWithText(text(R.string.setup_qq_error_description)).assertExists()
+        compose.onNodeWithText(text(R.string.setup_title)).assertDoesNotExist()
+        compose.onNodeWithText(text(R.string.setup_back)).performTouchInput { click() }
+        compose.runOnIdle {
+            assertEquals(1, cancellations)
+            assertEquals(0, loginRequests)
+        }
+        compose.onNodeWithText(text(R.string.setup_qq_retry)).performTouchInput { click() }
+        compose.runOnIdle {
+            assertEquals(1, cancellations)
+            assertEquals(1, loginRequests)
+        }
+    }
+
+    @Test
     fun smsPermissionCannotBeRequestedAgainWhilePending() {
         val pending = mutableStateOf(false)
         var permissionRequests = 0
