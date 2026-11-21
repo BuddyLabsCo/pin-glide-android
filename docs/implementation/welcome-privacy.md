@@ -89,5 +89,6 @@ light frame was compared against the original vector still (mean maximum RGB
 channel difference below 1/255 across the hero). Captures, assertion results and
 check logs are under ignored `build/ticket-12/fix-*`.
 
-Physical devices, TalkBack speech, older Android versions and signed Release
-installation were not exercised. Settings navigation is outside this slice.
+The issue #12 verification covered onboarding. Physical devices, TalkBack
+speech, older Android versions and signed Release installation were not
+exercised in that verification.
