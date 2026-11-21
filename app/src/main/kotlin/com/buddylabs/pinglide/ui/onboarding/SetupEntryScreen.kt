@@ -43,6 +43,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -68,83 +70,42 @@ fun SmsPermissionScreen(
     requestPending: Boolean,
     onRequest: () -> Unit,
     onSettings: () -> Boolean,
-    onCheckAgain: () -> Boolean,
-    onBack: () -> Unit
+    onCheckAgain: () -> Boolean
 ) {
-    var settingsUnavailable by rememberSaveable { mutableStateOf(false) }
-    var permissionStillDenied by rememberSaveable { mutableStateOf(false) }
-    if (!denied) {
-        IncomingSmsSetupScreen(requestPending, onRequest)
-        return
-    }
-    SetupStepScreen(
-        step = 1,
-        icon = R.drawable.ic_sms,
-        title = R.string.setup_sms_denied_title,
-        description = R.string.setup_sms_denied_description,
-        onBack = onBack,
-        error = true,
-        notice = {
-            Surface(
-                color = MaterialTheme.colorScheme.errorContainer,
-                shape = MaterialTheme.shapes.medium
-            ) {
-                Row(
-                    Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(painterResource(R.drawable.ic_info), contentDescription = null)
-                    Text(stringResource(R.string.setup_sms_denied_hint))
-                }
-            }
-        }
-    ) {
-        SettingsError(settingsUnavailable)
-        if (permissionStillDenied) {
-            Text(
-                stringResource(R.string.setup_sms_still_denied),
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-            )
-        }
-        Button(
-            onClick = { settingsUnavailable = !onSettings() },
-            enabled = !requestPending,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
-        ) { Text(stringResource(R.string.setup_open_application_settings)) }
-        TextButton(
-            onClick = {
-                settingsUnavailable = false
-                permissionStillDenied = !onCheckAgain()
-            },
-            enabled = !requestPending,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-        ) { Text(stringResource(R.string.setup_check_again)) }
-    }
-}
-
-@Composable
-private fun IncomingSmsSetupScreen(requestPending: Boolean, onRequest: () -> Unit) {
     CompactSetupStepScreen(
         step = 1,
-        title = R.string.setup_sms_title,
-        description = R.string.setup_sms_description,
+        title = if (denied) R.string.setup_sms_denied_title else R.string.setup_sms_title,
+        description = if (denied) {
+            R.string.setup_sms_denied_description
+        } else {
+            R.string.setup_sms_description
+        },
         emblem = {
-            RingedSetupEmblem(RoundedCornerShape(44.dp)) {
+            RingedSetupEmblem(RoundedCornerShape(44.dp), error = denied) {
                 Icon(
                     painterResource(R.drawable.ic_sms),
                     contentDescription = null,
                     modifier = Modifier.size(54.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    tint = if (denied) {
+                        colorResource(R.color.error_emblem)
+                    } else {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    }
                 )
             }
-        }
+        },
+        notice = { if (denied) SmsPermissionWarning() }
     ) {
-        CompactSetupButton(
-            R.string.setup_allow_sms,
-            R.drawable.ic_check,
-            onRequest,
-            enabled = !requestPending
-        )
+        if (denied) {
+            DeniedSmsActions(requestPending, onSettings, onCheckAgain)
+        } else {
+            CompactSetupButton(
+                R.string.setup_allow_sms,
+                R.drawable.ic_check,
+                onRequest,
+                enabled = !requestPending
+            )
+        }
     }
 }
 
@@ -154,6 +115,7 @@ internal fun CompactSetupStepScreen(
     @StringRes title: Int,
     @StringRes description: Int,
     emblem: @Composable () -> Unit,
+    notice: @Composable () -> Unit = {},
     action: @Composable () -> Unit
 ) {
     val pane = stringResource(title)
@@ -193,6 +155,7 @@ internal fun CompactSetupStepScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 12.dp).widthIn(max = 305.dp)
                 )
+                notice()
             }
         },
         actions = action
@@ -219,6 +182,73 @@ internal fun CompactSetupButton(
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.14.sp
         )
+    }
+}
+
+@Composable
+private fun SmsPermissionWarning() {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+        color = colorResource(R.color.setup_warning_container),
+        contentColor = colorResource(R.color.setup_on_warning),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(13.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_info),
+                contentDescription = null,
+                modifier = Modifier.padding(top = 1.dp).size(18.dp)
+            )
+            Text(
+                stringResource(R.string.setup_sms_denied_hint),
+                style = MaterialTheme.typography.bodySmall.copy(
+                    lineHeight = 18.sp,
+                    letterSpacing = 0.sp
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun DeniedSmsActions(
+    requestPending: Boolean,
+    onSettings: () -> Boolean,
+    onCheckAgain: () -> Boolean
+) {
+    var settingsUnavailable by rememberSaveable { mutableStateOf(false) }
+    var permissionStillDenied by rememberSaveable { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SettingsError(settingsUnavailable)
+        if (permissionStillDenied) {
+            Text(
+                stringResource(R.string.setup_sms_still_denied),
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            )
+        }
+        CompactSetupButton(
+            R.string.setup_open_application_settings,
+            R.drawable.ic_settings_filled,
+            onClick = { settingsUnavailable = !onSettings() },
+            enabled = !requestPending
+        )
+        TextButton(
+            onClick = {
+                settingsUnavailable = false
+                permissionStillDenied = !onCheckAgain()
+            },
+            enabled = !requestPending,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        ) {
+            Text(
+                stringResource(R.string.setup_check_again),
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.14.sp
+            )
+        }
     }
 }
 
@@ -414,7 +444,11 @@ private fun SetupStepIndicator(step: Int, label: String, modifier: Modifier) {
 }
 
 @Composable
-internal fun RingedSetupEmblem(shape: Shape, content: @Composable () -> Unit) {
+internal fun RingedSetupEmblem(
+    shape: Shape,
+    error: Boolean = false,
+    content: @Composable () -> Unit
+) {
     val colors = MaterialTheme.colorScheme
     val ring = colors.primary.copy(alpha = 0.22f)
     Box(
@@ -424,7 +458,11 @@ internal fun RingedSetupEmblem(shape: Shape, content: @Composable () -> Unit) {
         Box(Modifier.size(186.dp).border(1.dp, ring, CircleShape))
         Box(
             modifier = Modifier.size(148.dp).background(
-                Brush.linearGradient(listOf(colors.primaryContainer, colors.secondaryContainer)),
+                if (error) {
+                    SolidColor(colorResource(R.color.error_emblem_container))
+                } else {
+                    Brush.linearGradient(listOf(colors.primaryContainer, colors.secondaryContainer))
+                },
                 shape
             ),
             contentAlignment = Alignment.Center

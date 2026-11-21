@@ -56,8 +56,7 @@ class OnboardingActionsTest {
                         pending.value = true
                     },
                     onSettings = { false },
-                    onCheckAgain = { false },
-                    onBack = {}
+                    onCheckAgain = { false }
                 )
             }
         }
@@ -67,6 +66,32 @@ class OnboardingActionsTest {
         compose.runOnIdle { assertEquals(1, permissionRequests) }
         action.assertIsNotEnabled().performTouchInput { click() }
         compose.runOnIdle { assertEquals(1, permissionRequests) }
+    }
+
+    @Test
+    fun deniedSmsPermissionShowsRecoveryFeedback() {
+        compose.setContent {
+            PinGlideTheme {
+                SmsPermissionScreen(
+                    denied = true,
+                    requestPending = false,
+                    onRequest = { error("Denied SMS permission must use recovery actions") },
+                    onSettings = { false },
+                    onCheckAgain = { false }
+                )
+            }
+        }
+
+        compose.onNodeWithText(text(R.string.setup_sms_denied_hint)).assertExists()
+        compose.onNodeWithText(text(R.string.setup_open_application_settings))
+            .performScrollTo()
+            .performTouchInput { click() }
+        compose.onNodeWithText(text(R.string.setup_settings_unavailable)).assertExists()
+        compose.onNodeWithText(text(R.string.setup_check_again))
+            .performScrollTo()
+            .performTouchInput { click() }
+        compose.onNodeWithText(text(R.string.setup_settings_unavailable)).assertDoesNotExist()
+        compose.onNodeWithText(text(R.string.setup_sms_still_denied)).assertExists()
     }
 
     private fun text(resource: Int) =
