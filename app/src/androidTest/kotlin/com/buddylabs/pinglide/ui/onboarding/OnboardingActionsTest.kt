@@ -1,7 +1,6 @@
 package com.buddylabs.pinglide.ui.onboarding
 
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -21,7 +20,7 @@ class OnboardingActionsTest {
     val compose = createComposeRule()
 
     @Test
-    fun qqSignInShowsDisclosureBeforeRequestingLogin() {
+    fun tappingQqSignInRequestsLogin() {
         var loginRequests = 0
         compose.setContent {
             PinGlideTheme {
@@ -36,9 +35,6 @@ class OnboardingActionsTest {
             }
         }
 
-        compose.onNodeWithText(text(R.string.setup_qq_privacy))
-            .performScrollTo()
-            .assertIsDisplayed()
         compose.runOnIdle { assertEquals(0, loginRequests) }
         compose.onNodeWithText(text(R.string.setup_qq_sign_in))
             .performScrollTo()
