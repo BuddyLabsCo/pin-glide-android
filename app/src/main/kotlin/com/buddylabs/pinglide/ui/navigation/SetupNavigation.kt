@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -102,17 +103,19 @@ fun SetupNavigation(
             onRetryLogout = onRetryLogout
         )
 
-        SetupDestination.Sms, SetupDestination.SmsDenied -> SmsPermissionScreen(
-            denied = destination == SetupDestination.SmsDenied,
-            requestPending = smsRequestPending,
-            onRequest = {
-                progress.recordSmsRequest()
-                setup = progress.state
-                onRequestSms()
-            },
-            onSettings = onApplicationSettings,
-            onCheckAgain = onCheckSms
-        )
+        SetupDestination.Sms, SetupDestination.SmsDenied -> key(destination) {
+            SmsPermissionScreen(
+                denied = destination == SetupDestination.SmsDenied,
+                requestPending = smsRequestPending,
+                onRequest = {
+                    progress.recordSmsRequest()
+                    setup = progress.state
+                    onRequestSms()
+                },
+                onSettings = onApplicationSettings,
+                onCheckAgain = onCheckSms
+            )
+        }
 
         SetupDestination.Battery -> BatterySetupScreen(
             onSettings = onBatterySettings,

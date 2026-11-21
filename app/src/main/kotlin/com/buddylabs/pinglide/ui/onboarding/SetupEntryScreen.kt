@@ -413,7 +413,7 @@ private fun RingedSmsEmblem(denied: Boolean) {
     val colors = MaterialTheme.colorScheme
     val ring = colors.primary.copy(alpha = 0.22f)
     val iconTint = if (denied) {
-        colorResource(R.color.registration_error)
+        colorResource(R.color.error_emblem)
     } else {
         colors.onPrimaryContainer
     }
@@ -425,7 +425,7 @@ private fun RingedSmsEmblem(denied: Boolean) {
         Box(
             modifier = Modifier.size(148.dp).background(
                 if (denied) {
-                    SolidColor(colorResource(R.color.registration_error_container))
+                    SolidColor(colorResource(R.color.error_emblem_container))
                 } else {
                     Brush.linearGradient(listOf(colors.primaryContainer, colors.secondaryContainer))
                 },
