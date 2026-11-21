@@ -37,28 +37,33 @@ class HomeReadyScreenTest {
 
     @Test
     fun readyHomeUsesEnglishWhenSelected() {
-        verifyHome(AppLanguage.English, "en", "Online · State changed: 2 minutes ago")
+        verifyHome(AppLanguage.English, "fr-FR", "en", "Online · State changed: 2 minutes ago")
     }
 
     @Test
     fun readyHomeUsesSimplifiedChineseWhenSelected() {
-        verifyHome(AppLanguage.SimplifiedChinese, "zh-Hans", "在线 · 状态变化：2分钟前")
+        verifyHome(AppLanguage.SimplifiedChinese, "en-US", "zh-Hans", "在线 · 状态变化：2分钟前")
     }
 
     @Test
     fun readyHomeFallsBackToSimplifiedChineseForFrenchSystemLocale() {
-        verifyHome(AppLanguage.System, "zh-Hans", "在线 · 状态变化：2分钟前")
+        verifyHome(AppLanguage.System, "fr-FR", "zh-Hans", "在线 · 状态变化：2分钟前")
     }
 
-    private fun verifyHome(language: AppLanguage, expectedLocale: String, officePresence: String) {
+    private fun verifyHome(
+        language: AppLanguage,
+        systemLocale: String,
+        expectedLocale: String,
+        officePresence: String
+    ) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val app = instrumentation.targetContext.applicationContext as PinGlideApplication
         val home = HomeViewModel(app.ownPairings, app.senderRestoration()) { null }
-        val frenchSystem = Configuration(app.resources.configuration).apply {
-            setLocales(LocaleList.forLanguageTags("fr-FR"))
+        val systemConfiguration = Configuration(app.resources.configuration).apply {
+            setLocales(LocaleList.forLanguageTags(systemLocale))
         }
         val expected = app.createConfigurationContext(
-            Configuration(frenchSystem).apply {
+            Configuration(systemConfiguration).apply {
                 setLocales(LocaleList.forLanguageTags(expectedLocale))
             }
         )
@@ -84,7 +89,7 @@ class HomeReadyScreenTest {
         var settingsRequests = 0
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         compose.setContent {
-            CompositionLocalProvider(LocalConfiguration provides frenchSystem) {
+            CompositionLocalProvider(LocalConfiguration provides systemConfiguration) {
                 LocalizedContent(language) {
                     PinGlideTheme {
                         HomeScreen(
