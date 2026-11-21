@@ -22,6 +22,7 @@
     <string name="close">关闭</string>
     <string name="setup_title">完成准备</string>
     <string name="setup_step">第 %1$d 步，共 4 步</string>
+    <string name="setup_step_fraction" translatable="false">%1$d / 4</string>
     <string name="setup_sms_title">接收短信</string>
     <string name="setup_sms_description">允许鹊信读取到达的新短信。</string>
     <string name="setup_allow_sms">允许接收短信</string>

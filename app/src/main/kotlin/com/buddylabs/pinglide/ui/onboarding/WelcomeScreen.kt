@@ -148,26 +148,11 @@ fun WelcomeScreen(
 
 @Composable
 private fun Brand() {
-    val tileShape = RoundedCornerShape(11.dp)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Image(
-            painterResource(R.mipmap.ic_launcher),
-            contentDescription = null,
-            modifier = Modifier.align(Alignment.Top).size(38.dp)
-                .dropShadow(
-                    shape = tileShape,
-                    shadow = Shadow(
-                        radius = 12.dp,
-                        color = Color(0xFF0A1210),
-                        offset = DpOffset(0.dp, 5.dp),
-                        alpha = 0.12f
-                    )
-                )
-                .clip(tileShape)
-        )
+        SetupBrandIcon(Modifier.align(Alignment.Top).size(38.dp))
         Column {
             Text(
                 stringResource(R.string.app_name),
@@ -186,4 +171,22 @@ private fun Brand() {
             )
         }
     }
+}
+
+@Composable
+internal fun SetupBrandIcon(modifier: Modifier) {
+    val tileShape = RoundedCornerShape(11.dp)
+    Image(
+        painterResource(R.mipmap.ic_launcher),
+        contentDescription = null,
+        modifier = modifier.dropShadow(
+            shape = tileShape,
+            shadow = Shadow(
+                radius = 12.dp,
+                color = Color(0xFF0A1210),
+                offset = DpOffset(0.dp, 5.dp),
+                alpha = 0.12f
+            )
+        ).clip(tileShape)
+    )
 }
