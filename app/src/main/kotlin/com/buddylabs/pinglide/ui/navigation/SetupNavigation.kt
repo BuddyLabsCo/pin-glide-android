@@ -123,8 +123,7 @@ fun SetupNavigation(
                 onCheckSms()
                 progress.acknowledgeBattery()
                 setup = progress.state
-            },
-            onBack = onBackground
+            }
         )
 
         SetupDestination.QqLogin -> QqLoginScreen(

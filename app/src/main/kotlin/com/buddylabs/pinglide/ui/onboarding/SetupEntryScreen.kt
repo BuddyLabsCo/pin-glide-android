@@ -29,7 +29,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -253,28 +252,7 @@ private fun DeniedSmsActions(
 }
 
 @Composable
-fun BatterySetupScreen(onSettings: () -> Boolean, onNext: () -> Unit, onBack: () -> Unit) {
-    var settingsUnavailable by rememberSaveable { mutableStateOf(false) }
-    SetupStepScreen(
-        step = 2,
-        icon = R.drawable.ic_battery,
-        title = R.string.setup_battery_title,
-        description = R.string.setup_battery_description,
-        onBack = onBack
-    ) {
-        SettingsError(settingsUnavailable)
-        Button(
-            onClick = { settingsUnavailable = !onSettings() },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
-        ) { Text(stringResource(R.string.setup_open_battery_settings)) }
-        OutlinedButton(onClick = onNext, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-            Text(stringResource(R.string.setup_next))
-        }
-    }
-}
-
-@Composable
-private fun SettingsError(visible: Boolean) {
+internal fun SettingsError(visible: Boolean) {
     if (visible) {
         Text(
             stringResource(R.string.setup_settings_unavailable),
