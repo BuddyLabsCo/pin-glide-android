@@ -8,7 +8,7 @@ android
 
 ## Stack
 
-Jetpack Compose with Material 3 for the product; a throwaway static HTML/CSS/JS prototype is used for UI decision review.
+Jetpack Compose with Material 3 for the product;  a throwaway static HTML/CSS/JS prototype is used for UI decision review.
 
 ## Users
 

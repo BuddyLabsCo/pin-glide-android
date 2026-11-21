@@ -40,7 +40,6 @@
     <string name="setup_qq_title">Connect your QQ</string>
     <string name="setup_qq_description">Sign in with QQ to manage devices and authorize encrypted forwarding.</string>
     <string name="setup_qq_sign_in">Sign in with QQ</string>
-    <string name="setup_qq_privacy">By signing in, you authorize QQ Connect (Tencent) to use your device model and QQ/TIM installation information for authorization. Pin Glide sends a fresh one-use code to its service; QQ provider credentials stay with the service.</string>
     <string name="setup_qq_loading">Signing in with QQ</string>
     <string name="setup_qq_error_title">Sign-in did not complete</string>
     <string name="setup_qq_error_description">QQ authorization was cancelled or sign-in could not be confirmed. Try signing in again.</string>

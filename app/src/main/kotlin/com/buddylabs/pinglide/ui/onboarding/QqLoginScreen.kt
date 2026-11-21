@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,6 +45,8 @@ fun QqLoginScreen(
     onBack: () -> Unit
 ) {
     when (state) {
+        LoginState.Entry -> QqSignInScreen(onLogin)
+
         LoginState.Loading -> {
             val title = stringResource(R.string.setup_qq_loading)
             LoginProgressLayout(
@@ -94,12 +97,24 @@ fun QqLoginScreen(
 
         LoginState.FirstDevice -> Unit
 
-        else -> LoginActionScreen(state, onLogin, onNewAccount, onCancel, onRetryStorage, onBack)
+        else -> LoginErrorScreen(state, onLogin, onNewAccount, onCancel, onRetryStorage, onBack)
     }
 }
 
 @Composable
-private fun LoginActionScreen(
+private fun QqSignInScreen(onLogin: () -> Unit) {
+    CompactSetupStepScreen(
+        step = 3,
+        title = R.string.setup_qq_title,
+        description = R.string.setup_qq_description,
+        emblem = { RingedSetupEmblem(CircleShape) { QqEmblem() } }
+    ) {
+        CompactSetupButton(R.string.setup_qq_sign_in, R.drawable.ic_chevron, onLogin)
+    }
+}
+
+@Composable
+private fun LoginErrorScreen(
     state: LoginState,
     onLogin: () -> Unit,
     onNewAccount: () -> Unit,
@@ -108,44 +123,28 @@ private fun LoginActionScreen(
     onBack: () -> Unit
 ) {
     val storageError = state == LoginState.StorageError
-    val error = state != LoginState.Entry
     SetupStepScreen(
         step = 3,
         icon = R.drawable.ic_info,
-        title = when {
-            storageError -> R.string.setup_identity_unavailable_title
-            error -> R.string.setup_qq_error_title
-            else -> R.string.setup_qq_title
+        title = if (storageError) {
+            R.string.setup_identity_unavailable_title
+        } else {
+            R.string.setup_qq_error_title
         },
         description = when {
             storageError -> R.string.setup_identity_unavailable_description
             state == LoginState.RestorationError -> R.string.account_restore_error
-            error -> R.string.setup_qq_error_description
-            else -> R.string.setup_qq_description
+            else -> R.string.setup_qq_error_description
         },
         onBack = onBack,
-        error = error,
-        emblem = if (error) {
-            null
-        } else {
-            { QqEmblem() }
-        },
-        notice = {
-            if (!error) {
-                Text(
-                    stringResource(R.string.setup_qq_privacy),
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
+        error = true
     ) {
-        LoginActions(state, onLogin, onNewAccount, onCancel, onRetryStorage)
+        LoginErrorActions(state, onLogin, onNewAccount, onCancel, onRetryStorage)
     }
 }
 
 @Composable
-private fun LoginActions(
+private fun LoginErrorActions(
     state: LoginState,
     onLogin: () -> Unit,
     onNewAccount: () -> Unit,
@@ -153,18 +152,13 @@ private fun LoginActions(
     onRetryStorage: () -> Unit
 ) {
     val storageError = state == LoginState.StorageError
-    val error = state != LoginState.Entry
     Button(
         onClick = if (storageError) onRetryStorage else onLogin,
         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
     ) {
         Text(
             stringResource(
-                when {
-                    storageError -> R.string.setup_check_again
-                    error -> R.string.setup_qq_retry
-                    else -> R.string.setup_qq_sign_in
-                }
+                if (storageError) R.string.setup_check_again else R.string.setup_qq_retry
             )
         )
     }
