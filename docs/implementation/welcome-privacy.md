@@ -45,9 +45,9 @@ Close, Got it and Back dismiss it to the caller. Its visibility survives Activit
 recreation. Settings can use the same screen and supply its own dismiss action;
 `PrivacyContent` also exposes the shared copy for a column-based host.
 
-The copy distinguishes direct Bailian processing from ciphertext routing by the
-Pin Glide service, explains client-only keys and safe diagnostics, and states
-cloud/device-transfer exclusions and the login/Pairing consequences of data loss.
+As of issue #69, the shared privacy body follows the approved prototype: an
+introduction, four icon-and-text rows, and a notice about losing local identity
+and Pairing keys on reinstall or app data clearing.
 
 ## Verification
 
