@@ -151,7 +151,10 @@ class OnboardingActionsTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         compose.onNodeWithContentDescription(context.getString(R.string.setup_step, 4))
             .assert(!hasClickAction())
-        compose.onNodeWithContentDescription(text(R.string.setup_back)).assertDoesNotExist()
+        val backLabel = text(R.string.setup_back)
+        compose.onAllNodes(
+            hasClickAction() and (hasText(backLabel) or hasContentDescription(backLabel))
+        ).assertCountEquals(0)
         compose.onNodeWithText(text(R.string.pairing_scan_title))
             .performScrollTo()
             .performTouchInput { click() }
