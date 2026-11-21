@@ -111,8 +111,7 @@ fun SetupNavigation(
                 onRequestSms()
             },
             onSettings = onApplicationSettings,
-            onCheckAgain = onCheckSms,
-            onBack = onBackground
+            onCheckAgain = onCheckSms
         )
 
         SetupDestination.Battery -> BatterySetupScreen(
