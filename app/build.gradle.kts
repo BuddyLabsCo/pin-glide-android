@@ -34,6 +34,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "QQ_APP_ID", "\"$qqAppId\"")
         buildConfigField("String", "SERVICE_URL", "\"$serviceUrl\"")
         manifestPlaceholders["qqAuthScheme"] = "tencent${qqAppId.ifEmpty { "unconfigured" }}"
@@ -122,4 +123,9 @@ dependencies {
     implementation(libs.camera.mlkit)
     implementation(libs.barcode.scanning)
     testImplementation(libs.junit)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.espresso)
+    androidTestImplementation(libs.androidx.test.runner)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
