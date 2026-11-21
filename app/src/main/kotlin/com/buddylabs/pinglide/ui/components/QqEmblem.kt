@@ -1,12 +1,19 @@
 package com.buddylabs.pinglide.ui.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -17,14 +24,16 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
-import androidx.compose.ui.semantics.progressBarRangeInfo
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
 
@@ -34,7 +43,15 @@ internal fun QqEmblem(size: Dp = 92.dp) {
     Image(
         painterResource(R.drawable.ic_qq),
         contentDescription = null,
-        modifier = Modifier.size(size).shadow(10.dp, shape)
+        modifier = Modifier.size(size).dropShadow(
+            shape,
+            Shadow(
+                radius = 24.dp,
+                color = Color(0xFF075E9D),
+                offset = DpOffset(0.dp, 10.dp),
+                alpha = 0.22f
+            )
+        )
             .background(
                 Brush.linearGradient(listOf(Color(0xFF1597DE), Color(0xFF075E9D))),
                 shape
@@ -51,14 +68,33 @@ internal fun QqLoadingEmblem() {
             motionEnabled = it
         }
     }
+    val rotation = if (motionEnabled) {
+        rememberInfiniteTransition(label = "QQ sign-in").animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(1000, easing = LinearEasing)),
+            label = "Progress arc rotation"
+        )
+    } else {
+        null
+    }
+    val arc = MaterialTheme.colorScheme.primary
+    val track = MaterialTheme.colorScheme.surfaceContainerHigh
     Box(Modifier.size(168.dp), contentAlignment = Alignment.Center) {
-        val progressModifier = Modifier.matchParentSize().semantics {
-            progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
-        }
-        if (motionEnabled) {
-            CircularProgressIndicator(progressModifier, strokeWidth = 6.dp)
-        } else {
-            CircularProgressIndicator(progress = { 0.25f }, progressModifier, strokeWidth = 6.dp)
+        Canvas(Modifier.matchParentSize().progressSemantics()) {
+            val stroke = Stroke(6.dp.toPx())
+            val diameter = (size.minDimension - stroke.width).coerceAtLeast(0f)
+            val radius = diameter / 2f
+            drawCircle(track, radius = radius, style = stroke)
+            drawArc(
+                color = arc,
+                startAngle = -135f + (rotation?.value ?: 0f),
+                sweepAngle = 90f,
+                useCenter = false,
+                topLeft = center - Offset(radius, radius),
+                size = Size(diameter, diameter),
+                style = stroke
+            )
         }
         QqEmblem()
     }

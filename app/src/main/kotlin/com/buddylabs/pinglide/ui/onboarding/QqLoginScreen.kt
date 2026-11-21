@@ -2,7 +2,6 @@ package com.buddylabs.pinglide.ui.onboarding
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -22,8 +21,10 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.identity.LoginState
 import com.buddylabs.pinglide.ui.components.QqEmblem
@@ -136,53 +137,54 @@ private fun LoginActions(
 
 @Composable
 private fun LoginBusyScreen(state: LoginState, onCancel: () -> Unit, onBack: () -> Unit) {
+    val signingIn = state == LoginState.Loading
     val title = stringResource(
-        if (state ==
-            LoginState.Loading
-        ) {
-            R.string.setup_qq_loading
-        } else {
-            R.string.setup_identity_loading
-        }
+        if (signingIn) R.string.setup_qq_loading else R.string.setup_identity_loading
     )
     ScreenLayout {
-        Spacer(Modifier.weight(1f))
         Column(
-            modifier = Modifier.fillMaxWidth().weight(2f).verticalScroll(rememberScrollState())
+            modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+                .then(if (signingIn) Modifier.padding(top = 20.dp, bottom = 26.dp) else Modifier)
                 .semantics {
                     paneTitle = title
                     liveRegion = LiveRegionMode.Polite
                 },
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically)
+            verticalArrangement = Arrangement.spacedBy(
+                if (signingIn) 44.dp else 24.dp,
+                Alignment.CenterVertically
+            )
         ) {
-            if (state == LoginState.Loading) {
+            if (signingIn) {
                 QqLoadingEmblem()
             } else {
                 CircularProgressIndicator()
             }
             Text(
                 title,
-                style = MaterialTheme.typography.headlineLarge,
+                style = if (signingIn) {
+                    MaterialTheme.typography.headlineMedium.copy(
+                        fontSize = 26.sp,
+                        lineHeight = 30.sp,
+                        fontWeight = FontWeight(750),
+                        letterSpacing = (-1.17).sp
+                    )
+                } else {
+                    MaterialTheme.typography.headlineLarge
+                },
                 textAlign = TextAlign.Center,
                 modifier = Modifier.semantics { heading() }
             )
         }
-        Spacer(Modifier.weight(1f))
         TextButton(
-            onClick = if (state == LoginState.Loading) onCancel else onBack,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp).heightIn(min = 48.dp)
+            onClick = if (signingIn) onCancel else onBack,
+            modifier = Modifier.fillMaxWidth().padding(vertical = if (signingIn) 0.dp else 16.dp)
+                .heightIn(min = 48.dp)
         ) {
             Text(
-                stringResource(
-                    if (state ==
-                        LoginState.Loading
-                    ) {
-                        R.string.setup_cancel
-                    } else {
-                        R.string.setup_back
-                    }
-                )
+                stringResource(if (signingIn) R.string.setup_cancel else R.string.setup_back),
+                fontWeight = if (signingIn) FontWeight.Bold else FontWeight.Medium,
+                letterSpacing = if (signingIn) 0.14.sp else 0.1.sp
             )
         }
     }
