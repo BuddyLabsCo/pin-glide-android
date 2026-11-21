@@ -72,7 +72,8 @@
     <string name="home_receive">%1$s接收短信</string>
     <string name="home_key_unavailable">密钥丢失或损坏</string>
     <string name="home_ready_title">转发已就绪</string>
-    <string name="home_ready_copy">新短信会加密转发到已选择的设备；鹊信不会读取历史短信。</string>
+    <string name="home_ready_copy">新短信会被端到端加密后送往选中的设备。</string>
+    <string name="home_presence_just_now">刚刚</string>
     <string name="home_empty_title">账号已连接</string>
     <string name="home_empty_copy">添加第一台设备后，鹊信才会开始转发新短信。</string>
     <string name="home_disabled_title">尚未选择接收设备</string>

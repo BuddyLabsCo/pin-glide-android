@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
+import com.buddylabs.pinglide.ui.components.BrandIcon
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
@@ -338,7 +339,7 @@ private fun CompactSetupStepHeader(step: Int) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(11.dp)
     ) {
-        SetupBrandIcon(Modifier.size(34.dp))
+        BrandIcon(Modifier.size(34.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 stringResource(R.string.setup_title),
