@@ -230,7 +230,12 @@ private fun HomeContent(
             val showAdd = state.listed && state.targets.size in 1..4 && canAdd(readiness)
             Column(Modifier.fillMaxSize()) {
                 HomeHeader(headingFocus, onSettings, compact)
-                HomeRefreshContainer(state, showListProgress, onRefresh, Modifier.weight(1f)) {
+                HomeRefreshContainer(
+                    state,
+                    showListProgress,
+                    onRefresh,
+                    Modifier.weight(1f)
+                ) { refreshHint ->
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
@@ -246,7 +251,8 @@ private fun HomeContent(
                                 smsRecovery,
                                 onRestoreSms,
                                 onAdd,
-                                onRestoreLogin
+                                onRestoreLogin,
+                                refreshHint
                             )
                         }
                         items(state.targets, key = { it.pairingId }) { target ->
@@ -358,7 +364,8 @@ private fun HomeSummary(
     smsRecovery: SmsRecovery,
     onRestoreSms: () -> Unit,
     onAdd: () -> Unit,
-    onRestoreLogin: () -> Unit
+    onRestoreLogin: () -> Unit,
+    refreshHint: @Composable () -> Unit
 ) {
     val spacing = when {
         showListProgress -> 0.dp
@@ -366,22 +373,27 @@ private fun HomeSummary(
         else -> 16.dp
     }
     Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
-        HomeHero(state, readiness)
-        if (readiness == HomeReadiness.LoginRequired) {
-            Button(
-                onClick = onRestoreLogin,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            ) {
-                Text(stringResource(R.string.home_login_action))
+        Column {
+            Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
+                HomeHero(state, readiness)
+                if (readiness == HomeReadiness.LoginRequired) {
+                    Button(
+                        onClick = onRestoreLogin,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    ) {
+                        Text(stringResource(R.string.home_login_action))
+                    }
+                } else if (!smsGranted) {
+                    HomeSmsRecovery(smsRecovery == SmsRecovery.Pending, onRestoreSms)
+                }
+                if (state.failed && state.targets.isNotEmpty()) {
+                    Text(
+                        stringResource(R.string.home_cached_notice),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
-        } else if (!smsGranted) {
-            HomeSmsRecovery(smsRecovery == SmsRecovery.Pending, onRestoreSms)
-        }
-        if (state.failed && state.targets.isNotEmpty()) {
-            Text(
-                stringResource(R.string.home_cached_notice),
-                style = MaterialTheme.typography.bodyMedium
-            )
+            refreshHint()
         }
         when {
             showListProgress -> HomeLoadingCard()

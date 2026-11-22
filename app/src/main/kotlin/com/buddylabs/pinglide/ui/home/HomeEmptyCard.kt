@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
@@ -98,12 +99,6 @@ internal fun HomeEmptyCard(onAdd: () -> Unit) {
 @Composable
 internal fun HomeLoadingCard() {
     val colors = MaterialTheme.colorScheme
-    val rotation = rememberInfiniteTransition(label = "Device list").animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(1000, easing = LinearEasing)),
-        label = "Loading arc rotation"
-    )
     Column(
         Modifier.fillMaxWidth().heightIn(min = 280.dp).dashedOutline().padding(28.dp)
             .progressSemantics().semantics(mergeDescendants = true) {
@@ -112,24 +107,35 @@ internal fun HomeLoadingCard() {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Canvas(Modifier.size(20.dp)) {
-            val width = 2.dp.toPx()
-            drawArc(
-                color = colors.onSurface,
-                startAngle = 45f + rotation.value,
-                sweepAngle = 270f,
-                useCenter = false,
-                topLeft = Offset(width / 2, width / 2),
-                size = Size(size.width - width, size.height - width),
-                style = Stroke(width)
-            )
-        }
+        HomeLoadingSpinner(colors.onSurface)
         Text(
             stringResource(R.string.home_loading_region),
             modifier = Modifier.widthIn(max = 240.dp).padding(top = 8.dp, bottom = 20.dp),
             color = colors.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
             textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+internal fun HomeLoadingSpinner(color: Color) {
+    val rotation = rememberInfiniteTransition(label = "Device list").animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(1000, easing = LinearEasing)),
+        label = "Loading arc rotation"
+    )
+    Canvas(Modifier.size(20.dp)) {
+        val width = 2.dp.toPx()
+        drawArc(
+            color = color,
+            startAngle = 45f + rotation.value,
+            sweepAngle = 270f,
+            useCenter = false,
+            topLeft = Offset(width / 2, width / 2),
+            size = Size(size.width - width, size.height - width),
+            style = Stroke(width)
         )
     }
 }
