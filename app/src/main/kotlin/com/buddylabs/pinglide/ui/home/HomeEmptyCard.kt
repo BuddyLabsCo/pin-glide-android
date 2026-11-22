@@ -1,5 +1,7 @@
 package com.buddylabs.pinglide.ui.home
 
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -43,47 +45,18 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 
 @Composable
 internal fun HomeEmptyCard(onAdd: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Column(
-        Modifier.fillMaxWidth().dashedOutline().padding(28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    HomeIllustratedCard(
+        R.drawable.ic_computer,
+        R.string.home_no_devices,
+        R.string.home_add_instructions
     ) {
-        Box(
-            Modifier.size(72.dp).background(colors.primaryContainer, RoundedCornerShape(24.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painterResource(R.drawable.ic_computer),
-                null,
-                Modifier.size(30.dp),
-                colors.primary
-            )
-        }
-        Spacer(Modifier.height(18.dp))
-        Text(
-            stringResource(R.string.home_no_devices),
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontSize = 18.sp,
-                fontWeight = FontWeight(730)
-            ),
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            stringResource(R.string.home_add_instructions),
-            modifier = Modifier.widthIn(max = 240.dp),
-            color = colors.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(20.dp))
         FilledTonalButton(onClick = onAdd, modifier = Modifier.heightIn(min = 48.dp)) {
             Icon(painterResource(R.drawable.ic_qr), null, Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
@@ -93,6 +66,58 @@ internal fun HomeEmptyCard(onAdd: () -> Unit) {
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+@Composable
+private fun HomeIllustratedCard(
+    @DrawableRes icon: Int,
+    @StringRes title: Int,
+    @StringRes copy: Int,
+    modifier: Modifier = Modifier,
+    copyTracking: TextUnit = MaterialTheme.typography.bodySmall.letterSpacing,
+    action: @Composable () -> Unit = {}
+) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        modifier.fillMaxWidth().dashedOutline().padding(28.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier.size(72.dp).background(colors.primaryContainer, RoundedCornerShape(24.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painterResource(icon),
+                null,
+                Modifier.size(30.dp),
+                colors.primary
+            )
+        }
+        Spacer(Modifier.height(18.dp))
+        Text(
+            stringResource(title),
+            modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontSize = 18.sp,
+                fontWeight = FontWeight(730)
+            ),
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            stringResource(copy),
+            modifier = Modifier.widthIn(max = 240.dp),
+            color = colors.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall.copy(
+                lineHeight = 18.sp,
+                letterSpacing = copyTracking
+            ),
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(20.dp))
+        action()
     }
 }
 
@@ -142,11 +167,12 @@ internal fun HomeLoadingSpinner(color: Color) {
 
 @Composable
 internal fun HomeListUnavailable() {
-    Text(
-        stringResource(R.string.home_load_error_region),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp)
-            .semantics { liveRegion = LiveRegionMode.Polite },
-        textAlign = TextAlign.Center
+    HomeIllustratedCard(
+        R.drawable.ic_cloud_off,
+        R.string.home_load_error_region_title,
+        R.string.home_load_error_region,
+        Modifier.heightIn(min = 280.dp).semantics { liveRegion = LiveRegionMode.Polite },
+        copyTracking = 0.sp
     )
 }
 

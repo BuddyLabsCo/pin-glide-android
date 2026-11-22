@@ -40,11 +40,14 @@ import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.HomeReadiness
 import com.buddylabs.pinglide.domain.pairing.HomeState
 
+internal fun HomeState.hasInitialListFailure(readiness: HomeReadiness): Boolean =
+    readiness == HomeReadiness.Unknown && failed && !listed && targets.isEmpty()
+
 @Composable
 internal fun HomeHero(state: HomeState, readiness: HomeReadiness) {
     val strings = heroStrings(state, readiness)
-    if (readiness == HomeReadiness.Empty) {
-        EmptyHero(strings)
+    if (readiness == HomeReadiness.Empty || state.hasInitialListFailure(readiness)) {
+        IllustratedWarningHero(strings, showWaitingBadge = readiness == HomeReadiness.Empty)
         return
     }
     val preparing = readiness == HomeReadiness.Unknown && !state.listed
@@ -88,7 +91,7 @@ private fun HeroCopy(strings: Pair<Int, Int>, prominent: Boolean, modifier: Modi
 }
 
 @Composable
-private fun EmptyHero(strings: Pair<Int, Int>) {
+private fun IllustratedWarningHero(strings: Pair<Int, Int>, showWaitingBadge: Boolean) {
     val colors = MaterialTheme.colorScheme
     val warning = colorResource(R.color.setup_warning_container)
     Surface(
@@ -99,10 +102,12 @@ private fun EmptyHero(strings: Pair<Int, Int>) {
     ) {
         BoxWithConstraints(
             Modifier.fillMaxWidth().heightIn(min = 128.dp)
-                .emptyHeroBackdrop(warning, colors.surfaceContainerHigh, colors.primary)
+                .warningHeroBackdrop(warning, colors.surfaceContainerHigh, colors.primary)
                 .padding(18.dp)
         ) {
-            if (maxWidth < 264.dp * LocalDensity.current.fontScale) {
+            if (!showWaitingBadge) {
+                HeroCopy(strings, prominent = true)
+            } else if (maxWidth < 264.dp * LocalDensity.current.fontScale) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     HeroCopy(strings, prominent = true)
                     WaitingBadge()
@@ -117,7 +122,7 @@ private fun EmptyHero(strings: Pair<Int, Int>) {
     }
 }
 
-private fun Modifier.emptyHeroBackdrop(
+private fun Modifier.warningHeroBackdrop(
     startColor: Color,
     endColor: Color,
     accent: Color

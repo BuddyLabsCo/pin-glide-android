@@ -160,8 +160,11 @@ class HomeCapacityScreenTest {
     }
 }
 
-internal class HomePairingStore(targets: List<RemotePairing>, expiresAt: String) :
-    IdentityStore,
+internal class HomePairingStore(
+    targets: List<RemotePairing>,
+    expiresAt: String,
+    private var listed: Boolean = true
+) : IdentityStore,
     PairingStore {
     private val authority = IdentitySnapshot(
         generation = 1,
@@ -186,10 +189,11 @@ internal class HomePairingStore(targets: List<RemotePairing>, expiresAt: String)
     override suspend fun read() = authority
 
     override suspend fun readPairings() =
-        PairingSnapshot(authority, revision, true, pairings.values.toList())
+        PairingSnapshot(authority, revision, listed, pairings.values.toList())
 
     override suspend fun reconcile(expected: PairingSnapshot, items: List<RemotePairing>): Boolean {
         pairings.keys.retainAll(items.map { it.pairingId }.toSet())
+        listed = true
         revision++
         return true
     }

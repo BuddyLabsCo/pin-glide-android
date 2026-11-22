@@ -368,11 +368,7 @@ private fun HomeSummary(
     onRestoreLogin: () -> Unit,
     refreshHint: @Composable () -> Unit
 ) {
-    val spacing = when {
-        showListProgress -> 0.dp
-        readiness == HomeReadiness.Empty -> 14.dp
-        else -> 16.dp
-    }
+    val spacing = summarySpacing(state, readiness, showListProgress)
     Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
         Column {
             Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
@@ -406,10 +402,17 @@ private fun HomeSummary(
                 if (state.targets.isEmpty()) EmptyRegion(readiness, onAdd)
             }
 
-            state.failed -> HomeListUnavailable()
+            state.hasInitialListFailure(readiness) -> HomeListUnavailable()
         }
     }
 }
+
+private fun summarySpacing(state: HomeState, readiness: HomeReadiness, showListProgress: Boolean) =
+    when {
+        showListProgress || state.hasInitialListFailure(readiness) -> 0.dp
+        readiness == HomeReadiness.Empty -> 14.dp
+        else -> 16.dp
+    }
 
 @Composable
 private fun TargetGone(onDismiss: () -> Unit, onAdd: () -> Unit) {
