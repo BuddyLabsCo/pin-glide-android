@@ -7,11 +7,15 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -72,9 +76,27 @@ class HomeReadyScreenTest {
 
     @Test
     fun homeWaitsForFirstDeviceListBeforeOfferingPairing() {
-        renderEmptyHome(AppLanguage.English, listed = false)
+        val state = mutableStateOf(
+            HomeState(refreshing = true, authorization = AuthorizationState.Ready)
+        )
+        renderEmptyHome(AppLanguage.English, homeState = { state.value })
         compose.onNodeWithText("Loading device list").assertIsDisplayed()
+            .assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+            )
+            .assert(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.ProgressBarRangeInfo,
+                    ProgressBarRangeInfo.Indeterminate
+                )
+            )
+        compose.onNodeWithText("Refreshing").assertDoesNotExist()
+        compose.onNodeWithText("Add device").assertDoesNotExist()
         compose.onNodeWithText("Add first device").assertDoesNotExist()
+
+        compose.runOnIdle { state.value = state.value.copy(listed = true, refreshing = false) }
+        compose.onNodeWithText("Loading device list").assertDoesNotExist()
+        compose.onNode(hasText("Add first device") and hasClickAction()).assertIsDisplayed()
     }
 
     @Test
@@ -93,14 +115,15 @@ class HomeReadyScreenTest {
 
     private fun renderEmptyHome(
         language: AppLanguage,
-        listed: Boolean = true,
         fontScale: Float = 1f,
-        onAdd: () -> Unit = {}
+        onAdd: () -> Unit = {},
+        homeState: () -> HomeState = {
+            HomeState(listed = true, authorization = AuthorizationState.Ready)
+        }
     ) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val app = instrumentation.targetContext.applicationContext as PinGlideApplication
         val home = HomeViewModel(app.ownPairings, app.senderRestoration()) { null }
-        val state = HomeState(listed = listed, authorization = AuthorizationState.Ready)
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         compose.setContent {
             val density = Density(LocalDensity.current.density, fontScale)
@@ -109,7 +132,7 @@ class HomeReadyScreenTest {
                     LocalizedContent(language) {
                         PinGlideTheme {
                             HomeScreen(
-                                state,
+                                homeState(),
                                 smsGranted = true,
                                 smsRecovery = SmsRecovery.Idle,
                                 home = home,

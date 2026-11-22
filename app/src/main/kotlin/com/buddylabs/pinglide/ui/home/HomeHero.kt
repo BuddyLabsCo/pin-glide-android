@@ -47,15 +47,16 @@ internal fun HomeHero(state: HomeState, readiness: HomeReadiness) {
         EmptyHero(strings)
         return
     }
-    val ready = readiness == HomeReadiness.Ready && !state.failed
+    val preparing = readiness == HomeReadiness.Unknown && !state.listed
+    val prominent = !state.failed && (readiness == HomeReadiness.Ready || preparing)
     Surface(
-        color = if (ready) Color.Transparent else colorResource(R.color.home_warning_container),
-        contentColor = if (ready) Color.White else colorResource(R.color.home_on_warning),
-        shape = RoundedCornerShape(if (ready) 28.dp else 24.dp),
+        color = if (prominent) Color.Transparent else colorResource(R.color.home_warning_container),
+        contentColor = if (prominent) Color.White else colorResource(R.color.home_on_warning),
+        shape = RoundedCornerShape(if (prominent) 28.dp else 24.dp),
         modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }
     ) {
-        val style = if (ready) readyHeroStyle() else Modifier
-        HeroCopy(strings, ready, style.padding(if (ready) 18.dp else 24.dp))
+        val style = if (prominent) readyHeroStyle() else Modifier
+        HeroCopy(strings, prominent, style.padding(if (prominent) 18.dp else 24.dp))
     }
 }
 

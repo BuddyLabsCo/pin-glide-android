@@ -27,6 +27,9 @@ import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.HomeState
 
+internal val HomeState.loadingDeviceList: Boolean
+    get() = refreshing && !listed && !failed
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun HomeRefreshContainer(
@@ -60,6 +63,7 @@ internal fun HomeRefreshContainer(
         }.focusable(),
         indicator = {
             val hint = when {
+                state.loadingDeviceList -> null
                 state.refreshing -> R.string.home_refreshing
                 pull.distanceFraction >= 1f -> R.string.home_pull_release
                 pull.distanceFraction > 0f -> R.string.home_pull_down
