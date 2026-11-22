@@ -74,6 +74,7 @@
     <string name="home_ready_copy">New SMS messages are end-to-end encrypted and sent to the selected devices.</string>
     <string name="home_presence_just_now">Just now</string>
     <string name="home_empty_title">Account connected</string>
+    <string name="home_waiting_for_devices">Waiting for devices</string>
     <string name="home_empty_copy">Add your first device to start forwarding new SMS messages.</string>
     <string name="home_disabled_title">No receiving devices selected</string>
     <string name="home_disabled_copy">Turn on receiving for at least one device to forward new SMS messages.</string>

@@ -333,7 +333,11 @@ private fun HomeSummary(
     onAdd: () -> Unit,
     onRestoreLogin: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(
+            if (readiness == HomeReadiness.Empty) 14.dp else 16.dp
+        )
+    ) {
         HomeHero(state, readiness)
         if (readiness == HomeReadiness.LoginRequired) {
             Button(
@@ -357,8 +361,12 @@ private fun HomeSummary(
                 style = MaterialTheme.typography.bodyMedium
             )
         }
-        if (state.listed) DeviceCount(state.targets.size)
-        if (state.targets.isEmpty()) EmptyRegion(state, readiness, onAdd)
+        if (readiness == HomeReadiness.Empty) {
+            HomeEmptyCard(onAdd)
+        } else {
+            if (state.listed) DeviceCount(state.targets.size)
+            if (state.targets.isEmpty()) EmptyRegion(state, readiness, onAdd)
+        }
     }
 }
 

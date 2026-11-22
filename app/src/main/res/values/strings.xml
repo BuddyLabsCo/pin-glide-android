@@ -75,6 +75,7 @@
     <string name="home_ready_copy">新短信会被端到端加密后送往选中的设备。</string>
     <string name="home_presence_just_now">刚刚</string>
     <string name="home_empty_title">账号已连接</string>
+    <string name="home_waiting_for_devices">等待设备</string>
     <string name="home_empty_copy">添加第一台设备后，鹊信才会开始转发新短信。</string>
     <string name="home_disabled_title">尚未选择接收设备</string>
     <string name="home_disabled_copy">开启至少一台设备的接收开关后，鹊信才会转发新短信。</string>
