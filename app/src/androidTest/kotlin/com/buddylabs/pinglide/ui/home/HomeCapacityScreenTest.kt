@@ -15,6 +15,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
@@ -50,6 +51,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -58,6 +60,7 @@ class HomeCapacityScreenTest {
     val compose = createAndroidComposeRule<ComponentActivity>()
 
     private val scope = CoroutineScope(Dispatchers.Main)
+    private val removedPairingIds = mutableListOf<String>()
 
     @After
     fun stopFixture() = scope.cancel()
@@ -67,21 +70,26 @@ class HomeCapacityScreenTest {
         openHome(Configuration.UI_MODE_NIGHT_NO)
         assertFull(Color(0xFFB45309))
         val target = "客厅设备"
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText(target))
+        val list = compose.onNode(hasScrollAction())
+        list.performScrollToNode(hasText(target))
         compose.onNodeWithText(target).performClick()
         compose.onNodeWithText("移除这台设备的配对").performClick()
         compose.onNodeWithText("移除配对").performClick()
 
-        compose.onNodeWithText("配对已移除")
+        val notice = compose.onNodeWithText("配对已移除")
             .assertIsDisplayed()
             .assert(!hasAnyAncestor(hasScrollAction()))
             .assert(
                 SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
             )
+        assertTrue(
+            "Removal notice is below the device list",
+            list.getUnclippedBoundsInRoot().bottom <= notice.getUnclippedBoundsInRoot().top
+        )
         compose.onNodeWithText("添加设备").assertIsDisplayed().assertHasClickAction()
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText("4 台"))
+        list.performScrollToNode(hasText("4 台"))
         compose.onNodeWithText("4 台").assertIsDisplayed()
-        compose.onNodeWithText(target).assertDoesNotExist()
+        compose.runOnIdle { assertEquals(listOf("pairing-4"), removedPairingIds) }
     }
 
     @Test
@@ -119,6 +127,7 @@ class HomeCapacityScreenTest {
             override suspend fun list(managementToken: String) = remote.values.toList()
 
             override suspend fun remove(managementToken: String, pairingId: String) {
+                removedPairingIds.add(pairingId)
                 checkNotNull(remote.remove(pairingId))
             }
         }

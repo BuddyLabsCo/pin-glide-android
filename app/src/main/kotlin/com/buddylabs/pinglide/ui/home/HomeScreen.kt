@@ -219,6 +219,8 @@ private fun HomeContent(
     LaunchedEffect(Unit) { headingFocus.requestFocus() }
     ScreenLayout {
         BoxWithConstraints(Modifier.fillMaxSize()) {
+            val viewportHeight = maxHeight
+            val showAdd = state.targets.isNotEmpty() && state.targets.size < 5 && canAdd(readiness)
             Column(Modifier.fillMaxSize()) {
                 HomeHeader(headingFocus, onSettings)
                 HomeRefreshContainer(state, onRefresh, Modifier.weight(1f)) {
@@ -257,19 +259,23 @@ private fun HomeContent(
                         }
                     }
                 }
-                if (state.targets.isNotEmpty() && state.targets.size < 5 && canAdd(readiness)) {
+                if (action.result == PairingChange.Removed && action.owner == state.owner) {
+                    val bottomGap = if (showAdd) {
+                        minOf(48.dp, viewportHeight / 16)
+                    } else {
+                        minOf(140.dp, viewportHeight / 3)
+                    }
+                    RemovalNotice(
+                        Modifier.align(Alignment.CenterHorizontally)
+                            .padding(start = 4.dp, top = 4.dp, end = 4.dp, bottom = bottomGap)
+                    )
+                }
+                if (showAdd) {
                     AddDeviceAction(
                         onAdd,
                         Modifier.align(Alignment.End).padding(top = 12.dp, bottom = 24.dp)
                     )
                 }
-            }
-            if (action.result == PairingChange.Removed && action.owner == state.owner) {
-                RemovalNotice(
-                    Modifier.align(Alignment.BottomCenter)
-                        .padding(horizontal = 4.dp)
-                        .padding(bottom = minOf(140.dp, maxHeight / 3))
-                )
             }
         }
     }
