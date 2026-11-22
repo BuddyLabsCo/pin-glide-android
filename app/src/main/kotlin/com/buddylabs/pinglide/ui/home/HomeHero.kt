@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -88,16 +89,18 @@ private fun HeroCopy(strings: Pair<Int, Int>, prominent: Boolean, modifier: Modi
 @Composable
 private fun EmptyHero(strings: Pair<Int, Int>) {
     val colors = MaterialTheme.colorScheme
-    val gradient = Brush.linearGradient(
-        listOf(colorResource(R.color.setup_warning_container), colors.surfaceContainerHigh)
-    )
+    val warning = colorResource(R.color.setup_warning_container)
     Surface(
         color = Color.Transparent,
         contentColor = if (isSystemInDarkTheme()) Color.White else colors.onPrimaryContainer,
         shape = RoundedCornerShape(28.dp),
         modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }
     ) {
-        BoxWithConstraints(heroBackdrop(gradient).padding(18.dp)) {
+        BoxWithConstraints(
+            Modifier.fillMaxWidth().heightIn(min = 128.dp)
+                .emptyHeroBackdrop(warning, colors.surfaceContainerHigh, colors.primary)
+                .padding(18.dp)
+        ) {
             if (maxWidth < 264.dp * LocalDensity.current.fontScale) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     HeroCopy(strings, prominent = true)
@@ -110,6 +113,37 @@ private fun EmptyHero(strings: Pair<Int, Int>) {
                 }
             }
         }
+    }
+}
+
+private fun Modifier.emptyHeroBackdrop(
+    startColor: Color,
+    endColor: Color,
+    accent: Color
+): Modifier = drawWithCache {
+    val midpoint = Offset(size.width / 2, size.height / 2)
+    val axisExtent = (size.width + size.height) / 4
+    val diagonal = Offset(axisExtent, axisExtent)
+    val gradient = Brush.linearGradient(
+        listOf(startColor, endColor),
+        start = midpoint - diagonal,
+        end = midpoint + diagonal
+    )
+    val center = Offset(size.width - 42.dp.toPx(), size.height - 10.dp.toPx())
+    onDrawBehind {
+        drawRect(gradient)
+        drawCircle(
+            accent.copy(alpha = 0.05f),
+            radius = 130.dp.toPx(),
+            center = center,
+            style = Stroke(24.dp.toPx())
+        )
+        drawCircle(
+            accent.copy(alpha = 0.20f),
+            radius = 117.5.dp.toPx(),
+            center = center,
+            style = Stroke(1.dp.toPx())
+        )
     }
 }
 

@@ -4,12 +4,17 @@ import android.content.res.Configuration
 import android.os.LocaleList
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -18,6 +23,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.app.LocalizedContent
@@ -30,6 +37,7 @@ import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import java.time.Instant
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -62,32 +70,69 @@ class HomeReadyScreenTest {
         verifyEmptyHome(AppLanguage.English, "en", "Waiting for devices")
     }
 
-    private fun verifyEmptyHome(language: AppLanguage, locale: String, waiting: String) {
+    @Test
+    fun homeWaitsForFirstDeviceListBeforeOfferingPairing() {
+        renderEmptyHome(AppLanguage.English, listed = false)
+        compose.onNodeWithText("Loading device list").assertIsDisplayed()
+        compose.onNodeWithText("Add first device").assertDoesNotExist()
+    }
+
+    @Test
+    fun emptyHomeStacksTheHeroAndKeepsTheActionReachableAtLargeFontScale() {
+        var addRequests = 0
+        renderEmptyHome(AppLanguage.English, fontScale = 2f, onAdd = { addRequests++ })
+        val heading = compose.onNodeWithText("Account connected").assertIsDisplayed()
+        val badge = compose.onNodeWithText("Waiting for devices").assertIsDisplayed()
+        assertTrue(
+            badge.getUnclippedBoundsInRoot().top >= heading.getUnclippedBoundsInRoot().bottom
+        )
+        compose.onNode(hasText("Add first device") and hasClickAction())
+            .performScrollTo().assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(1, addRequests) }
+    }
+
+    private fun renderEmptyHome(
+        language: AppLanguage,
+        listed: Boolean = true,
+        fontScale: Float = 1f,
+        onAdd: () -> Unit = {}
+    ) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val app = instrumentation.targetContext.applicationContext as PinGlideApplication
         val home = HomeViewModel(app.ownPairings, app.senderRestoration()) { null }
+        val state = HomeState(listed = listed, authorization = AuthorizationState.Ready)
+        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        compose.setContent {
+            val density = Density(LocalDensity.current.density, fontScale)
+            CompositionLocalProvider(LocalDensity provides density) {
+                Box(Modifier.widthIn(max = 366.dp)) {
+                    LocalizedContent(language) {
+                        PinGlideTheme {
+                            HomeScreen(
+                                state,
+                                smsGranted = true,
+                                smsRecovery = SmsRecovery.Idle,
+                                home = home,
+                                onRestoreSms = {},
+                                onAdd = onAdd,
+                                onSettings = {}
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun verifyEmptyHome(language: AppLanguage, locale: String, waiting: String) {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext
         val expected = app.createConfigurationContext(
             Configuration(app.resources.configuration).apply {
                 setLocales(LocaleList.forLanguageTags(locale))
             }
         )
         var addRequests = 0
-        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
-        compose.setContent {
-            LocalizedContent(language) {
-                PinGlideTheme {
-                    HomeScreen(
-                        HomeState(listed = true, authorization = AuthorizationState.Ready),
-                        smsGranted = true,
-                        smsRecovery = SmsRecovery.Idle,
-                        home = home,
-                        onRestoreSms = {},
-                        onAdd = { addRequests++ },
-                        onSettings = {}
-                    )
-                }
-            }
-        }
+        renderEmptyHome(language, onAdd = { addRequests++ })
         compose.onNodeWithText(waiting).assertIsDisplayed()
         compose.onNodeWithText(expected.getString(R.string.home_no_devices))
             .performScrollTo().assertIsDisplayed()
