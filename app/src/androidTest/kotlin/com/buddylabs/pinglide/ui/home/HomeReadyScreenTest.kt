@@ -11,11 +11,13 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.app.LocalizedContent
@@ -48,6 +50,54 @@ class HomeReadyScreenTest {
     @Test
     fun readyHomeFallsBackToSimplifiedChineseForFrenchSystemLocale() {
         verifyHome(AppLanguage.System, "fr-FR", "zh-Hans", "在线 · 状态变化：2分钟前")
+    }
+
+    @Test
+    fun emptyHomeShowsWaitingStatusAndOnlyTheFirstDeviceAction() {
+        verifyEmptyHome(AppLanguage.SimplifiedChinese, "zh-Hans", "等待设备")
+    }
+
+    @Test
+    fun emptyHomeUsesEnglishWhenSelected() {
+        verifyEmptyHome(AppLanguage.English, "en", "Waiting for devices")
+    }
+
+    private fun verifyEmptyHome(language: AppLanguage, locale: String, waiting: String) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val app = instrumentation.targetContext.applicationContext as PinGlideApplication
+        val home = HomeViewModel(app.ownPairings, app.senderRestoration()) { null }
+        val expected = app.createConfigurationContext(
+            Configuration(app.resources.configuration).apply {
+                setLocales(LocaleList.forLanguageTags(locale))
+            }
+        )
+        var addRequests = 0
+        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        compose.setContent {
+            LocalizedContent(language) {
+                PinGlideTheme {
+                    HomeScreen(
+                        HomeState(listed = true, authorization = AuthorizationState.Ready),
+                        smsGranted = true,
+                        smsRecovery = SmsRecovery.Idle,
+                        home = home,
+                        onRestoreSms = {},
+                        onAdd = { addRequests++ },
+                        onSettings = {}
+                    )
+                }
+            }
+        }
+        compose.onNodeWithText(waiting).assertIsDisplayed()
+        compose.onNodeWithText(expected.getString(R.string.home_no_devices))
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(expected.getString(R.string.home_add_instructions))
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(expected.getString(R.string.home_add)).assertDoesNotExist()
+        compose.onNodeWithText(expected.getString(R.string.home_count, 0)).assertDoesNotExist()
+        compose.onNode(hasText(expected.getString(R.string.home_add_first)) and hasClickAction())
+            .performScrollTo().assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(1, addRequests) }
     }
 
     private fun verifyHome(
