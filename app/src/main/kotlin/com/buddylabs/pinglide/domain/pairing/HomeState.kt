@@ -31,6 +31,9 @@ data class HomeState(
     val generation: Long = 0,
     val owner: Pair<String, String>? = null
 ) {
+    private val hasCachedTargetsDuringRefresh: Boolean
+        get() = refreshing && !failed && targets.isNotEmpty()
+
     fun readiness(smsGranted: Boolean): HomeReadiness {
         val enabled = targets.filter { it.enabled && it.keyUsable }
         return when {
@@ -43,7 +46,7 @@ data class HomeState(
 
             authorization != AuthorizationState.Ready -> HomeReadiness.Unknown
 
-            !listed -> HomeReadiness.Unknown
+            !listed && !hasCachedTargetsDuringRefresh -> HomeReadiness.Unknown
 
             targets.isEmpty() -> HomeReadiness.Empty
 

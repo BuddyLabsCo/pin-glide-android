@@ -7,11 +7,15 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -72,15 +76,93 @@ class HomeReadyScreenTest {
 
     @Test
     fun homeWaitsForFirstDeviceListBeforeOfferingPairing() {
-        renderEmptyHome(AppLanguage.English, listed = false)
+        val state = mutableStateOf(
+            HomeState(refreshing = true, authorization = AuthorizationState.Ready)
+        )
+        renderHome(AppLanguage.English, homeState = { state.value })
         compose.onNodeWithText("Loading device list").assertIsDisplayed()
+            .assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+            )
+            .assert(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.ProgressBarRangeInfo,
+                    ProgressBarRangeInfo.Indeterminate
+                )
+            )
+        compose.onNodeWithText("Refreshing").assertDoesNotExist()
+        compose.onNodeWithText("Add device").assertDoesNotExist()
         compose.onNodeWithText("Add first device").assertDoesNotExist()
+
+        compose.runOnIdle { state.value = state.value.copy(listed = true, refreshing = false) }
+        compose.onNodeWithText("Loading device list").assertDoesNotExist()
+        compose.onNode(hasText("Add first device") and hasClickAction()).assertIsDisplayed()
+    }
+
+    @Test
+    fun homeAnnouncesListRefreshWhileSmsPermissionIsOff() {
+        renderHome(AppLanguage.English, smsGranted = false, homeState = {
+            HomeState(refreshing = true, authorization = AuthorizationState.Ready)
+        })
+
+        assertRefreshing()
+        compose.onNode(hasText("Allow SMS permission again") and hasClickAction())
+            .assertIsDisplayed()
+        compose.onNodeWithText("Loading device list").assertDoesNotExist()
+    }
+
+    @Test
+    fun homeKeepsCachedDevicesWhenFirstListRefreshFails() {
+        val target = TargetDevice("cached", "Cached device", enabled = true, keyUsable = true)
+        val state = mutableStateOf(
+            HomeState(
+                targets = listOf(target),
+                refreshing = true,
+                authorization = AuthorizationState.Ready
+            )
+        )
+        renderHome(AppLanguage.English, homeState = { state.value })
+
+        assertRefreshing()
+        compose.onNodeWithText("Ready to forward").assertIsDisplayed()
+        compose.onNodeWithText("Loading device list").assertDoesNotExist()
+        compose.onNodeWithText("Cached device").assertIsDisplayed()
+        compose.onNodeWithText("Add device").assertDoesNotExist()
+
+        compose.runOnIdle {
+            state.value = state.value.copy(targets = listOf(target.copy(enabled = false)))
+        }
+        compose.onNodeWithText("No receiving devices selected").assertIsDisplayed()
+        compose.runOnIdle {
+            state.value =
+                state.value.copy(targets = listOf(target.copy(presence = Presence.Offline)))
+        }
+        compose.onNodeWithText("All selected devices are offline").assertIsDisplayed()
+
+        compose.runOnIdle {
+            state.value =
+                state.value.copy(targets = listOf(target), refreshing = false, failed = true)
+        }
+        compose.onNodeWithText("Refreshing").assertDoesNotExist()
+        compose.onNodeWithText("Device status not updated").assertIsDisplayed()
+        compose.onNodeWithText("Existing Pairings are retained.", substring = true)
+            .assertIsDisplayed()
+        compose.onNodeWithText("Cached device").assertIsDisplayed()
+        compose.onNodeWithText("Pull down or use the Refresh device list", substring = true)
+            .assertDoesNotExist()
+        compose.onNodeWithText("Add device").assertDoesNotExist()
+    }
+
+    private fun assertRefreshing() {
+        compose.onNodeWithText("Refreshing").assertIsDisplayed().assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+        )
     }
 
     @Test
     fun emptyHomeStacksTheHeroAndKeepsTheActionReachableAtLargeFontScale() {
         var addRequests = 0
-        renderEmptyHome(AppLanguage.English, fontScale = 2f, onAdd = { addRequests++ })
+        renderHome(AppLanguage.English, fontScale = 2f, onAdd = { addRequests++ })
         val heading = compose.onNodeWithText("Account connected").assertIsDisplayed()
         val badge = compose.onNodeWithText("Waiting for devices").assertIsDisplayed()
         assertTrue(
@@ -91,16 +173,18 @@ class HomeReadyScreenTest {
         compose.runOnIdle { assertEquals(1, addRequests) }
     }
 
-    private fun renderEmptyHome(
+    private fun renderHome(
         language: AppLanguage,
-        listed: Boolean = true,
         fontScale: Float = 1f,
-        onAdd: () -> Unit = {}
+        onAdd: () -> Unit = {},
+        smsGranted: Boolean = true,
+        homeState: () -> HomeState = {
+            HomeState(listed = true, authorization = AuthorizationState.Ready)
+        }
     ) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val app = instrumentation.targetContext.applicationContext as PinGlideApplication
         val home = HomeViewModel(app.ownPairings, app.senderRestoration()) { null }
-        val state = HomeState(listed = listed, authorization = AuthorizationState.Ready)
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         compose.setContent {
             val density = Density(LocalDensity.current.density, fontScale)
@@ -109,8 +193,8 @@ class HomeReadyScreenTest {
                     LocalizedContent(language) {
                         PinGlideTheme {
                             HomeScreen(
-                                state,
-                                smsGranted = true,
+                                homeState(),
+                                smsGranted = smsGranted,
                                 smsRecovery = SmsRecovery.Idle,
                                 home = home,
                                 onRestoreSms = {},
@@ -132,7 +216,7 @@ class HomeReadyScreenTest {
             }
         )
         var addRequests = 0
-        renderEmptyHome(language, onAdd = { addRequests++ })
+        renderHome(language, onAdd = { addRequests++ })
         compose.onNodeWithText(waiting).assertIsDisplayed()
         compose.onNodeWithText(expected.getString(R.string.home_no_devices))
             .performScrollTo().assertIsDisplayed()
