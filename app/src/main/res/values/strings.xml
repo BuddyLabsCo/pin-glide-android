@@ -80,6 +80,7 @@
     <string name="home_disabled_title">尚未选择接收设备</string>
     <string name="home_disabled_copy">开启至少一台设备的接收开关后，鹊信才会转发新短信。</string>
     <string name="home_offline_title">接收目标均已离线</string>
+    <string name="home_all_offline">全部离线</string>
     <string name="home_offline_copy">已开启接收的设备当前均离线。目标设备上线后才能接收新短信，离线期间的短信不会补发。</string>
     <string name="home_loading_title">正在准备转发</string>
     <string name="home_loading_copy">正在获取服务端返回的设备和配对状态。</string>
