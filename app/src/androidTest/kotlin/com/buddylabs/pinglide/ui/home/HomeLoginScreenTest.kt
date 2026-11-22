@@ -138,14 +138,16 @@ class HomeLoginScreenTest {
             compose.setContent {
                 val state by home.loginRestoration.collectAsState()
                 LaunchedEffect(Unit) { home.restoreLogin() }
-                LocalizedContent(AppLanguage.SimplifiedChinese) {
-                    PinGlideTheme {
-                        HomeLoginScreen(
-                            state,
-                            home::restoreLogin,
-                            home::cancelLogin,
-                            home::leaveLogin
-                        )
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    LocalizedContent(AppLanguage.SimplifiedChinese) {
+                        PinGlideTheme {
+                            HomeLoginScreen(
+                                state,
+                                home::restoreLogin,
+                                home::cancelLogin,
+                                home::leaveLogin
+                            )
+                        }
                     }
                 }
             }
