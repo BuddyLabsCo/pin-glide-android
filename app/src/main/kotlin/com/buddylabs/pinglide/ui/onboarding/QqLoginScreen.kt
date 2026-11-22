@@ -39,6 +39,7 @@ import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.identity.LoginState
 import com.buddylabs.pinglide.ui.components.QqEmblem
 import com.buddylabs.pinglide.ui.components.QqLoadingEmblem
+import com.buddylabs.pinglide.ui.components.RingedEmblem
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
@@ -116,7 +117,7 @@ private fun QqSignInScreen(onLogin: () -> Unit) {
         step = 3,
         title = R.string.setup_qq_title,
         description = R.string.setup_qq_description,
-        emblem = { RingedSetupEmblem(CircleShape) { QqEmblem() } }
+        emblem = { RingedEmblem(CircleShape) { QqEmblem() } }
     ) {
         CompactSetupButton(R.string.setup_qq_sign_in, R.drawable.ic_chevron, onLogin)
     }
@@ -143,7 +144,7 @@ private fun QqSignInFailureScreen(onRetry: () -> Unit, onBack: () -> Unit) {
             }
         }
     ) {
-        RingedSetupEmblem(RoundedCornerShape(44.dp), error = true) {
+        RingedEmblem(RoundedCornerShape(44.dp), error = true) {
             Icon(
                 painterResource(R.drawable.ic_error_filled),
                 contentDescription = null,

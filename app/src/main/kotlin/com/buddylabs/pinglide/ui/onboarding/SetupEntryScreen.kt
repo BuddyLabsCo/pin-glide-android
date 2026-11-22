@@ -4,7 +4,6 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -40,9 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -62,6 +58,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.ui.components.BrandIcon
+import com.buddylabs.pinglide.ui.components.RingedEmblem
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 import com.buddylabs.pinglide.ui.components.WarningInfoCard
 
@@ -82,7 +79,7 @@ fun SmsPermissionScreen(
             R.string.setup_sms_description
         },
         emblem = {
-            RingedSetupEmblem(RoundedCornerShape(44.dp), error = denied) {
+            RingedEmblem(RoundedCornerShape(44.dp), error = denied) {
                 Icon(
                     painterResource(R.drawable.ic_sms),
                     contentDescription = null,
@@ -395,35 +392,6 @@ private fun SetupStepIndicator(step: Int, label: String, modifier: Modifier) {
                     CircleShape
                 )
             )
-        }
-    }
-}
-
-@Composable
-internal fun RingedSetupEmblem(
-    shape: Shape,
-    error: Boolean = false,
-    content: @Composable () -> Unit
-) {
-    val colors = MaterialTheme.colorScheme
-    val ring = colors.primary.copy(alpha = 0.22f)
-    Box(
-        modifier = Modifier.size(222.dp).border(1.dp, ring, CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        Box(Modifier.size(186.dp).border(1.dp, ring, CircleShape))
-        Box(
-            modifier = Modifier.size(148.dp).background(
-                if (error) {
-                    SolidColor(colorResource(R.color.error_emblem_container))
-                } else {
-                    Brush.linearGradient(listOf(colors.primaryContainer, colors.secondaryContainer))
-                },
-                shape
-            ),
-            contentAlignment = Alignment.Center
-        ) {
-            content()
         }
     }
 }

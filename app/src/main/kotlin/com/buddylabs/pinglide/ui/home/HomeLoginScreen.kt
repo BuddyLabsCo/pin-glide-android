@@ -46,13 +46,13 @@ import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.identity.RestorationState
 import com.buddylabs.pinglide.ui.components.QqEmblem
 import com.buddylabs.pinglide.ui.components.QqLoadingEmblem
+import com.buddylabs.pinglide.ui.components.RingedEmblem
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
@@ -63,7 +63,10 @@ internal fun HomeLoginScreen(
     onBack: () -> Unit
 ) {
     val loading = state == RestorationState.Loading
-    val framedEmblemLayout = loading || state == RestorationState.Error
+    val framedEmblemLayout = when (state) {
+        RestorationState.Loading, RestorationState.Cancelled, RestorationState.Error -> true
+        else -> false
+    }
     val strings = when (state) {
         RestorationState.Loading -> R.string.home_login_loading to R.string.home_login_loading_copy
 
@@ -84,9 +87,10 @@ internal fun HomeLoginScreen(
         Column(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                 .padding(
-                    when {
-                        loading -> PaddingValues(top = 12.dp, bottom = 53.dp)
-                        framedEmblemLayout -> PaddingValues(top = 12.dp, bottom = 63.dp)
+                    when (state) {
+                        RestorationState.Loading -> PaddingValues(top = 12.dp, bottom = 53.dp)
+                        RestorationState.Cancelled -> PaddingValues(top = 12.dp, bottom = 58.dp)
+                        RestorationState.Error -> PaddingValues(top = 12.dp, bottom = 63.dp)
                         else -> PaddingValues(vertical = 24.dp)
                     }
                 ).semantics {
@@ -99,13 +103,13 @@ internal fun HomeLoginScreen(
             ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (framedEmblemLayout) HomeLoginEmblem(loading) else QqEmblem()
+            HomeLoginEmblem(loading, framedEmblemLayout)
             HomeLoginText(
                 title,
                 stringResource(strings.second),
                 titleFocus,
                 framedEmblemLayout,
-                if (loading) 17.dp else 7.dp
+                state
             )
         }
         HomeLoginAction(state, framedEmblemLayout, onCancel, onRetry)
@@ -134,7 +138,7 @@ private fun HomeLoginAction(
         }
     } else {
         Button(onClick = onRetry, modifier = modifier) {
-            if (state == RestorationState.Error) {
+            if (framedEmblemLayout) {
                 HomeActionLabel(R.drawable.ic_account_circle, R.string.home_login_action)
             } else {
                 Text(stringResource(R.string.home_login_action))
@@ -187,22 +191,27 @@ private fun HomeLoginHeader(framedEmblemLayout: Boolean, onBack: () -> Unit) {
 }
 
 @Composable
-private fun HomeLoginEmblem(loading: Boolean) {
-    val colors = MaterialTheme.colorScheme
-    val outline = colors.primary.copy(alpha = 0.22f)
-    val gradient = Brush.linearGradient(listOf(colors.primaryContainer, colors.secondaryContainer))
-    Box(
-        Modifier.size(222.dp).border(1.dp, outline, CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        if (loading) {
-            Box(Modifier.size(168.dp).background(gradient, CircleShape))
-            QqLoadingEmblem(Modifier.offset(14.dp, 14.dp).size(196.dp))
+private fun HomeLoginEmblem(loading: Boolean, framedEmblemLayout: Boolean) {
+    if (!loading) {
+        if (framedEmblemLayout) {
+            RingedEmblem(RoundedCornerShape(44.dp)) { QqEmblem() }
         } else {
-            Box(Modifier.size(186.dp).border(1.dp, outline, CircleShape))
-            Box(Modifier.size(148.dp).background(gradient, RoundedCornerShape(44.dp)))
             QqEmblem()
         }
+        return
+    }
+    val colors = MaterialTheme.colorScheme
+    Box(
+        Modifier.size(222.dp).border(1.dp, colors.primary.copy(alpha = 0.22f), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            Modifier.size(168.dp).background(
+                Brush.linearGradient(listOf(colors.primaryContainer, colors.secondaryContainer)),
+                CircleShape
+            )
+        )
+        QqLoadingEmblem(Modifier.offset(14.dp, 14.dp).size(196.dp))
     }
 }
 
@@ -212,9 +221,16 @@ private fun HomeLoginText(
     description: String,
     titleFocus: FocusRequester,
     framedEmblemLayout: Boolean,
-    titleSpacing: Dp
+    state: RestorationState
 ) {
     val typography = MaterialTheme.typography
+    val cancelled = state == RestorationState.Cancelled
+    val titleSpacing = when (state) {
+        RestorationState.Loading -> 17.dp
+        RestorationState.Cancelled -> 4.dp
+        RestorationState.Error -> 7.dp
+        else -> 0.dp
+    }
     Text(
         title,
         style = if (framedEmblemLayout) {
@@ -228,19 +244,20 @@ private fun HomeLoginText(
             typography.headlineLarge
         },
         textAlign = TextAlign.Center,
-        modifier = Modifier.padding(top = if (framedEmblemLayout) titleSpacing else 0.dp)
+        modifier = Modifier.padding(top = titleSpacing)
             .focusRequester(titleFocus).focusable().semantics { heading() }
     )
     Text(
         description,
         modifier = if (framedEmblemLayout) {
-            Modifier.padding(top = 12.dp).widthIn(max = 305.dp)
+            Modifier.padding(top = if (cancelled) 8.dp else 12.dp).widthIn(max = 305.dp)
         } else {
             Modifier
         },
         style = if (framedEmblemLayout) {
             typography.bodyMedium.copy(
-                lineHeight = 22.sp
+                lineHeight = 22.sp,
+                letterSpacing = if (cancelled) 0.sp else typography.bodyMedium.letterSpacing
             )
         } else {
             typography.bodyLarge

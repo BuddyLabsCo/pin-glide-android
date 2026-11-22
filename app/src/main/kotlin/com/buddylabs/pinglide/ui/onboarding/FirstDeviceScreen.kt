@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
+import com.buddylabs.pinglide.ui.components.RingedEmblem
 
 @Composable
 fun FirstDeviceScreen(onLeave: () -> Unit, onScan: () -> Unit) {
@@ -27,7 +28,7 @@ fun FirstDeviceScreen(onLeave: () -> Unit, onScan: () -> Unit) {
         title = R.string.setup_first_device_title,
         description = R.string.setup_first_device_description,
         emblem = {
-            RingedSetupEmblem(RoundedCornerShape(44.dp)) {
+            RingedEmblem(RoundedCornerShape(44.dp)) {
                 Icon(
                     painterResource(R.drawable.ic_qr),
                     contentDescription = null,
