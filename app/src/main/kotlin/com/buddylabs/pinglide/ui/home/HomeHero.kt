@@ -75,7 +75,12 @@ internal fun HomeHero(state: HomeState, readiness: HomeReadiness) {
 }
 
 @Composable
-private fun HeroCopy(strings: Pair<Int, Int>, prominent: Boolean, modifier: Modifier = Modifier) {
+private fun HeroCopy(
+    strings: Pair<Int, Int>,
+    prominent: Boolean,
+    modifier: Modifier = Modifier,
+    bodyColor: Color = Color.Unspecified
+) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(if (prominent) 8.dp else 12.dp)) {
         Text(
             stringResource(strings.first),
@@ -91,6 +96,7 @@ private fun HeroCopy(strings: Pair<Int, Int>, prominent: Boolean, modifier: Modi
         )
         Text(
             stringResource(strings.second),
+            color = bodyColor,
             style = if (prominent) {
                 MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp)
             } else {
@@ -105,9 +111,12 @@ private fun HeroCopy(strings: Pair<Int, Int>, prominent: Boolean, modifier: Modi
 private fun IllustratedWarningHero(strings: Pair<Int, Int>, showWaitingBadge: Boolean) {
     val colors = MaterialTheme.colorScheme
     val warning = colorResource(R.color.setup_warning_container)
+    val darkTheme = isSystemInDarkTheme()
+    val titleColor = if (darkTheme) Color.White else colors.onPrimaryContainer
+    val bodyColor = if (darkTheme) titleColor else titleColor.copy(alpha = 0.78f)
     Surface(
         color = Color.Transparent,
-        contentColor = if (isSystemInDarkTheme()) Color.White else colors.onPrimaryContainer,
+        contentColor = titleColor,
         shape = RoundedCornerShape(28.dp),
         modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }
     ) {
@@ -117,15 +126,20 @@ private fun IllustratedWarningHero(strings: Pair<Int, Int>, showWaitingBadge: Bo
                 .padding(18.dp)
         ) {
             if (!showWaitingBadge) {
-                HeroCopy(strings, prominent = true)
+                HeroCopy(strings, prominent = true, bodyColor = bodyColor)
             } else if (maxWidth < 264.dp * LocalDensity.current.fontScale) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HeroCopy(strings, prominent = true)
+                    HeroCopy(strings, prominent = true, bodyColor = bodyColor)
                     WaitingBadge()
                 }
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HeroCopy(strings, prominent = true, modifier = Modifier.weight(1f))
+                    HeroCopy(
+                        strings,
+                        prominent = true,
+                        modifier = Modifier.weight(1f),
+                        bodyColor = bodyColor
+                    )
                     WaitingBadge()
                 }
             }

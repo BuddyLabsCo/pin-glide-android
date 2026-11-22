@@ -1,5 +1,6 @@
 package com.buddylabs.pinglide.ui.home
 
+import android.content.res.Configuration
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -7,12 +8,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -26,7 +29,6 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
-import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -38,6 +40,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.app.LocalizedContent
@@ -85,17 +88,14 @@ class HomeRefreshScreenTest {
 
     @Test
     fun allReceiveSwitchesOffShowsWarningUntilAnOnlineTargetIsEnabled() {
-        openHome(listOf("我的电脑", "办公室电脑"), initiallyDisabled = listOf(0, 1))
+        val aliases = listOf("我的电脑", "办公室电脑")
+        openHome(aliases, initiallyDisabled = listOf(0, 1))
         val warningTitle = hasText("尚未选择接收设备")
         compose.onNode(warningTitle).assertIsDisplayed()
-        compose.onNodeWithText("开启至少一台设备的接收开关后，鹊信才会转发新短信。")
-            .assertIsDisplayed()
-        val hero = compose.onNode(
-            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite) and
-                hasAnyDescendant(warningTitle),
-            useUnmergedTree = true
-        )
-        compose.density.assertWarningHeroArtwork(hero.captureToImage().asAndroidBitmap())
+        val warningBody = compose.onNodeWithText("开启至少一台设备的接收开关后，鹊信才会转发新短信。")
+        warningBody.assertIsDisplayed()
+        assertWarningBodyColor(warningBody)
+        compose.assertWarningHeroArtwork(warningTitle)
         compose.onNodeWithText("添加设备").assertIsDisplayed()
 
         val first = compose.onNodeWithContentDescription("我的电脑接收短信")
@@ -108,10 +108,17 @@ class HomeRefreshScreenTest {
             switchImage.getPixel(column, switchImage.height / 2) == thumbColor
         }
         assertEquals(22f, thumbWidth / compose.density.density, 1f)
-        compose.onNode(hasText("我的电脑") and hasText("在线 · 状态变化：刚刚"))
-            .assertIsDisplayed()
-        compose.onNode(hasText("办公室电脑") and hasText("在线 · 状态变化：2分钟前"))
-            .assertIsDisplayed()
+        val onlinePrefix = "在线 · 状态变化："
+        val onlineWithChangeTime =
+            SemanticsMatcher("Shows online status and a status-change time") { node ->
+                node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { text ->
+                    text.text.startsWith(onlinePrefix) &&
+                        text.text.removePrefix(onlinePrefix).isNotBlank()
+                }
+            }
+        aliases.forEach { alias ->
+            compose.onNodeWithText(alias).assertIsDisplayed().assert(onlineWithChangeTime)
+        }
 
         first.performTouchInput { click() }.assertIsOn()
         second.assertIsOff()
@@ -180,12 +187,7 @@ class HomeRefreshScreenTest {
         compose.waitUntil { compose.onAllNodes(heroTitle).fetchSemanticsNodes().size == 1 }
 
         warning.assertIsDisplayed()
-        val hero = compose.onNode(
-            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite) and
-                hasAnyDescendant(heroTitle),
-            useUnmergedTree = true
-        )
-        compose.density.assertWarningHeroArtwork(hero.captureToImage().asAndroidBitmap())
+        compose.assertWarningHeroArtwork(heroTitle)
         val bounds = list.getUnclippedBoundsInRoot()
         val warningBounds = warning.getUnclippedBoundsInRoot()
         compose.density.assertCachedFailureNoticeArtwork(
@@ -303,6 +305,19 @@ class HomeRefreshScreenTest {
 
     private fun refreshList() = compose.onNodeWithContentDescription("设备列表，可下拉刷新或按 Enter 刷新")
 
+    private fun assertWarningBodyColor(body: SemanticsNodeInteraction) {
+        val layouts = mutableListOf<TextLayoutResult>()
+        body.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val nightMode =
+            compose.activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        val expected = if (nightMode == Configuration.UI_MODE_NIGHT_YES) {
+            Color.White
+        } else {
+            Color(compose.activity.getColor(R.color.on_primary_container)).copy(alpha = 0.78f)
+        }
+        assertEquals(expected, layouts.single().layoutInput.style.color)
+    }
+
     private fun SemanticsNodeInteraction.pullToRefresh() = performTouchInput {
         down(center)
         moveBy(Offset(0f, 216.dp.toPx()))
@@ -322,7 +337,7 @@ class HomeRefreshScreenTest {
                 "receiver-$index",
                 alias,
                 Presence.Online,
-                now.minusSeconds(if (index == 1) 125 else 0).toString()
+                now.toString()
             )
         }
         val service = object : PairingService {

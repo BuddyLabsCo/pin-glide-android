@@ -3,6 +3,13 @@ package com.buddylabs.pinglide.ui.home
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -30,7 +37,12 @@ internal fun Density.assertInitialFailureArtwork(screenshot: Bitmap, context: Co
     )
 }
 
-internal fun Density.assertWarningHeroArtwork(hero: Bitmap) {
+internal fun ComposeTestRule.assertWarningHeroArtwork(title: SemanticsMatcher) = with(density) {
+    val hero = onNode(
+        SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite) and
+            hasAnyDescendant(title),
+        useUnmergedTree = true
+    ).captureToImage().asAndroidBitmap()
     val sampleRow = hero.height - 14.dp.roundToPx()
     val gradientLeft = hero.getPixel(hero.width / 4, sampleRow)
     val gradientMiddle = hero.getPixel(hero.width / 2, sampleRow)
