@@ -26,13 +26,17 @@ data class HomeState(
     val targets: List<TargetDevice> = emptyList(),
     val listed: Boolean = false,
     val refreshing: Boolean = false,
-    val failed: Boolean = false,
+    val listRefreshFailed: Boolean = false,
+    val selectionWriteFailed: Boolean = false,
     val authorization: AuthorizationState = AuthorizationState.Checking,
     val generation: Long = 0,
     val owner: Pair<String, String>? = null
 ) {
+    val failed: Boolean
+        get() = listRefreshFailed || selectionWriteFailed
+
     private val hasCachedTargetsDuringRefresh: Boolean
-        get() = refreshing && !failed && targets.isNotEmpty()
+        get() = refreshing && !listRefreshFailed && targets.isNotEmpty()
 
     fun readiness(smsGranted: Boolean): HomeReadiness {
         val enabled = targets.filter { it.enabled && it.keyUsable }

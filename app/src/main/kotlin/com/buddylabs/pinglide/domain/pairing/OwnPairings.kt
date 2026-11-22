@@ -116,7 +116,7 @@ class OwnPairings(
                 val accepted = store.reconcile(expected, items)
                 presence = if (accepted) items.associateBy { it.pairingId } else emptyMap()
                 presenceOwner = identity.accountId to identity.senderId
-                publish(store.readPairings(), refreshing = true, failed = !accepted)
+                publish(store.readPairings(), refreshing = true, listRefreshFailed = !accepted)
                 accepted
             }
         }
@@ -156,10 +156,11 @@ class OwnPairings(
                 publish(
                     store.readPairings(),
                     refreshing = state.value.refreshing,
-                    failed = state.value.failed || !accepted
+                    listRefreshFailed = state.value.listRefreshFailed,
+                    selectionWriteFailed = state.value.selectionWriteFailed || !accepted
                 )
             } catch (_: IdentityStorageException) {
-                mutableState.value = state.value.copy(failed = true)
+                mutableState.value = state.value.copy(selectionWriteFailed = true)
             }
         }
 
@@ -376,7 +377,12 @@ class OwnPairings(
 
     private suspend fun readCurrent(): PairingSnapshot {
         val current = store.readPairings()
-        publish(current, refreshing = state.value.refreshing, failed = state.value.failed)
+        publish(
+            current,
+            refreshing = state.value.refreshing,
+            listRefreshFailed = state.value.listRefreshFailed,
+            selectionWriteFailed = state.value.selectionWriteFailed
+        )
         return current
     }
 
@@ -402,10 +408,10 @@ class OwnPairings(
     private suspend fun refreshFailed() = stateGate.withLock {
         presence = emptyMap()
         try {
-            publish(store.readPairings(), failed = true)
+            publish(store.readPairings(), listRefreshFailed = true)
         } catch (_: IdentityStorageException) {
             mutableState.value = state.value.copy(
-                failed = true,
+                listRefreshFailed = true,
                 targets = state.value.targets.map {
                     it.copy(presence = Presence.Unknown, stateChangedAt = null)
                 }
@@ -416,7 +422,8 @@ class OwnPairings(
     private fun publish(
         current: PairingSnapshot,
         refreshing: Boolean = false,
-        failed: Boolean = false
+        listRefreshFailed: Boolean = false,
+        selectionWriteFailed: Boolean = false
     ) {
         if (renewal.state.value == AuthorizationState.LoggedOut) {
             snapshot = null
@@ -444,7 +451,8 @@ class OwnPairings(
             },
             listed = current.listed,
             refreshing = refreshing,
-            failed = failed,
+            listRefreshFailed = listRefreshFailed,
+            selectionWriteFailed = selectionWriteFailed,
             authorization = renewal.state.value,
             generation = current.authority.generation,
             owner = current.authority.identity?.let { it.accountId to it.senderId }

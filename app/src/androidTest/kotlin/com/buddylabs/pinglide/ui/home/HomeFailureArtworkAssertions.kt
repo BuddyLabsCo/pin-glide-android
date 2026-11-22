@@ -2,9 +2,12 @@ package com.buddylabs.pinglide.ui.home
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Color
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
+import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 
@@ -25,4 +28,43 @@ internal fun Density.assertInitialFailureArtwork(screenshot: Bitmap, context: Co
         context.getColor(R.color.primary),
         screenshot.getPixel(centerX - slashOffset, slashY)
     )
+}
+
+internal fun Density.assertCachedFailureHeroArtwork(hero: Bitmap) {
+    val sampleRow = hero.height - 14.dp.roundToPx()
+    val gradientLeft = hero.getPixel(hero.width / 4, sampleRow)
+    val gradientMiddle = hero.getPixel(hero.width / 2, sampleRow)
+    assertTrue("The warning hero has a gradient", gradientLeft != gradientMiddle)
+
+    val ringStart = (hero.width - 184.dp.roundToPx()).coerceAtLeast(16.dp.roundToPx())
+    val ringEnd = hero.width - 28.dp.roundToPx()
+    val ringColors = (ringStart until ringEnd).step(1.dp.roundToPx().coerceAtLeast(1))
+        .map { column -> hero.getPixel(column, sampleRow) }
+    val illustrated = ringColors.zipWithNext().any { (first, second) ->
+        abs(Color.red(first) - Color.red(second)) >= 5 ||
+            abs(Color.green(first) - Color.green(second)) >= 5 ||
+            abs(Color.blue(first) - Color.blue(second)) >= 5
+    }
+    assertTrue("The decorative ring is visible on the warning hero", illustrated)
+}
+
+internal fun Density.assertCachedFailureNoticeArtwork(
+    screenshot: Bitmap,
+    context: Context,
+    warningTextLeft: Dp,
+    warningTextTop: Dp
+) {
+    val iconLeft = (warningTextLeft - 28.dp).roundToPx()
+    val iconTop = warningTextTop.roundToPx()
+    val iconSize = 18.dp.roundToPx()
+    val iconColor = context.getColor(R.color.setup_on_warning)
+    val cardColor = context.getColor(R.color.setup_warning_container)
+    assertTrue("The warning has a tinted card", iconLeft >= 0)
+    assertEquals(cardColor, screenshot.getPixel(iconLeft, iconTop))
+    val iconVisible = (iconLeft until iconLeft + iconSize).any { column ->
+        (iconTop until iconTop + iconSize).any { row ->
+            screenshot.getPixel(column, row) == iconColor
+        }
+    }
+    assertTrue("The information icon is visible beside the warning", iconVisible)
 }

@@ -58,6 +58,7 @@ import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.domain.pairing.TargetDevice
 import com.buddylabs.pinglide.ui.components.BrandIcon
 import com.buddylabs.pinglide.ui.components.ScreenLayout
+import com.buddylabs.pinglide.ui.components.WarningInfoCard
 import java.time.Instant
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -222,12 +223,13 @@ private fun HomeContent(
 ) {
     LaunchedEffect(Unit) { headingFocus.requestFocus() }
     val showListProgress = readiness == HomeReadiness.Unknown && state.refreshing &&
-        !state.listed && !state.failed && state.targets.isEmpty()
+        !state.listed && !state.listRefreshFailed && state.targets.isEmpty()
     ScreenLayout {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val viewportHeight = maxHeight
             val compact = viewportHeight < 320.dp
-            val showAdd = state.listed && state.targets.size in 1..4 && canAdd(readiness)
+            val showAdd = state.listed && state.targets.size in 1..4 &&
+                !state.hasCachedListFailure && canAdd(readiness)
             Column(Modifier.fillMaxSize()) {
                 HomeHeader(headingFocus, onSettings, compact)
                 HomeRefreshContainer(
@@ -383,11 +385,8 @@ private fun HomeSummary(
                 } else if (!smsGranted) {
                     HomeSmsRecovery(smsRecovery == SmsRecovery.Pending, onRestoreSms)
                 }
-                if (state.failed && state.targets.isNotEmpty()) {
-                    Text(
-                        stringResource(R.string.home_cached_notice),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                if (state.hasCachedListFailure) {
+                    WarningInfoCard(R.string.home_cached_notice)
                 }
             }
             refreshHint()
@@ -410,7 +409,7 @@ private fun HomeSummary(
 private fun summarySpacing(state: HomeState, readiness: HomeReadiness, showListProgress: Boolean) =
     when {
         showListProgress || state.hasInitialListFailure(readiness) -> 0.dp
-        readiness == HomeReadiness.Empty -> 14.dp
+        readiness == HomeReadiness.Empty || state.hasCachedListFailure -> 14.dp
         else -> 16.dp
     }
 

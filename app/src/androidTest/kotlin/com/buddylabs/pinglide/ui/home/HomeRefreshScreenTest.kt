@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -14,16 +15,23 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
@@ -34,7 +42,11 @@ import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
+import com.buddylabs.pinglide.domain.pairing.PairingFailure
 import com.buddylabs.pinglide.domain.pairing.PairingService
+import com.buddylabs.pinglide.domain.pairing.PairingServiceException
+import com.buddylabs.pinglide.domain.pairing.PairingSnapshot
+import com.buddylabs.pinglide.domain.pairing.PairingStore
 import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import com.buddylabs.pinglide.domain.settings.AppLanguage
@@ -64,6 +76,7 @@ class HomeRefreshScreenTest {
         ProgressBarRangeInfo.Indeterminate
     )
     private var requests = 0
+    private var selectionAttempts = 0
 
     @After
     fun stopFixture() = scope.cancel()
@@ -110,6 +123,75 @@ class HomeRefreshScreenTest {
         response.complete(targets)
         compose.waitUntil { compose.onAllNodes(hasText("正在刷新")).fetchSemanticsNodes().isEmpty() }
         targets.forEach { compose.onNodeWithText(it.alias).assertIsDisplayed() }
+    }
+
+    @Test
+    fun failedRefreshRetainsPairingsAndPullingAgainRestoresPresence() {
+        val aliases = listOf("我的电脑", "办公室电脑")
+        openHome(aliases, initiallyDisabled = 1)
+        val list = compose.onNode(hasScrollAction())
+        val warning = compose.onNodeWithText("已有配对仍保留。当前无法确认设备是否在线。")
+        val heading = compose.onNodeWithText("我的设备")
+        val stalePresence = hasText("状态待更新")
+
+        list.pullToRefresh()
+        compose.waitUntil { compose.onAllNodes(hasText("正在刷新")).fetchSemanticsNodes().size == 1 }
+        response.completeExceptionally(PairingServiceException(PairingFailure.Unavailable))
+        val heroTitle = hasText("设备状态未更新")
+        compose.waitUntil { compose.onAllNodes(heroTitle).fetchSemanticsNodes().size == 1 }
+
+        warning.assertIsDisplayed()
+        val hero = compose.onNode(
+            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite) and
+                hasAnyDescendant(heroTitle),
+            useUnmergedTree = true
+        )
+        compose.density.assertCachedFailureHeroArtwork(hero.captureToImage().asAndroidBitmap())
+        val bounds = list.getUnclippedBoundsInRoot()
+        val warningBounds = warning.getUnclippedBoundsInRoot()
+        compose.density.assertCachedFailureNoticeArtwork(
+            list.captureToImage().asAndroidBitmap(),
+            compose.activity,
+            warningBounds.left - bounds.left,
+            warningBounds.top - bounds.top
+        )
+        assertTrue(
+            warning.getUnclippedBoundsInRoot().bottom < heading.getUnclippedBoundsInRoot().top
+        )
+        compose.onNodeWithText("添加设备").assertDoesNotExist()
+        aliases.forEach { alias ->
+            compose.onNodeWithText(alias).assertIsDisplayed().assert(stalePresence)
+        }
+        val first = compose.onNodeWithContentDescription("${aliases.first()}接收短信")
+        val second = compose.onNodeWithContentDescription("${aliases.last()}接收短信")
+        first.assertIsEnabled().assertIsOn()
+        second.assertIsEnabled().assertIsOff().performClick().assertIsOn()
+        warning.assertIsDisplayed()
+        compose.onAllNodes(stalePresence).assertCountEquals(2)
+
+        list.pullToRefresh()
+        compose.waitUntil { compose.onAllNodes(stalePresence).fetchSemanticsNodes().isEmpty() }
+        warning.assertDoesNotExist()
+        compose.onNodeWithText("添加设备").assertIsDisplayed()
+        aliases.forEach { compose.onNodeWithText(it).assertIsDisplayed() }
+        compose.runOnIdle { assertEquals(3, requests) }
+    }
+
+    @Test
+    fun rejectedReceiveSwitchWriteKeepsTheCurrentDeviceList() {
+        val alias = "我的电脑"
+        openHome(listOf(alias), rejectSelection = true)
+
+        compose.onNodeWithContentDescription("${alias}接收短信")
+            .assertIsOn().performClick().assertIsOn()
+        compose.runOnIdle {
+            assertEquals(1, selectionAttempts)
+            assertEquals(1, requests)
+        }
+        compose.onNodeWithText(alias).assert(hasText("在线", substring = true)).assertIsDisplayed()
+        compose.onNodeWithText("转发已就绪").assertIsDisplayed()
+        compose.onNodeWithText("已有配对仍保留。当前无法确认设备是否在线。").assertDoesNotExist()
+        compose.onNodeWithText("添加设备").assertIsDisplayed()
     }
 
     @Test
@@ -182,9 +264,17 @@ class HomeRefreshScreenTest {
 
     private fun refreshList() = compose.onNodeWithContentDescription("设备列表，可下拉刷新或按 Enter 刷新")
 
+    private fun SemanticsNodeInteraction.pullToRefresh() = performTouchInput {
+        down(center)
+        moveBy(Offset(0f, 216.dp.toPx()))
+        up()
+    }
+
     private fun openHome(
         aliases: List<String>,
-        modifier: Modifier = Modifier
+        modifier: Modifier = Modifier,
+        initiallyDisabled: Int? = null,
+        rejectSelection: Boolean = false
     ): List<RemotePairing> {
         val now = Instant.now()
         val targets = aliases.mapIndexed { index, alias ->
@@ -198,12 +288,27 @@ class HomeRefreshScreenTest {
         }
         val service = object : PairingService {
             override suspend fun list(managementToken: String) =
-                if (++requests == 1) targets else response.await()
+                if (++requests == 2) response.await() else targets
         }
         val store = HomePairingStore(targets, now.plusSeconds(3600).toString())
+        val pairingStore = object : PairingStore by store {
+            override suspend fun select(
+                expected: PairingSnapshot,
+                pairingId: String,
+                enabled: Boolean
+            ): Boolean {
+                selectionAttempts++
+                return !rejectSelection && store.select(expected, pairingId, enabled)
+            }
+        }
         val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)
-        val pairings = OwnPairings(store, service, renewal, scope)
-        runBlocking(Dispatchers.Main) { pairings.refresh() }
+        val pairings = OwnPairings(pairingStore, service, renewal, scope)
+        runBlocking(Dispatchers.Main) {
+            if (initiallyDisabled != null) {
+                store.select(store.readPairings(), targets[initiallyDisabled].pairingId, false)
+            }
+            pairings.refresh()
+        }
         val app = compose.activity.application as PinGlideApplication
         val home = HomeViewModel(pairings, app.senderRestoration()) { null }
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
