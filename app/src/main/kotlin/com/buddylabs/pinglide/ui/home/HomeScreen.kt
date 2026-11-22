@@ -9,23 +9,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -41,12 +45,18 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.HomeReadiness
 import com.buddylabs.pinglide.domain.pairing.HomeState
 import com.buddylabs.pinglide.domain.pairing.PairingChange
+import com.buddylabs.pinglide.domain.pairing.TargetDevice
+import com.buddylabs.pinglide.ui.components.BrandIcon
 import com.buddylabs.pinglide.ui.components.ScreenLayout
+import java.time.Instant
+import kotlinx.coroutines.delay
 
 @Composable
 fun HomeScreen(
@@ -126,6 +136,7 @@ fun HomeScreen(
         })
         return
     }
+    val now by rememberPresenceTime(state.targets)
     HomeContent(
         state, readiness, action, smsGranted, smsRecovery, onRestoreSms,
         home::refresh, { pairingId, enabled ->
@@ -146,13 +157,15 @@ fun HomeScreen(
         rowFocus,
         headingFocus,
         listState,
-        highlightedPairingId
+        highlightedPairingId,
+        now
     )
     LoginRestorationNotice(restoration, state.refreshing, home::dismissLoginNotice)
     SmsRecoveryNotice(state, smsGranted, smsRecovery, home::dismissSmsFeedback)
     if (selected != null) {
         TargetDetailsSheet(
             selected,
+            presenceLabel = targetPresence(selected, now),
             otherAliases = state.targets.filter {
                 it.pairingId != selected.pairingId
             }.map { it.alias },
@@ -166,6 +179,15 @@ fun HomeScreen(
         )
     }
 }
+
+@Composable
+private fun rememberPresenceTime(targets: List<TargetDevice>): State<Instant> =
+    produceState(Instant.now(), targets) {
+        while (targets.isNotEmpty()) {
+            value = Instant.now()
+            delay(60_000)
+        }
+    }
 
 @Composable
 private fun HomeContent(
@@ -185,30 +207,17 @@ private fun HomeContent(
     rowFocus: FocusRequester,
     headingFocus: FocusRequester,
     listState: LazyListState,
-    highlightedPairingId: String?
+    highlightedPairingId: String?,
+    now: Instant
 ) {
     LaunchedEffect(Unit) { headingFocus.requestFocus() }
     ScreenLayout {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                stringResource(R.string.app_name),
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.weight(1f).padding(vertical = 20.dp)
-                    .focusRequester(headingFocus)
-                    .focusable().semantics { heading() }
-            )
-            IconButton(onClick = onSettings) {
-                Icon(
-                    painterResource(R.drawable.ic_settings),
-                    stringResource(R.string.settings_title)
-                )
-            }
-        }
+        HomeHeader(headingFocus, onSettings)
         HomeRefreshContainer(state, onRefresh, Modifier.weight(1f)) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 item(key = "home-summary") {
                     HomeSummary(
@@ -231,6 +240,7 @@ private fun HomeContent(
                         },
                         onSelect = { onSelect(target.pairingId, it) },
                         highlighted = target.pairingId == highlightedPairingId,
+                        now = now,
                         modifier = if (target.pairingId == lastSelectedId) {
                             Modifier.focusRequester(rowFocus)
                         } else {
@@ -241,16 +251,73 @@ private fun HomeContent(
             }
         }
         if (state.targets.isNotEmpty() && state.targets.size < 5 && canAdd(readiness)) {
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                ExtendedFloatingActionButton(
-                    onClick = onAdd,
-                    icon = { Text("+") },
-                    text = { Text(stringResource(R.string.home_add)) }
-                )
-            }
+            AddDeviceAction(
+                onAdd,
+                Modifier.align(Alignment.End).padding(top = 12.dp, bottom = 24.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddDeviceAction(onAdd: () -> Unit, modifier: Modifier) {
+    FloatingActionButton(
+        onClick = onAdd,
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary
+    ) {
+        Row(
+            Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(painterResource(R.drawable.ic_add), null, Modifier.size(20.dp))
+            Text(
+                stringResource(R.string.home_add),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeHeader(headingFocus: FocusRequester, onSettings: () -> Unit) {
+    Row(
+        modifier = Modifier.padding(vertical = 8.dp).heightIn(min = 64.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(11.dp)
+    ) {
+        BrandIcon(Modifier.size(36.dp))
+        Column(
+            Modifier.weight(1f).focusRequester(headingFocus).focusable()
+                .semantics(mergeDescendants = true) { heading() }
+        ) {
+            Text(
+                stringResource(R.string.app_name),
+                fontSize = 20.sp,
+                lineHeight = 22.sp,
+                fontWeight = FontWeight(740),
+                letterSpacing = (-0.7).sp
+            )
+            Text(
+                stringResource(R.string.brand_wordmark),
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                fontWeight = FontWeight(650),
+                letterSpacing = 0.88.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        IconButton(onClick = onSettings) {
+            Icon(
+                painterResource(R.drawable.ic_settings_filled),
+                stringResource(R.string.settings_title),
+                modifier = Modifier.size(22.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -330,11 +397,16 @@ private fun TargetGone(onDismiss: () -> Unit, onAdd: () -> Unit) {
 
 @Composable
 private fun DeviceCount(count: Int) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Text(
             stringResource(R.string.home_devices),
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.semantics { heading() }
+            fontWeight = FontWeight(730),
+            modifier = Modifier.weight(1f).semantics { heading() }
         )
         Text(
             if (count >= 5) {
@@ -342,6 +414,8 @@ private fun DeviceCount(count: Int) {
             } else {
                 stringResource(R.string.home_count, count)
             },
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
             color = if (count >= 5) {
                 colorResource(R.color.home_capacity)
             } else {

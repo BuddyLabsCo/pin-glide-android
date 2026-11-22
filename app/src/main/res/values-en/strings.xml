@@ -71,7 +71,8 @@
     <string name="home_receive">Receive SMS on %1$s</string>
     <string name="home_key_unavailable">Pairing key missing or damaged</string>
     <string name="home_ready_title">Ready to forward</string>
-    <string name="home_ready_copy">New SMS messages will be encrypted and forwarded to the selected devices. This app does not read your SMS history.</string>
+    <string name="home_ready_copy">New SMS messages are end-to-end encrypted and sent to the selected devices.</string>
+    <string name="home_presence_just_now">Just now</string>
     <string name="home_empty_title">Account connected</string>
     <string name="home_empty_copy">Add your first device to start forwarding new SMS messages.</string>
     <string name="home_disabled_title">No receiving devices selected</string>
