@@ -63,7 +63,7 @@ internal fun HomeLoginScreen(
     onBack: () -> Unit
 ) {
     val loading = state == RestorationState.Loading
-    val centered = loading || state == RestorationState.Error
+    val framedEmblemLayout = loading || state == RestorationState.Error
     val strings = when (state) {
         RestorationState.Loading -> R.string.home_login_loading to R.string.home_login_loading_copy
 
@@ -80,13 +80,13 @@ internal fun HomeLoginScreen(
     BackHandler(onBack = onBack)
     LaunchedEffect(state) { titleFocus.requestFocus() }
     ScreenLayout {
-        HomeLoginHeader(centered, onBack)
+        HomeLoginHeader(framedEmblemLayout, onBack)
         Column(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                 .padding(
                     when {
                         loading -> PaddingValues(top = 12.dp, bottom = 53.dp)
-                        centered -> PaddingValues(top = 12.dp, bottom = 63.dp)
+                        framedEmblemLayout -> PaddingValues(top = 12.dp, bottom = 63.dp)
                         else -> PaddingValues(vertical = 24.dp)
                     }
                 ).semantics {
@@ -94,35 +94,35 @@ internal fun HomeLoginScreen(
                     liveRegion = LiveRegionMode.Polite
                 },
             verticalArrangement = Arrangement.spacedBy(
-                if (centered) 0.dp else 24.dp,
+                if (framedEmblemLayout) 0.dp else 24.dp,
                 Alignment.CenterVertically
             ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (centered) HomeLoginEmblem(loading) else QqEmblem()
+            if (framedEmblemLayout) HomeLoginEmblem(loading) else QqEmblem()
             HomeLoginText(
                 title,
                 stringResource(strings.second),
                 titleFocus,
-                centered,
+                framedEmblemLayout,
                 if (loading) 17.dp else 7.dp
             )
         }
-        HomeLoginAction(loading, centered, onCancel, onRetry)
+        HomeLoginAction(state, framedEmblemLayout, onCancel, onRetry)
     }
 }
 
 @Composable
 private fun HomeLoginAction(
-    loading: Boolean,
-    centered: Boolean,
+    state: RestorationState,
+    framedEmblemLayout: Boolean,
     onCancel: () -> Unit,
     onRetry: () -> Unit
 ) {
     val modifier = Modifier.fillMaxWidth().imePadding().padding(
-        vertical = if (centered) 0.dp else 16.dp
-    ).heightIn(min = if (centered) 48.dp else 56.dp)
-    if (loading) {
+        vertical = if (framedEmblemLayout) 0.dp else 16.dp
+    ).heightIn(min = if (framedEmblemLayout) 48.dp else 56.dp)
+    if (state == RestorationState.Loading) {
         TextButton(onClick = onCancel, modifier = modifier) {
             Text(
                 stringResource(R.string.setup_cancel),
@@ -134,7 +134,7 @@ private fun HomeLoginAction(
         }
     } else {
         Button(onClick = onRetry, modifier = modifier) {
-            if (centered) {
+            if (state == RestorationState.Error) {
                 HomeActionLabel(R.drawable.ic_account_circle, R.string.home_login_action)
             } else {
                 Text(stringResource(R.string.home_login_action))
@@ -144,24 +144,26 @@ private fun HomeLoginAction(
 }
 
 @Composable
-private fun HomeLoginHeader(centered: Boolean, onBack: () -> Unit) {
+private fun HomeLoginHeader(framedEmblemLayout: Boolean, onBack: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().then(
-            if (centered) {
+            if (framedEmblemLayout) {
                 Modifier.padding(top = 16.dp, bottom = 8.dp).heightIn(min = 64.dp)
             } else {
                 Modifier.padding(vertical = 16.dp)
             }
         ),
-        horizontalArrangement = Arrangement.spacedBy(if (centered) 12.dp else 0.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (framedEmblemLayout) 12.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) {
             Icon(
-                painterResource(if (centered) R.drawable.ic_back_chevron else R.drawable.ic_back),
+                painterResource(
+                    if (framedEmblemLayout) R.drawable.ic_back_chevron else R.drawable.ic_back
+                ),
                 stringResource(R.string.setup_back),
-                modifier = if (centered) Modifier.size(18.dp) else Modifier,
-                tint = if (centered) {
+                modifier = if (framedEmblemLayout) Modifier.size(18.dp) else Modifier,
+                tint = if (framedEmblemLayout) {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 } else {
                     LocalContentColor.current
@@ -170,7 +172,7 @@ private fun HomeLoginHeader(centered: Boolean, onBack: () -> Unit) {
         }
         Text(
             stringResource(R.string.app_name),
-            style = if (centered) {
+            style = if (framedEmblemLayout) {
                 MaterialTheme.typography.titleLarge.copy(
                     fontSize = 20.sp,
                     lineHeight = 22.sp,
@@ -209,13 +211,13 @@ private fun HomeLoginText(
     title: String,
     description: String,
     titleFocus: FocusRequester,
-    centered: Boolean,
+    framedEmblemLayout: Boolean,
     titleSpacing: Dp
 ) {
     val typography = MaterialTheme.typography
     Text(
         title,
-        style = if (centered) {
+        style = if (framedEmblemLayout) {
             typography.headlineMedium.copy(
                 fontSize = 26.sp,
                 lineHeight = 30.sp,
@@ -226,20 +228,24 @@ private fun HomeLoginText(
             typography.headlineLarge
         },
         textAlign = TextAlign.Center,
-        modifier = Modifier.padding(top = if (centered) titleSpacing else 0.dp)
+        modifier = Modifier.padding(top = if (framedEmblemLayout) titleSpacing else 0.dp)
             .focusRequester(titleFocus).focusable().semantics { heading() }
     )
     Text(
         description,
-        modifier = if (centered) Modifier.padding(top = 12.dp).widthIn(max = 305.dp) else Modifier,
-        style = if (centered) {
+        modifier = if (framedEmblemLayout) {
+            Modifier.padding(top = 12.dp).widthIn(max = 305.dp)
+        } else {
+            Modifier
+        },
+        style = if (framedEmblemLayout) {
             typography.bodyMedium.copy(
                 lineHeight = 22.sp
             )
         } else {
             typography.bodyLarge
         },
-        color = if (centered) {
+        color = if (framedEmblemLayout) {
             MaterialTheme.colorScheme.onSurfaceVariant
         } else {
             LocalContentColor.current

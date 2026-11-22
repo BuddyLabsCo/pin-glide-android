@@ -3,12 +3,15 @@ package com.buddylabs.pinglide.ui.home
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -16,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewModelScope
 import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.R
+import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.IdentitySnapshot
@@ -28,6 +32,7 @@ import com.buddylabs.pinglide.domain.identity.RestorationState
 import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import com.buddylabs.pinglide.domain.identity.SenderRestoration
 import com.buddylabs.pinglide.domain.identity.UploadCredential
+import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -43,35 +48,67 @@ class HomeLoginScreenTest {
     val compose = createComposeRule()
 
     @Test
-    fun failedRestorationShowsPairingRetentionAndOffersRetry() {
-        val resources = InstrumentationRegistry.getInstrumentation().targetContext.resources
+    fun failedRestorationShowsPairingRetentionAndRetryInSimplifiedChinese() {
+        verifyFailedRestoration(
+            AppLanguage.SimplifiedChinese,
+            "暂时无法登录",
+            "网络或服务暂时不可用。原有配对仍保留，请稍后重新登录。",
+            "使用 QQ 重新登录"
+        )
+    }
+
+    @Test
+    fun failedRestorationShowsPairingRetentionAndRetryInEnglish() {
+        verifyFailedRestoration(
+            AppLanguage.English,
+            "Unable to sign in right now",
+            "The network or service is temporarily unavailable. " +
+                "Your existing Pairings are retained. Try signing in again later.",
+            "Sign in again with QQ"
+        )
+    }
+
+    private fun verifyFailedRestoration(
+        language: AppLanguage,
+        title: String,
+        approvedCopy: String,
+        retryLabel: String
+    ) {
         var retries = 0
         compose.setContent {
-            PinGlideTheme {
-                HomeLoginScreen(
-                    state = RestorationState.Error,
-                    onRetry = { retries++ },
-                    onCancel = { error("Failed restoration has no pending QQ authorization") },
-                    onBack = { error("Retry must stay in the restoration flow") }
-                )
+            LocalizedContent(language) {
+                PinGlideTheme {
+                    HomeLoginScreen(
+                        state = RestorationState.Error,
+                        onRetry = { retries++ },
+                        onCancel = { error("Failed restoration has no pending QQ authorization") },
+                        onBack = { error("Retry must stay in the restoration flow") }
+                    )
+                }
             }
         }
 
-        val approvedCopy = if (resources.configuration.locales[0].language == "en") {
-            "The network or service is temporarily unavailable. " +
-                "Your existing Pairings are retained. Try signing in again later."
-        } else {
-            "网络或服务暂时不可用。原有配对仍保留，请稍后重新登录。"
-        }
-        compose.onNodeWithText(resources.getString(R.string.home_login_error)).assertIsDisplayed()
+        compose.onNodeWithText(title).assertIsDisplayed()
         compose.onNodeWithText(approvedCopy).assertIsDisplayed()
         compose.onNode(
             SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)
         ).assertDoesNotExist()
-        compose.onNodeWithText(resources.getString(R.string.home_login_action))
-            .assertIsDisplayed()
-            .assertHeightIsAtLeast(48.dp)
-            .performClick()
+        val action = compose.onNodeWithText(retryLabel)
+        action.assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+        with(compose.density) {
+            val label = compose.onNodeWithText(retryLabel, useUnmergedTree = true)
+            val labelStart =
+                label.getUnclippedBoundsInRoot().left - action.getUnclippedBoundsInRoot().left
+            val iconCenter = labelStart - 18.dp
+            val button = action.captureToImage().asAndroidBitmap()
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            assertEquals(
+                "The account icon is visible before the retry label",
+                context.getColor(R.color.on_primary),
+                button.getPixel(iconCenter.roundToPx(), button.height / 2 - 6.dp.roundToPx())
+            )
+        }
+        action.performClick()
         compose.runOnIdle { assertEquals(1, retries) }
     }
 
