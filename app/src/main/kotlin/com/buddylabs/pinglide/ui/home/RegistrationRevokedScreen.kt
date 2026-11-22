@@ -1,12 +1,13 @@
 package com.buddylabs.pinglide.ui.home
 
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -33,6 +34,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
@@ -42,50 +44,60 @@ fun RegistrationRevokedScreen(onNewRegistration: () -> Unit) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     ScreenLayout {
-        Column(
+        Box(
             modifier = Modifier.weight(1f).fillMaxWidth()
-                .verticalScroll(rememberScrollState()).padding(vertical = 32.dp)
                 .semantics {
                     paneTitle = title
                     liveRegion = LiveRegionMode.Polite
                 },
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically)
+            contentAlignment = Alignment.Center
         ) {
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = colorResource(R.color.error_emblem_container)
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 8.dp)
+                    .padding(top = 28.dp, bottom = 22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    painterResource(R.drawable.ic_lock),
-                    contentDescription = null,
-                    tint = colorResource(R.color.error_emblem),
-                    modifier = Modifier.padding(21.dp).size(30.dp)
+                Surface(
+                    modifier = Modifier.padding(bottom = 18.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    color = colorResource(R.color.error_emblem_container)
+                ) {
+                    Icon(
+                        painterResource(R.drawable.ic_registration_revoked_lock),
+                        contentDescription = null,
+                        tint = colorResource(R.color.error_emblem),
+                        modifier = Modifier.padding(21.dp).size(30.dp)
+                    )
+                }
+                Text(
+                    title,
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontSize = 26.sp,
+                        lineHeight = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-1.04).sp
+                    ),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.focusRequester(focus).focusable().semantics { heading() }
+                )
+                Text(
+                    stringResource(R.string.registration_revoked_description),
+                    modifier = Modifier.padding(top = 10.dp).widthIn(max = 300.dp),
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp,
+                        letterSpacing = 0.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
                 )
             }
-            Text(
-                title,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.focusRequester(focus).focusable().semantics { heading() }
-            )
-            Text(
-                stringResource(R.string.registration_revoked_description),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
         }
         Button(
             onClick = onNewRegistration,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).heightIn(min = 56.dp)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).heightIn(min = 48.dp)
         ) {
-            Icon(painterResource(R.drawable.ic_account), contentDescription = null)
-            Text(
-                stringResource(R.string.registration_start_again),
-                modifier = Modifier.padding(start = 8.dp),
-                textAlign = TextAlign.Center
-            )
+            HomeActionLabel(R.drawable.ic_account_circle, R.string.registration_start_again)
         }
     }
 }
