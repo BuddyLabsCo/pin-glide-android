@@ -27,7 +27,7 @@
     <color name="home_on_warning">#FFE5A0</color>
     <color name="setup_warning_container">#5B4109</color>
     <color name="setup_on_warning">#FFCA68</color>
-    <color name="home_capacity">#FFB77B</color>
+    <color name="home_capacity">#FFCA68</color>
     <color name="home_online">#66D7B4</color>
     <color name="error_emblem">#FFB4AB</color>
     <color name="error_emblem_container">#6C211D</color>
