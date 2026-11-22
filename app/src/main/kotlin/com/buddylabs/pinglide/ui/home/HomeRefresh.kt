@@ -53,6 +53,7 @@ internal suspend fun LazyListState.revealTarget(
 @Composable
 internal fun HomeRefreshContainer(
     state: HomeState,
+    showListProgress: Boolean,
     onRefresh: () -> Unit,
     modifier: Modifier,
     content: @Composable () -> Unit
@@ -82,6 +83,7 @@ internal fun HomeRefreshContainer(
         }.focusable(),
         indicator = {
             val hint = when {
+                showListProgress -> null
                 state.refreshing -> R.string.home_refreshing
                 pull.distanceFraction >= 1f -> R.string.home_pull_release
                 pull.distanceFraction > 0f -> R.string.home_pull_down

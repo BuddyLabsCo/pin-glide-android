@@ -221,14 +221,16 @@ private fun HomeContent(
     now: Instant
 ) {
     LaunchedEffect(Unit) { headingFocus.requestFocus() }
+    val showListProgress = readiness == HomeReadiness.Unknown && state.refreshing &&
+        !state.listed && !state.failed && state.targets.isEmpty()
     ScreenLayout {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val viewportHeight = maxHeight
             val compact = viewportHeight < 320.dp
-            val showAdd = state.targets.isNotEmpty() && state.targets.size < 5 && canAdd(readiness)
+            val showAdd = state.listed && state.targets.size in 1..4 && canAdd(readiness)
             Column(Modifier.fillMaxSize()) {
                 HomeHeader(headingFocus, onSettings, compact)
-                HomeRefreshContainer(state, onRefresh, Modifier.weight(1f)) {
+                HomeRefreshContainer(state, showListProgress, onRefresh, Modifier.weight(1f)) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
@@ -239,6 +241,7 @@ private fun HomeContent(
                             HomeSummary(
                                 state,
                                 readiness,
+                                showListProgress,
                                 smsGranted,
                                 smsRecovery,
                                 onRestoreSms,
@@ -250,9 +253,7 @@ private fun HomeContent(
                             TargetRow(
                                 target,
                                 enabled = readiness != HomeReadiness.LoginRequired,
-                                onOpen = {
-                                    onOpen(target.pairingId)
-                                },
+                                onOpen = { onOpen(target.pairingId) },
                                 onSelect = { onSelect(target.pairingId, it) },
                                 highlighted = target.pairingId == highlightedPairingId,
                                 now = now,
@@ -352,17 +353,19 @@ private fun HomeHeader(headingFocus: FocusRequester, onSettings: () -> Unit, com
 private fun HomeSummary(
     state: HomeState,
     readiness: HomeReadiness,
+    showListProgress: Boolean,
     smsGranted: Boolean,
     smsRecovery: SmsRecovery,
     onRestoreSms: () -> Unit,
     onAdd: () -> Unit,
     onRestoreLogin: () -> Unit
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(
-            if (readiness == HomeReadiness.Empty) 14.dp else 16.dp
-        )
-    ) {
+    val spacing = when {
+        showListProgress -> 0.dp
+        readiness == HomeReadiness.Empty -> 14.dp
+        else -> 16.dp
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
         HomeHero(state, readiness)
         if (readiness == HomeReadiness.LoginRequired) {
             Button(
@@ -380,11 +383,17 @@ private fun HomeSummary(
                 style = MaterialTheme.typography.bodyMedium
             )
         }
-        if (readiness == HomeReadiness.Empty) {
-            HomeEmptyCard(onAdd)
-        } else {
-            if (state.listed) DeviceCount(state.targets.size)
-            if (state.targets.isEmpty()) EmptyRegion(state, readiness, onAdd)
+        when {
+            showListProgress -> HomeLoadingCard()
+
+            readiness == HomeReadiness.Empty -> HomeEmptyCard(onAdd)
+
+            state.listed || state.targets.isNotEmpty() -> {
+                DeviceCount(state.targets.size)
+                if (state.targets.isEmpty()) EmptyRegion(readiness, onAdd)
+            }
+
+            state.failed -> HomeListUnavailable()
         }
     }
 }
@@ -447,40 +456,22 @@ private fun DeviceCount(count: Int) {
 }
 
 @Composable
-private fun EmptyRegion(state: HomeState, readiness: HomeReadiness, onAdd: () -> Unit) {
+private fun EmptyRegion(readiness: HomeReadiness, onAdd: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().padding(vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (state.listed) {
-            Text(
-                stringResource(R.string.home_no_devices),
-                style = MaterialTheme.typography.titleLarge
-            )
-            Text(stringResource(R.string.home_add_instructions))
-            if (canAdd(readiness)) {
-                Button(onClick = onAdd, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(stringResource(R.string.home_add_first))
-                }
+        Text(stringResource(R.string.home_no_devices), style = MaterialTheme.typography.titleLarge)
+        Text(stringResource(R.string.home_add_instructions))
+        if (canAdd(readiness)) {
+            Button(onClick = onAdd, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.home_add_first))
             }
-        } else {
-            Text(
-                stringResource(
-                    if (state.failed) {
-                        R.string.home_load_error_region
-                    } else {
-                        R.string.home_loading_region
-                    }
-                ),
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-            )
         }
     }
 }
 
-private fun canAdd(readiness: HomeReadiness): Boolean = readiness !in listOf(
-    HomeReadiness.Revoked,
-    HomeReadiness.LoginRequired,
-    HomeReadiness.Unknown
-)
+private fun canAdd(readiness: HomeReadiness): Boolean =
+    readiness != HomeReadiness.Revoked && readiness != HomeReadiness.LoginRequired &&
+        readiness != HomeReadiness.Unknown
