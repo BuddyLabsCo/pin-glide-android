@@ -8,12 +8,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -32,6 +34,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -39,12 +43,22 @@ import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
 import com.buddylabs.pinglide.domain.identity.AuthorizationState
+import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.pairing.HomeState
+import com.buddylabs.pinglide.domain.pairing.OwnPairings
+import com.buddylabs.pinglide.domain.pairing.PairingFailure
+import com.buddylabs.pinglide.domain.pairing.PairingService
+import com.buddylabs.pinglide.domain.pairing.PairingServiceException
 import com.buddylabs.pinglide.domain.pairing.Presence
+import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import com.buddylabs.pinglide.domain.pairing.TargetDevice
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import java.time.Instant
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -181,6 +195,53 @@ class HomeReadyScreenTest {
     }
 
     @Test
+    fun initialListFailureExplainsRecoveryAndOffersTwoWaysToRefresh() {
+        val scope = CoroutineScope(Dispatchers.Main)
+        try {
+            val store = HomePairingStore(
+                emptyList(),
+                Instant.now().plusSeconds(3600).toString(),
+                listed = false
+            )
+            val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)
+            var requests = 0
+            val service = object : PairingService {
+                override suspend fun list(managementToken: String): List<RemotePairing> {
+                    if (++requests < 3) throw PairingServiceException(PairingFailure.Unavailable)
+                    return emptyList()
+                }
+
+                override suspend fun remove(managementToken: String, pairingId: String) =
+                    error("Unexpected removal")
+            }
+            val pairings = OwnPairings(store, service, renewal, scope)
+            runBlocking(Dispatchers.Main) { pairings.refresh() }
+            renderHome(AppLanguage.SimplifiedChinese, pairings = pairings)
+
+            compose.onNodeWithText("暂时无法获取设备").assertIsDisplayed()
+            compose.onNodeWithText("设备列表暂不可用").assertIsDisplayed()
+                .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
+            compose.onNodeWithText("下拉刷新设备列表。这不代表配对已被删除，也不代表登录失效。")
+                .assertIsDisplayed()
+            compose.onNodeWithText("添加第一台设备").assertDoesNotExist()
+
+            val list = compose.onNodeWithContentDescription("设备列表，可下拉刷新或按 Enter 刷新")
+            val refresh = list.fetchSemanticsNode().config[SemanticsActions.CustomActions]
+                .single { it.label == "刷新设备列表" }
+            compose.runOnIdle { assertTrue(refresh.action()) }
+            compose.runOnIdle { assertEquals(2, requests) }
+            compose.onNodeWithText("设备列表暂不可用").assertIsDisplayed()
+
+            list.performTouchInput { swipeDown() }
+            compose.runOnIdle { assertEquals(3, requests) }
+            compose.onNodeWithText("设备列表暂不可用").assertDoesNotExist()
+            compose.onNode(hasText("添加第一台设备") and hasClickAction()).assertIsDisplayed()
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
     fun homeKeepsCachedDevicesWhenFirstListRefreshFails() {
         val target = TargetDevice("cached", "Cached device", enabled = true, keyUsable = true)
         val state = mutableStateOf(
@@ -217,8 +278,7 @@ class HomeReadyScreenTest {
         compose.onNodeWithText("Existing Pairings are retained.", substring = true)
             .assertIsDisplayed()
         compose.onNodeWithText("Cached device").assertIsDisplayed()
-        compose.onNodeWithText("Pull down or use the Refresh device list", substring = true)
-            .assertDoesNotExist()
+        compose.onNodeWithText("Device list temporarily unavailable").assertDoesNotExist()
         compose.onNodeWithText("Add device").assertDoesNotExist()
     }
 
@@ -247,13 +307,14 @@ class HomeReadyScreenTest {
         fontScale: Float = 1f,
         onAdd: () -> Unit = {},
         smsGranted: Boolean = true,
+        pairings: OwnPairings? = null,
         homeState: () -> HomeState = {
             HomeState(listed = true, authorization = AuthorizationState.Ready)
         }
     ) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val app = instrumentation.targetContext.applicationContext as PinGlideApplication
-        val home = HomeViewModel(app.ownPairings, app.senderRestoration()) { null }
+        val home = HomeViewModel(pairings ?: app.ownPairings, app.senderRestoration()) { null }
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         compose.setContent {
             val density = Density(LocalDensity.current.density, fontScale)
@@ -262,7 +323,7 @@ class HomeReadyScreenTest {
                     LocalizedContent(language) {
                         PinGlideTheme {
                             HomeScreen(
-                                homeState(),
+                                pairings?.state?.collectAsState()?.value ?: homeState(),
                                 smsGranted = smsGranted,
                                 smsRecovery = SmsRecovery.Idle,
                                 home = home,

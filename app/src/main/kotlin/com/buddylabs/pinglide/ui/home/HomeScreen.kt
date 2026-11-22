@@ -360,12 +360,11 @@ private fun HomeSummary(
     onAdd: () -> Unit,
     onRestoreLogin: () -> Unit
 ) {
-    val spacing = when {
-        showListProgress -> 0.dp
-        readiness == HomeReadiness.Empty -> 14.dp
-        else -> 16.dp
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(
+            summarySpacing(state, readiness, showListProgress)
+        )
+    ) {
         HomeHero(state, readiness)
         if (readiness == HomeReadiness.LoginRequired) {
             Button(
@@ -397,6 +396,13 @@ private fun HomeSummary(
         }
     }
 }
+
+private fun summarySpacing(state: HomeState, readiness: HomeReadiness, showListProgress: Boolean) =
+    when {
+        showListProgress || state.hasInitialListFailure(readiness) -> 0.dp
+        readiness == HomeReadiness.Empty -> 14.dp
+        else -> 16.dp
+    }
 
 @Composable
 private fun TargetGone(onDismiss: () -> Unit, onAdd: () -> Unit) {

@@ -84,8 +84,9 @@
     <string name="home_loading_copy">Getting your devices and Pairings from the service.</string>
     <string name="home_loading_region">Loading device list</string>
     <string name="home_load_error_title">Devices temporarily unavailable</string>
-    <string name="home_load_error_copy">Check your connection. The list refreshes when you return to the app.</string>
-    <string name="home_load_error_region">Pull down or use the Refresh device list accessibility action to retry. This does not mean your Pairings were deleted or your login expired.</string>
+    <string name="home_load_error_copy">The network or service is temporarily unavailable. Check your connection. The list refreshes when you return to the app.</string>
+    <string name="home_load_error_region_title">Device list temporarily unavailable</string>
+    <string name="home_load_error_region">Pull down to refresh the device list. This does not mean your Pairings were deleted or your login expired.</string>
     <string name="home_refresh_error_title">Device status not updated</string>
     <string name="home_refresh_error_copy">The network or service is temporarily unavailable. Check your connection and pull down to retry.</string>
     <string name="home_cached_notice">Existing Pairings are retained. Device presence is currently unconfirmed.</string>
