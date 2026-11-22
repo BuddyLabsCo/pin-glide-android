@@ -44,6 +44,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
@@ -73,6 +74,7 @@ private fun HomeIllustratedCard(
     @StringRes title: Int,
     @StringRes copy: Int,
     modifier: Modifier = Modifier,
+    copyTracking: TextUnit = MaterialTheme.typography.bodySmall.letterSpacing,
     action: @Composable () -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
@@ -107,7 +109,10 @@ private fun HomeIllustratedCard(
             stringResource(copy),
             modifier = Modifier.widthIn(max = 240.dp),
             color = colors.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+            style = MaterialTheme.typography.bodySmall.copy(
+                lineHeight = 18.sp,
+                letterSpacing = copyTracking
+            ),
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(20.dp))
@@ -160,7 +165,8 @@ internal fun HomeListUnavailable() {
         R.drawable.ic_cloud_off,
         R.string.home_load_error_region_title,
         R.string.home_load_error_region,
-        Modifier.heightIn(min = 280.dp).semantics { liveRegion = LiveRegionMode.Polite }
+        Modifier.heightIn(min = 280.dp).semantics { liveRegion = LiveRegionMode.Polite },
+        copyTracking = 0.sp
     )
 }
 

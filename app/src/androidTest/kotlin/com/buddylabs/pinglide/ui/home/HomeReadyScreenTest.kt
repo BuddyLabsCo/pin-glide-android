@@ -1,6 +1,7 @@
 package com.buddylabs.pinglide.ui.home
 
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.os.LocaleList
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
@@ -11,6 +12,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -23,6 +25,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
@@ -34,8 +37,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -221,11 +226,22 @@ class HomeReadyScreenTest {
             compose.onNodeWithText("暂时无法获取设备").assertIsDisplayed()
             compose.onNodeWithText("设备列表暂不可用").assertIsDisplayed()
                 .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
-            compose.onNodeWithText("下拉刷新设备列表。这不代表配对已被删除，也不代表登录失效。")
-                .assertIsDisplayed()
+            val recoveryCopy = "下拉刷新设备列表。这不代表配对已被删除，也不代表登录失效。"
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(recoveryCopy).assertIsDisplayed().performSemanticsAction(
+                SemanticsActions.GetTextLayoutResult
+            ) { it(layouts) }
+            val layout = layouts.single()
+            if (layout.size.width >= with(compose.density) { 240.dp.roundToPx() }) {
+                assertEquals(
+                    "下拉刷新设备列表。这不代表配对已被删除，",
+                    recoveryCopy.take(layout.getLineEnd(0))
+                )
+            }
             compose.onNodeWithText("添加第一台设备").assertDoesNotExist()
 
             val list = compose.onNodeWithContentDescription("设备列表，可下拉刷新或按 Enter 刷新")
+            assertInitialFailureArtwork(list.captureToImage().asAndroidBitmap())
             val refresh = list.fetchSemanticsNode().config[SemanticsActions.CustomActions]
                 .single { it.label == "刷新设备列表" }
             compose.runOnIdle { assertTrue(refresh.action()) }
@@ -239,6 +255,44 @@ class HomeReadyScreenTest {
         } finally {
             scope.cancel()
         }
+    }
+
+    private fun assertInitialFailureArtwork(screenshot: Bitmap) {
+        val context = compose.activity
+        with(compose.density) {
+            val heroTop = 14.dp.roundToPx()
+            val heroLeft = screenshot.getPixel(20.dp.roundToPx(), heroTop)
+            val heroMiddle = screenshot.getPixel(120.dp.roundToPx(), heroTop)
+            assertTrue("The warning hero has a gradient", heroLeft != heroMiddle)
+            val iconCenter = 214.dp.roundToPx()
+            assertEquals(
+                "The cloud-off glyph fills the center of the emblem",
+                context.getColor(R.color.primary),
+                screenshot.getPixel(screenshot.width / 2, iconCenter)
+            )
+            assertEquals(
+                context.getColor(R.color.primary_container),
+                screenshot.getPixel(screenshot.width / 2 - 22.dp.roundToPx(), iconCenter)
+            )
+        }
+    }
+
+    @Test
+    fun failedFirstListKeepsLoginAndSmsRecoverySeparateFromTheListFailure() {
+        val state = mutableStateOf(
+            HomeState(failed = true, authorization = AuthorizationState.LoginRequired)
+        )
+        renderHome(AppLanguage.English, smsGranted = false, homeState = { state.value })
+
+        compose.onNode(hasText("Sign in again with QQ") and hasClickAction()).assertIsDisplayed()
+        compose.onNodeWithText("Device list temporarily unavailable").assertDoesNotExist()
+
+        compose.runOnIdle {
+            state.value = state.value.copy(authorization = AuthorizationState.Ready)
+        }
+        compose.onNode(hasText("Allow SMS permission again") and hasClickAction())
+            .assertIsDisplayed()
+        compose.onNodeWithText("Device list temporarily unavailable").assertDoesNotExist()
     }
 
     @Test

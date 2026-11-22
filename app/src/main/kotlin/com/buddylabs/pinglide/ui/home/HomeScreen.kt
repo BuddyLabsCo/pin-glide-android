@@ -392,7 +392,7 @@ private fun HomeSummary(
                 if (state.targets.isEmpty()) EmptyRegion(readiness, onAdd)
             }
 
-            state.failed -> HomeListUnavailable()
+            state.hasInitialListFailure(readiness) -> HomeListUnavailable()
         }
     }
 }
