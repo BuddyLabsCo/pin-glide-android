@@ -32,8 +32,9 @@ credentials as either value. Unconfigured builds can compile and run setup but
 fail an explicit login locally before opening QQ. Supply both values for a usable
 login build.
 
-The build downloads the official QQ Connect Android SDK 3.5.19 archive and verifies
-its pinned SHA-256 before extracting the JAR into ignored `build/dependencies/qq/`.
+The build downloads the official QQ Connect Android SDK 3.5.19 archive from Tencent's
+CDN and falls back to its storage origin if the transfer fails. It verifies the
+pinned SHA-256 before extracting the JAR into ignored `build/dependencies/qq/`.
 SDK preparation replaces its twelve static logging method bodies with no-ops,
 including callback URI diagnostics, before either variant compiles. It also makes
 `QQToken.saveSession` acknowledge without writing: the SDK's native login listener

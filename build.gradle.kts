@@ -1,4 +1,5 @@
 import groovy.json.JsonSlurper
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.URI
@@ -24,15 +25,33 @@ plugins {
 val openApiGenerator = configurations.create("openApiGenerator")
 val qqSdk = layout.buildDirectory.file("dependencies/qq/open_sdk_3.5.19_lite.jar")
 tasks.register("downloadQqSdk") {
-    val sdkUrl = "https://tangram-1251316161.file.myqcloud.com/files/20260414/" +
-        "143310b667ece8922594fbe866dabdef.zip"
+    val sdkPath = "/files/20260414/143310b667ece8922594fbe866dabdef.zip"
+    val sdkUrl = "https://tangram-1251316161.file.myqcloud.com$sdkPath"
+    val sdkOriginUrl = "https://tangram-1251316161.cos.ap-guangzhou.myqcloud.com$sdkPath"
     inputs.property("url", sdkUrl)
+    inputs.property("originUrl", sdkOriginUrl)
     outputs.file(qqSdk)
     doLast {
         val archive = layout.buildDirectory.file("dependencies/qq/sdk.zip").get().asFile
         archive.parentFile.mkdirs()
-        URI(sdkUrl).toURL().openStream().use { input ->
-            archive.outputStream().use { input.copyTo(it) }
+        fun download(url: String) {
+            val connection = URI(url).toURL().openConnection().apply {
+                connectTimeout = 15_000
+                readTimeout = 30_000
+            }
+            connection.getInputStream().use { input ->
+                archive.outputStream().use { input.copyTo(it) }
+            }
+        }
+        try {
+            download(sdkUrl)
+        } catch (cdnFailure: IOException) {
+            try {
+                download(sdkOriginUrl)
+            } catch (originFailure: IOException) {
+                originFailure.addSuppressed(cdnFailure)
+                throw originFailure
+            }
         }
         val digest = MessageDigest.getInstance("SHA-256").digest(archive.readBytes())
             .joinToString("") { "%02x".format(it) }
