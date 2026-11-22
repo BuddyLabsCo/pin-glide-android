@@ -164,6 +164,7 @@
     <string name="pairing_camera_unavailable">Camera unavailable. Check its permission or try again later.</string>
     <string name="pairing_rescan">Scan a new QR code</string>
     <string name="pairing_already_added">This target is already added</string>
+    <string name="home_just_scanned">Just scanned device</string>
     <string name="pairing_camera_denied">Camera permission was denied. QR scanning is unavailable.</string>
     <string name="pairing_camera_blocked">Camera permission is blocked. Enable it in system settings.</string>
     <string name="pairing_open_settings">Open settings</string>

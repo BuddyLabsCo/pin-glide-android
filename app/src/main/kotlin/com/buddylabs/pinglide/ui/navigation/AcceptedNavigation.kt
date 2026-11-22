@@ -11,7 +11,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.identity.AuthorizationState
 import com.buddylabs.pinglide.domain.identity.LoginState
 import com.buddylabs.pinglide.domain.identity.RestorationState
@@ -154,7 +153,6 @@ private fun PairingEntryNotices(
     LaunchedEffect(entry.highlightUntil) {
         if (entry.duplicatePairingId != null) {
             onDuplicate()
-            Toast.makeText(context, R.string.pairing_already_added, Toast.LENGTH_LONG).show()
         }
     }
     LaunchedEffect(entry.page, entry.problem) {

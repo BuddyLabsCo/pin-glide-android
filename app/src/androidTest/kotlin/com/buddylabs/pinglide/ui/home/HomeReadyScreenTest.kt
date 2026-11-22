@@ -7,12 +7,17 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
@@ -58,6 +63,59 @@ class HomeReadyScreenTest {
     @Test
     fun readyHomeFallsBackToSimplifiedChineseForFrenchSystemLocale() {
         verifyHome(AppLanguage.System, "fr-FR", "zh-Hans", "在线 · 状态变化：2分钟前")
+    }
+
+    @Test
+    fun duplicateScanShowsASeparateNoticeAndCuesOnlyTheScannedTarget() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext
+            .applicationContext as PinGlideApplication
+        val home = HomeViewModel(app.ownPairings, app.senderRestoration()) { null }
+        val now = Instant.now().toString()
+        val state = HomeState(
+            targets = listOf(
+                TargetDevice("home", "My computer", true, true, Presence.Online, now),
+                TargetDevice("office", "Office computer", false, true, Presence.Online, now)
+            ),
+            listed = true,
+            authorization = AuthorizationState.Ready
+        )
+        val scannedPairingId = mutableStateOf<String?>(null)
+        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        compose.setContent {
+            LocalizedContent(AppLanguage.English) {
+                PinGlideTheme {
+                    HomeScreen(
+                        state,
+                        smsGranted = true,
+                        smsRecovery = SmsRecovery.Idle,
+                        home = home,
+                        onRestoreSms = {},
+                        onAdd = {},
+                        onSettings = {},
+                        highlightedPairingId = scannedPairingId.value
+                    )
+                }
+            }
+        }
+        val cue = "Just scanned device"
+        val notice = compose.onNodeWithText("This target is already added")
+        val enabled = compose.onNodeWithContentDescription("Receive SMS on My computer")
+        val disabled = compose.onNodeWithContentDescription("Receive SMS on Office computer")
+        compose.runOnIdle { scannedPairingId.value = "office" }
+        compose.onNode(hasText("Office computer") and hasText(cue)).assertIsDisplayed()
+        compose.onAllNodes(hasText(cue)).assertCountEquals(1)
+        notice.assertIsDisplayed()
+            .assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+            )
+        enabled.assertIsOn()
+        disabled.assertIsOff()
+
+        compose.runOnIdle { scannedPairingId.value = null }
+        compose.onNodeWithText(cue).assertDoesNotExist()
+        notice.assertDoesNotExist()
+        enabled.assertIsOn()
+        disabled.assertIsOff()
     }
 
     @Test

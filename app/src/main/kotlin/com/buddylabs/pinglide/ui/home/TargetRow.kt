@@ -1,9 +1,14 @@
 package com.buddylabs.pinglide.ui.home
 
 import android.icu.text.RelativeDateTimeFormatter
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,16 +29,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,15 +68,17 @@ internal fun TargetRow(
     modifier: Modifier = Modifier
 ) {
     val name = target.alias.ifBlank { stringResource(R.string.home_target_device) }
-    val outline by animateColorAsState(
-        if (highlighted) MaterialTheme.colorScheme.primary else Color.Transparent,
+    val highlightAlpha by animateFloatAsState(
+        targetValue = if (highlighted) 1f else 0f,
+        animationSpec = if (highlighted) snap() else tween(240),
         label = "Pairing scan outline"
     )
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(16.dp)
     Row(
-        Modifier.fillMaxWidth().clip(shape).background(colors.surfaceContainer)
-            .border(2.dp, outline, shape).padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().scanHalo(shape, colors.primary, highlightAlpha)
+            .clip(shape).background(colors.surfaceContainer)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(9.dp)
     ) {
@@ -81,7 +93,7 @@ internal fun TargetRow(
             horizontalArrangement = Arrangement.spacedBy(9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TargetCardDetails(target, name, now, highlighted)
+            TargetCardDetails(target, name, now, highlightAlpha)
         }
         val switchLabel = stringResource(R.string.home_receive, name)
         Switch(
@@ -100,11 +112,41 @@ internal fun TargetRow(
 }
 
 @Composable
+private fun Modifier.scanHalo(shape: RoundedCornerShape, color: Color, opacity: Float): Modifier {
+    if (opacity == 0f) return this
+    val pulse by rememberInfiniteTransition(label = "Pairing scan halo").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
+        label = "Halo pulse"
+    )
+    return dropShadow(shape) {
+        this.color = color
+        radius = (12 + 4 * pulse).dp.toPx()
+        alpha = opacity * (0.25f + 0.15f * pulse)
+    }.dropShadow(shape) {
+        this.color = color
+        spread = (6 + 2 * pulse).dp.toPx()
+        alpha = opacity * (0.12f + 0.08f * pulse)
+    }.drawBehind {
+        val outset = 4.dp.toPx()
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(-outset, -outset),
+            size = Size(size.width + 2 * outset, size.height + 2 * outset),
+            cornerRadius = CornerRadius(20.dp.toPx()),
+            alpha = opacity,
+            style = Stroke(2.dp.toPx())
+        )
+    }
+}
+
+@Composable
 private fun TargetCardDetails(
     target: TargetDevice,
     name: String,
     now: Instant,
-    highlighted: Boolean
+    highlightAlpha: Float
 ) {
     val colors = MaterialTheme.colorScheme
     Box(
@@ -122,11 +164,13 @@ private fun TargetCardDetails(
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Text(name, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight(720))
         TargetRowPresence(target, now)
-        if (highlighted) {
+        if (highlightAlpha > 0f) {
             Text(
-                stringResource(R.string.pairing_already_added),
+                stringResource(R.string.home_just_scanned),
                 color = colors.primary,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
+                modifier = Modifier.alpha(highlightAlpha)
             )
         }
         if (!target.keyUsable) {
