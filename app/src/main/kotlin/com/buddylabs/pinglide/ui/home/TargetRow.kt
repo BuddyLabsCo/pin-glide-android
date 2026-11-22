@@ -117,11 +117,14 @@ private fun TargetReceiveSwitch(
     onSelect: (Boolean) -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    val uncheckedBorder = colors.onSurface.copy(
+        alpha = if (isSystemInDarkTheme()) 0.32f else 0.34f
+    )
     Switch(
         checked = checked,
         onCheckedChange = onSelect,
         enabled = enabled,
-        thumbContent = if (!checked && enabled) {
+        thumbContent = if (!checked) {
             { Box(Modifier.size(22.dp).background(colors.onSurfaceVariant, CircleShape)) }
         } else {
             null
@@ -130,11 +133,14 @@ private fun TargetReceiveSwitch(
             checkedThumbColor = colors.onPrimary,
             uncheckedThumbColor = Color.Transparent,
             uncheckedTrackColor = colors.surfaceContainerHigh,
-            uncheckedBorderColor = colors.onSurface.copy(
-                alpha = if (isSystemInDarkTheme()) 0.32f else 0.34f
-            )
+            uncheckedBorderColor = uncheckedBorder,
+            disabledUncheckedThumbColor = Color.Transparent,
+            disabledUncheckedTrackColor = colors.surfaceContainerHigh,
+            disabledUncheckedBorderColor = uncheckedBorder
         ),
-        modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = label }
+        modifier = Modifier.heightIn(min = 48.dp)
+            .alpha(if (!enabled && !checked) 0.38f else 1f)
+            .semantics { contentDescription = label }
     )
 }
 
@@ -203,8 +209,11 @@ private fun TargetCardDetails(
         if (!target.keyUsable) {
             Text(
                 stringResource(R.string.home_key_unavailable),
-                color = colors.error,
-                style = MaterialTheme.typography.bodySmall
+                modifier = Modifier.padding(top = 1.dp),
+                color = colorResource(R.color.error_emblem),
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
+                letterSpacing = 0.sp
             )
         }
     }

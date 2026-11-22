@@ -163,7 +163,8 @@ class HomeCapacityScreenTest {
 internal class HomePairingStore(
     targets: List<RemotePairing>,
     expiresAt: String,
-    private var listed: Boolean = true
+    private var listed: Boolean = true,
+    missingKeyId: String? = null
 ) : IdentityStore,
     PairingStore {
     private val authority = IdentitySnapshot(
@@ -182,7 +183,7 @@ internal class HomePairingStore(
             target.pairingId,
             target.receiverId,
             target.alias,
-            key = ByteArray(32)
+            key = if (target.pairingId == missingKeyId) null else ByteArray(32)
         )
     }.toMutableMap()
 

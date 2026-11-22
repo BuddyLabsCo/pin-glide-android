@@ -11,7 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -26,6 +26,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.captureToImage
@@ -44,6 +45,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
@@ -60,6 +62,7 @@ import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
+import kotlin.math.abs
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -90,6 +93,60 @@ class HomeRefreshScreenTest {
     fun stopFixture() = scope.cancel()
 
     @Test
+    fun missingPairingKeyDisablesOnlyTheAffectedReceiveSwitchInLightTheme() {
+        verifyMissingPairingKey(
+            Configuration.UI_MODE_NIGHT_NO,
+            rowColor = Color(0xFFEEF6F2),
+            thumbColor = Color(0xFF52635E),
+            trackColor = Color(0xFFE3EFEA)
+        )
+    }
+
+    @Test
+    fun missingPairingKeyDisablesOnlyTheAffectedReceiveSwitchInDarkTheme() {
+        verifyMissingPairingKey(
+            Configuration.UI_MODE_NIGHT_YES,
+            rowColor = Color(0xFF11221F),
+            thumbColor = Color(0xFFA7BBB5),
+            trackColor = Color(0xFF172B27)
+        )
+    }
+
+    private fun verifyMissingPairingKey(
+        nightMode: Int,
+        rowColor: Color,
+        thumbColor: Color,
+        trackColor: Color
+    ) {
+        openHome(listOf("我的电脑", "办公室电脑"), missingKeyIndex = 0, nightMode = nightMode)
+        val keyError = hasText("密钥丢失或损坏")
+        compose.onNode(hasText("我的电脑") and keyError).assertIsDisplayed().assertIsEnabled()
+        compose.onAllNodes(keyError).assertCountEquals(1)
+        compose.onNodeWithText("转发已就绪").assertIsDisplayed()
+        compose.onNodeWithText("添加设备").assertIsDisplayed()
+        val affected = compose.onNodeWithContentDescription("我的电脑接收短信")
+        val other = compose.onNodeWithContentDescription("办公室电脑接收短信")
+        affected.assertIsNotEnabled().assertIsOff()
+        other.assertIsEnabled().assertIsOn()
+        assertUncheckedSwitchArtwork(
+            affected,
+            thumbColor.copy(alpha = 0.38f).compositeOver(rowColor),
+            trackColor.copy(alpha = 0.38f).compositeOver(rowColor)
+        )
+        affected.performTouchInput { click() }.assertIsOff()
+        compose.runOnIdle { assertEquals(0, selectionAttempts) }
+        other.performTouchInput { click() }.assertIsOff()
+        other.performTouchInput { click() }.assertIsOn()
+        affected.assertIsNotEnabled().assertIsOff()
+        compose.runOnIdle { assertEquals(2, selectionAttempts) }
+
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNode(keyError, useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertEquals(11.sp, layouts.single().layoutInput.style.fontSize)
+    }
+
+    @Test
     fun allReceiveSwitchesOffShowsWarningUntilAnOnlineTargetIsEnabled() {
         val aliases = listOf("我的电脑", "办公室电脑")
         openHome(aliases, initiallyDisabled = listOf(0, 1))
@@ -105,12 +162,7 @@ class HomeRefreshScreenTest {
         val second = compose.onNodeWithContentDescription("办公室电脑接收短信")
         first.assertIsEnabled().assertIsOff()
         second.assertIsEnabled().assertIsOff()
-        val switchImage = first.captureToImage().asAndroidBitmap()
-        val thumbColor = Color(0xFF52635E).toArgb()
-        val thumbWidth = (0 until switchImage.width).count { column ->
-            switchImage.getPixel(column, switchImage.height / 2) == thumbColor
-        }
-        assertEquals(22f, thumbWidth / compose.density.density, 1f)
+        assertUncheckedSwitchArtwork(first, Color(0xFF52635E), Color(0xFFE3EFEA))
         compose.onNode(hasText(aliases.first()) and hasText("在线 · 状态变化：2020/1/15 17:00"))
             .assertIsDisplayed()
         compose.onNode(hasText(aliases.last()) and hasText("在线 · 状态变化：2021/1/15 17:00"))
@@ -301,6 +353,29 @@ class HomeRefreshScreenTest {
 
     private fun refreshList() = compose.onNodeWithContentDescription("设备列表，可下拉刷新或按 Enter 刷新")
 
+    private fun assertUncheckedSwitchArtwork(
+        switch: SemanticsNodeInteraction,
+        thumbColor: Color,
+        trackColor: Color
+    ) {
+        val image = switch.captureToImage().asAndroidBitmap()
+        val center = image.height / 2
+        val thumbWidth = (0 until image.width).count { column ->
+            Color(image.getPixel(column, center)).matchesRgb(thumbColor)
+        }
+        assertEquals("Thumb width in dp", 22f, thumbWidth / compose.density.density, 1f)
+        val actualTrackColor = Color(image.getPixel(image.width * 3 / 4, center))
+        assertTrue(
+            "Track color expected $trackColor, got $actualTrackColor",
+            actualTrackColor.matchesRgb(trackColor)
+        )
+    }
+
+    private fun Color.matchesRgb(expected: Color): Boolean =
+        abs(red - expected.red) <= 1.5f / 255f &&
+            abs(green - expected.green) <= 1.5f / 255f &&
+            abs(blue - expected.blue) <= 1.5f / 255f
+
     private fun assertWarningBodyColor(body: SemanticsNodeInteraction) {
         val layouts = mutableListOf<TextLayoutResult>()
         body.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
@@ -318,7 +393,9 @@ class HomeRefreshScreenTest {
         aliases: List<String>,
         modifier: Modifier = Modifier,
         initiallyDisabled: List<Int> = emptyList(),
-        rejectSelection: Boolean = false
+        rejectSelection: Boolean = false,
+        missingKeyIndex: Int? = null,
+        nightMode: Int = Configuration.UI_MODE_NIGHT_NO
     ): List<RemotePairing> {
         val now = Instant.now()
         val targets = aliases.mapIndexed { index, alias ->
@@ -336,7 +413,11 @@ class HomeRefreshScreenTest {
             override suspend fun list(managementToken: String) =
                 if (++requests == 2) response.await() else targets
         }
-        val store = HomePairingStore(targets, now.plusSeconds(3600).toString())
+        val store = HomePairingStore(
+            targets,
+            now.plusSeconds(3600).toString(),
+            missingKeyId = missingKeyIndex?.let { targets[it].pairingId }
+        )
         val pairingStore = object : PairingStore by store {
             override suspend fun select(
                 expected: PairingSnapshot,
@@ -361,8 +442,7 @@ class HomeRefreshScreenTest {
         compose.setContent {
             val state = home.state.collectAsState().value
             val configuration = Configuration(LocalConfiguration.current).apply {
-                uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
-                    Configuration.UI_MODE_NIGHT_NO
+                uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or nightMode
             }
             CompositionLocalProvider(LocalConfiguration provides configuration) {
                 LocalizedContent(AppLanguage.SimplifiedChinese) {
