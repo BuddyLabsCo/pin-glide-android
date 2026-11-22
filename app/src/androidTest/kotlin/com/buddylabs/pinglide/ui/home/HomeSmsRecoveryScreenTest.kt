@@ -62,6 +62,7 @@ class HomeSmsRecoveryScreenTest {
             listed = true,
             authorization = AuthorizationState.Ready
         )
+        val homeState = mutableStateOf(state)
         val recovery = mutableStateOf(SmsRecovery.Idle)
         val dark = nightMode == Configuration.UI_MODE_NIGHT_YES
         val systemBars = if (dark) SystemBarStyle.dark(0) else SystemBarStyle.light(0, 0)
@@ -74,7 +75,7 @@ class HomeSmsRecoveryScreenTest {
                 LocalizedContent(AppLanguage.SimplifiedChinese) {
                     PinGlideTheme {
                         HomeScreen(
-                            state,
+                            homeState.value,
                             smsGranted = false,
                             smsRecovery = recovery.value,
                             home = home,
@@ -88,8 +89,16 @@ class HomeSmsRecoveryScreenTest {
         }
 
         compose.onNodeWithText("权限失效").assertIsDisplayed()
-        compose.onNodeWithText("重新开启短信权限后，转发会自动恢复；无需重新登录或重新配对。")
+        val approvedHint = compose.onNodeWithText(
+            "重新开启短信权限后，转发会自动恢复；无需重新登录或重新配对。"
+        )
+        approvedHint.assertIsDisplayed()
+        compose.runOnIdle { homeState.value = state.copy(refreshing = true) }
+        approvedHint.assertIsDisplayed()
+        compose.runOnIdle { homeState.value = homeState.value.copy(listed = false) }
+        compose.onNodeWithText("满足其他转发条件时会自动恢复", substring = true)
             .assertIsDisplayed()
+        compose.runOnIdle { homeState.value = state }
         state.targets.forEach { target ->
             compose.onNodeWithContentDescription("${target.alias}接收短信")
                 .assertIsDisplayed().assertIsEnabled().assertIsOn()

@@ -30,7 +30,7 @@ import com.buddylabs.pinglide.ui.components.WarningInfoCard
 
 @Composable
 internal fun HomeSmsRecovery(state: HomeState, pending: Boolean, onRestore: () -> Unit) {
-    val hint = if (state.canResumeForwarding) {
+    val hint = if (state.listed && state.isReadyWithSmsPermission) {
         R.string.home_sms_resume_hint
     } else {
         R.string.home_sms_hint
@@ -78,7 +78,7 @@ internal fun SmsRecoveryNotice(
     val messageId = when (recovery) {
         SmsRecovery.Granted, SmsRecovery.Denied -> when {
             !smsGranted -> R.string.home_sms_denied
-            state.canResumeForwarding -> R.string.home_sms_restored
+            !state.refreshing && state.isReadyWithSmsPermission -> R.string.home_sms_restored
             else -> R.string.home_sms_enabled
         }
 
@@ -96,5 +96,5 @@ internal fun SmsRecoveryNotice(
     }
 }
 
-private val HomeState.canResumeForwarding: Boolean
-    get() = readiness(smsGranted = true) == HomeReadiness.Ready && !failed && !refreshing
+private val HomeState.isReadyWithSmsPermission: Boolean
+    get() = readiness(smsGranted = true) == HomeReadiness.Ready && !failed
