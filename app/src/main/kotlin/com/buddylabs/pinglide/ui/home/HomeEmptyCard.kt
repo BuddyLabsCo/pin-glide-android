@@ -135,6 +135,16 @@ internal fun HomeLoadingCard() {
 }
 
 @Composable
+internal fun HomeListUnavailable() {
+    Text(
+        stringResource(R.string.home_load_error_region),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp)
+            .semantics { liveRegion = LiveRegionMode.Polite },
+        textAlign = TextAlign.Center
+    )
+}
+
+@Composable
 private fun Modifier.dashedOutline(): Modifier {
     val color = MaterialTheme.colorScheme.onSurface.copy(
         alpha = if (isSystemInDarkTheme()) 0.32f else 0.34f

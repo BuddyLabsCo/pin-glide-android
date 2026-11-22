@@ -217,13 +217,15 @@ private fun HomeContent(
     now: Instant
 ) {
     LaunchedEffect(Unit) { headingFocus.requestFocus() }
+    val showListProgress = readiness == HomeReadiness.Unknown && state.refreshing &&
+        !state.listed && !state.failed && state.targets.isEmpty()
     ScreenLayout {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val viewportHeight = maxHeight
             val showAdd = state.listed && state.targets.size in 1..4 && canAdd(readiness)
             Column(Modifier.fillMaxSize()) {
                 HomeHeader(headingFocus, onSettings)
-                HomeRefreshContainer(state, onRefresh, Modifier.weight(1f)) {
+                HomeRefreshContainer(state, showListProgress, onRefresh, Modifier.weight(1f)) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
@@ -233,6 +235,7 @@ private fun HomeContent(
                             HomeSummary(
                                 state,
                                 readiness,
+                                showListProgress,
                                 smsGranted,
                                 smsRecovery,
                                 onRestoreSms,
@@ -364,15 +367,15 @@ private fun HomeHeader(headingFocus: FocusRequester, onSettings: () -> Unit) {
 private fun HomeSummary(
     state: HomeState,
     readiness: HomeReadiness,
+    showListProgress: Boolean,
     smsGranted: Boolean,
     smsRecovery: SmsRecovery,
     onRestoreSms: () -> Unit,
     onAdd: () -> Unit,
     onRestoreLogin: () -> Unit
 ) {
-    val loading = state.loadingDeviceList && readiness == HomeReadiness.Unknown
     val spacing = when {
-        loading -> 0.dp
+        showListProgress -> 0.dp
         readiness == HomeReadiness.Empty -> 14.dp
         else -> 16.dp
     }
@@ -395,21 +398,16 @@ private fun HomeSummary(
             )
         }
         when {
-            loading -> HomeLoadingCard()
+            showListProgress -> HomeLoadingCard()
 
             readiness == HomeReadiness.Empty -> HomeEmptyCard(onAdd)
 
-            state.listed -> {
+            state.listed || state.targets.isNotEmpty() -> {
                 DeviceCount(state.targets.size)
                 if (state.targets.isEmpty()) EmptyRegion(readiness, onAdd)
             }
 
-            state.failed -> Text(
-                stringResource(R.string.home_load_error_region),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp)
-                    .semantics { liveRegion = LiveRegionMode.Polite },
-                textAlign = TextAlign.Center
-            )
+            state.failed -> HomeListUnavailable()
         }
     }
 }

@@ -207,10 +207,13 @@ private fun heroStrings(state: HomeState, readiness: HomeReadiness): Pair<Int, I
 
         HomeReadiness.Offline -> R.string.home_offline_title to R.string.home_offline_copy
 
-        HomeReadiness.Unknown -> if (state.failed) {
-            R.string.home_load_error_title to R.string.home_load_error_copy
-        } else {
-            R.string.home_loading_title to R.string.home_loading_copy
+        HomeReadiness.Unknown -> when {
+            !state.failed -> R.string.home_loading_title to R.string.home_loading_copy
+
+            state.targets.isEmpty() ->
+                R.string.home_load_error_title to R.string.home_load_error_copy
+
+            else -> R.string.home_refresh_error_title to R.string.home_refresh_error_copy
         }
 
         HomeReadiness.Ready -> if (state.failed) {

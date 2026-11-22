@@ -79,7 +79,7 @@ class HomeReadyScreenTest {
         val state = mutableStateOf(
             HomeState(refreshing = true, authorization = AuthorizationState.Ready)
         )
-        renderEmptyHome(AppLanguage.English, homeState = { state.value })
+        renderHome(AppLanguage.English, homeState = { state.value })
         compose.onNodeWithText("Loading device list").assertIsDisplayed()
             .assert(
                 SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
@@ -100,9 +100,55 @@ class HomeReadyScreenTest {
     }
 
     @Test
+    fun homeAnnouncesListRefreshWhileSmsPermissionIsOff() {
+        renderHome(AppLanguage.English, smsGranted = false, homeState = {
+            HomeState(refreshing = true, authorization = AuthorizationState.Ready)
+        })
+
+        assertRefreshing()
+        compose.onNode(hasText("Allow SMS permission again") and hasClickAction())
+            .assertIsDisplayed()
+        compose.onNodeWithText("Loading device list").assertDoesNotExist()
+    }
+
+    @Test
+    fun homeKeepsCachedDevicesWhenFirstListRefreshFails() {
+        val target = TargetDevice("cached", "Cached device", enabled = true, keyUsable = true)
+        val state = mutableStateOf(
+            HomeState(
+                targets = listOf(target),
+                refreshing = true,
+                authorization = AuthorizationState.Ready
+            )
+        )
+        renderHome(AppLanguage.English, homeState = { state.value })
+
+        assertRefreshing()
+        compose.onNodeWithText("Loading device list").assertDoesNotExist()
+        compose.onNodeWithText("Cached device").assertIsDisplayed()
+        compose.onNodeWithText("Add device").assertDoesNotExist()
+
+        compose.runOnIdle { state.value = state.value.copy(refreshing = false, failed = true) }
+        compose.onNodeWithText("Refreshing").assertDoesNotExist()
+        compose.onNodeWithText("Device status not updated").assertIsDisplayed()
+        compose.onNodeWithText("Existing Pairings are retained.", substring = true)
+            .assertIsDisplayed()
+        compose.onNodeWithText("Cached device").assertIsDisplayed()
+        compose.onNodeWithText("Pull down or use the Refresh device list", substring = true)
+            .assertDoesNotExist()
+        compose.onNodeWithText("Add device").assertDoesNotExist()
+    }
+
+    private fun assertRefreshing() {
+        compose.onNodeWithText("Refreshing").assertIsDisplayed().assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+        )
+    }
+
+    @Test
     fun emptyHomeStacksTheHeroAndKeepsTheActionReachableAtLargeFontScale() {
         var addRequests = 0
-        renderEmptyHome(AppLanguage.English, fontScale = 2f, onAdd = { addRequests++ })
+        renderHome(AppLanguage.English, fontScale = 2f, onAdd = { addRequests++ })
         val heading = compose.onNodeWithText("Account connected").assertIsDisplayed()
         val badge = compose.onNodeWithText("Waiting for devices").assertIsDisplayed()
         assertTrue(
@@ -113,10 +159,11 @@ class HomeReadyScreenTest {
         compose.runOnIdle { assertEquals(1, addRequests) }
     }
 
-    private fun renderEmptyHome(
+    private fun renderHome(
         language: AppLanguage,
         fontScale: Float = 1f,
         onAdd: () -> Unit = {},
+        smsGranted: Boolean = true,
         homeState: () -> HomeState = {
             HomeState(listed = true, authorization = AuthorizationState.Ready)
         }
@@ -133,7 +180,7 @@ class HomeReadyScreenTest {
                         PinGlideTheme {
                             HomeScreen(
                                 homeState(),
-                                smsGranted = true,
+                                smsGranted = smsGranted,
                                 smsRecovery = SmsRecovery.Idle,
                                 home = home,
                                 onRestoreSms = {},
@@ -155,7 +202,7 @@ class HomeReadyScreenTest {
             }
         )
         var addRequests = 0
-        renderEmptyHome(language, onAdd = { addRequests++ })
+        renderHome(language, onAdd = { addRequests++ })
         compose.onNodeWithText(waiting).assertIsDisplayed()
         compose.onNodeWithText(expected.getString(R.string.home_no_devices))
             .performScrollTo().assertIsDisplayed()
