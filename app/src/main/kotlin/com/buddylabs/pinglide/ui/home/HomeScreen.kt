@@ -224,9 +224,10 @@ private fun HomeContent(
     ScreenLayout {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val viewportHeight = maxHeight
+            val compact = viewportHeight < 320.dp
             val showAdd = state.targets.isNotEmpty() && state.targets.size < 5 && canAdd(readiness)
             Column(Modifier.fillMaxSize()) {
-                HomeHeader(headingFocus, onSettings)
+                HomeHeader(headingFocus, onSettings, compact)
                 HomeRefreshContainer(state, onRefresh, Modifier.weight(1f)) {
                     LazyColumn(
                         state = listState,
@@ -273,9 +274,10 @@ private fun HomeContent(
                 if (showAdd) {
                     AddDeviceAction(
                         onAdd,
-                        Modifier.align(
-                            Alignment.End
-                        ).padding(top = HomeAddTop, bottom = HomeAddBottom)
+                        Modifier.align(Alignment.End).padding(
+                            top = if (compact) 8.dp else HomeAddTop,
+                            bottom = if (compact) 8.dp else HomeAddBottom
+                        )
                     )
                 }
             }
@@ -308,9 +310,9 @@ private fun AddDeviceAction(onAdd: () -> Unit, modifier: Modifier) {
 }
 
 @Composable
-private fun HomeHeader(headingFocus: FocusRequester, onSettings: () -> Unit) {
+private fun HomeHeader(headingFocus: FocusRequester, onSettings: () -> Unit, compact: Boolean) {
     Row(
-        modifier = Modifier.padding(vertical = 8.dp).heightIn(min = 64.dp),
+        modifier = Modifier.padding(vertical = if (compact) 0.dp else 8.dp).heightIn(min = 64.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(11.dp)
     ) {
@@ -384,17 +386,6 @@ private fun HomeSummary(
             if (state.listed) DeviceCount(state.targets.size)
             if (state.targets.isEmpty()) EmptyRegion(state, readiness, onAdd)
         }
-    }
-}
-
-private suspend fun LazyListState.revealTarget(index: Int, pairingId: String?, clearance: Int = 0) {
-    if (index < 0) return
-    val layout = layoutInfo
-    val item = layout.visibleItemsInfo.find { it.key == pairingId }
-    if (item == null || item.offset < layout.viewportStartOffset + clearance ||
-        item.offset + item.size > layout.viewportEndOffset - clearance
-    ) {
-        scrollToItem(index + 1, -clearance)
     }
 }
 

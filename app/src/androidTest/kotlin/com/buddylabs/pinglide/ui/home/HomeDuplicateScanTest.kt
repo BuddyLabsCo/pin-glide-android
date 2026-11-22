@@ -5,7 +5,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -14,6 +17,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.AccessibilityManager
 import androidx.compose.ui.platform.LocalAccessibilityManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
@@ -26,6 +30,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -72,7 +77,6 @@ class HomeDuplicateScanTest {
     private val scope = CoroutineScope(Dispatchers.Main)
     private var primary = 0
     private var density = 1f
-    private var recommendedTextTimeout = 0L
 
     @After
     fun stopFixture() = scope.cancel()
@@ -91,9 +95,12 @@ class HomeDuplicateScanTest {
 
         add.performClick()
         compose.onNodeWithText("Scan QR code").assertIsDisplayed()
+        compose.mainClock.autoAdvance = false
         val scanStartedAt = System.currentTimeMillis()
         compose.runOnIdle { fixture.pairing.scan("receiver-office", "Unused") }
+        val composeScanTime = compose.mainClock.currentTime
         compose.waitUntil(2_000) { fixture.pairing.state.value.duplicatePairingId == "office" }
+        compose.mainClock.advanceTimeBy(160)
         val deadline = fixture.pairing.state.value.highlightUntil
         assertTrue(deadline >= scanStartedAt + 3_000)
         assertTrue(deadline <= System.currentTimeMillis() + 3_000)
@@ -109,9 +116,7 @@ class HomeDuplicateScanTest {
         val outlineX = list.left - 4.dp
         val outlineY = (switchBounds.top + switchBounds.bottom) / 2
         assertEquals(primary, pixelAt(outlineX, outlineY))
-        assertEquals(3_000L, recommendedTextTimeout)
 
-        compose.mainClock.autoAdvance = false
         compose.waitUntil(3_000) { System.currentTimeMillis() >= deadline - 600 }
         assertEquals("office", fixture.pairing.state.value.duplicatePairingId)
         assertEquals(primary, pixelAt(outlineX, outlineY))
@@ -129,8 +134,34 @@ class HomeDuplicateScanTest {
                 fixture.store.readPairings().items.associate { it.pairingId to it.enabled }
             }
         )
-        compose.mainClock.advanceTimeBy(6_000)
+        compose.mainClock.advanceTimeBy(4_500 - (compose.mainClock.currentTime - composeScanTime))
+        notice.assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(1_800)
         notice.assertDoesNotExist()
+    }
+
+    @Test
+    fun shortHomeRevealsScanCueThroughTheStandardTimeout() {
+        val fixture = renderHome(usableHeight = 260.dp, fontScale = 1.5f, textTimeout = 3_000L)
+        val add = compose.onNodeWithText("Add device").assertIsDisplayed()
+        val notice = compose.onNodeWithText("This target is already added")
+        val cue = compose.onNodeWithText("Just scanned device", useUnmergedTree = true)
+        add.performClick()
+        compose.onNodeWithText("Scan QR code").assertIsDisplayed()
+        compose.runOnIdle { fixture.pairing.scan("receiver-office", "Unused") }
+        compose.waitUntil(2_000) { fixture.pairing.state.value.duplicatePairingId == "office" }
+        val list = compose.onNode(hasScrollAction())
+        val cueBounds = cue.assertIsDisplayed().getUnclippedBoundsInRoot()
+        val listBounds = list.getUnclippedBoundsInRoot()
+        assertTrue(cueBounds.top >= listBounds.top && cueBounds.bottom <= listBounds.bottom)
+        assertTrue(notice.getUnclippedBoundsInRoot().bottom < add.getUnclippedBoundsInRoot().top)
+        compose.waitUntil(4_000) { fixture.pairing.state.value.duplicatePairingId == null }
+        compose.mainClock.advanceTimeBy(3_000)
+        notice.assertDoesNotExist()
+        cue.assertDoesNotExist()
+        val expandedList = list.getUnclippedBoundsInRoot()
+        assertTrue(expandedList.bottom - expandedList.top > listBounds.bottom - listBounds.top)
+        add.assertIsDisplayed()
     }
 
     private fun pixelAt(horizontal: Dp, vertical: Dp): Int =
@@ -139,7 +170,11 @@ class HomeDuplicateScanTest {
             (vertical.value * density).toInt()
         )
 
-    private fun renderHome(): DuplicateScanFixture {
+    private fun renderHome(
+        usableHeight: Dp = 520.dp,
+        fontScale: Float = 1f,
+        textTimeout: Long = 6_000L
+    ): DuplicateScanFixture {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val app = instrumentation.targetContext.applicationContext as PinGlideApplication
         instrumentation.uiAutomation.grantRuntimePermission(
@@ -155,8 +190,7 @@ class HomeDuplicateScanTest {
                 containsControls: Boolean
             ): Long {
                 if (containsText && originalTimeoutMillis == 3_000L) {
-                    recommendedTextTimeout = originalTimeoutMillis
-                    return 6_000L
+                    return textTimeout
                 }
                 return originalTimeoutMillis
             }
@@ -164,15 +198,23 @@ class HomeDuplicateScanTest {
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         val activity = compose.activity
         compose.setContent {
+            val configuration = android.content.res.Configuration(LocalConfiguration.current)
+            configuration.fontScale = fontScale
+            val displayDensity = LocalDensity.current.density
             CompositionLocalProvider(
                 LocalAccessibilityManager provides accessibility,
-                LocalActivityResultRegistryOwner provides activity
+                LocalActivityResultRegistryOwner provides activity,
+                LocalConfiguration provides configuration,
+                LocalDensity provides Density(displayDensity, fontScale)
             ) {
                 LocalizedContent(AppLanguage.English) {
                     PinGlideTheme {
                         primary = MaterialTheme.colorScheme.primary.toArgb()
                         density = LocalDensity.current.density
-                        Box(Modifier.height(520.dp)) {
+                        val insets = WindowInsets.safeDrawing.asPaddingValues()
+                        val windowHeight = usableHeight + insets.calculateTopPadding() +
+                            insets.calculateBottomPadding()
+                        Box(Modifier.height(windowHeight)) {
                             AcceptedNavigation(
                                 progress = CompletedSetup,
                                 smsGranted = true,
