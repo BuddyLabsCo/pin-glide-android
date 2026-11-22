@@ -258,21 +258,22 @@ class HomeReadyScreenTest {
     }
 
     private fun assertInitialFailureArtwork(screenshot: Bitmap) {
-        val context = compose.activity
         with(compose.density) {
             val heroTop = 14.dp.roundToPx()
             val heroLeft = screenshot.getPixel(20.dp.roundToPx(), heroTop)
             val heroMiddle = screenshot.getPixel(120.dp.roundToPx(), heroTop)
             assertTrue("The warning hero has a gradient", heroLeft != heroMiddle)
-            val iconCenter = 214.dp.roundToPx()
+            val emblemColor = compose.activity.getColor(R.color.primary_container)
+            val centerX = screenshot.width / 2
+            val emblemRows = (0 until screenshot.height)
+                .filter { row -> screenshot.getPixel(centerX, row) == emblemColor }
+            assertTrue("The cloud-off emblem is visible", emblemRows.isNotEmpty())
+            val slashOffset = 11.dp.roundToPx()
+            val slashY = (emblemRows.first() + emblemRows.last()) / 2 - slashOffset
             assertEquals(
-                "The cloud-off glyph fills the center of the emblem",
-                context.getColor(R.color.primary),
-                screenshot.getPixel(screenshot.width / 2, iconCenter)
-            )
-            assertEquals(
-                context.getColor(R.color.primary_container),
-                screenshot.getPixel(screenshot.width / 2 - 22.dp.roundToPx(), iconCenter)
+                "The cloud-off slash extends above and left of the cloud",
+                compose.activity.getColor(R.color.primary),
+                screenshot.getPixel(centerX - slashOffset, slashY)
             )
         }
     }
