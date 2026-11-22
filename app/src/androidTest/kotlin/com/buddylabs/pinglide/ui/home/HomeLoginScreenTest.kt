@@ -1,10 +1,12 @@
 package com.buddylabs.pinglide.ui.home
 
 import android.content.Context
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -22,6 +24,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewModelScope
@@ -85,8 +88,15 @@ class HomeLoginScreenTest {
             compose.setContent {
                 val state by home.loginRestoration.collectAsState()
                 LaunchedEffect(Unit) { home.restoreLogin() }
-                PinGlideTheme {
-                    HomeLoginScreen(state, home::restoreLogin, home::cancelLogin, home::leaveLogin)
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                    PinGlideTheme {
+                        HomeLoginScreen(
+                            state,
+                            home::restoreLogin,
+                            home::cancelLogin,
+                            home::leaveLogin
+                        )
+                    }
                 }
             }
 
@@ -114,16 +124,16 @@ class HomeLoginScreenTest {
             heading.performSemanticsAction(SemanticsActions.GetTextLayoutResult) {
                 it(headingLayouts)
             }
-            val headingStyle = headingLayouts.single().layoutInput.style
-            assertEquals(26.sp, headingStyle.fontSize)
-            assertEquals(FontWeight(750), headingStyle.fontWeight)
+            val headingLayout = headingLayouts.single().layoutInput
+            assertEquals(26.sp, headingLayout.style.fontSize)
+            assertEquals(FontWeight(750), headingLayout.style.fontWeight)
             compose.onNodeWithText(
                 resources.getString(R.string.home_login_cancelled_copy)
             ).assertIsDisplayed()
             val retry = compose.onNodeWithText(resources.getString(R.string.home_login_action))
                 .assertIsDisplayed()
                 .assertHeightIsEqualTo(48.dp)
-            assertRetryIcon(retry, context)
+            assertRetryIcon(retry, context, headingLayout.layoutDirection)
             retry.performClick()
             compose.onNodeWithText(
                 resources.getString(R.string.home_login_loading)
@@ -142,6 +152,16 @@ class HomeLoginScreenTest {
         val centerY = (headingTop - rootTop - 115.dp).roundToPx()
         val centerX = artwork.width / 2
         val background = artwork.getPixel(centerX - 102.dp.roundToPx(), centerY)
+        val backplateEdge = centerY - 69.dp.roundToPx()
+        assertTrue(
+            "The backplate is visible above the QQ tile",
+            artwork.getPixel(centerX, backplateEdge) != background
+        )
+        assertEquals(
+            "The rounded backplate leaves its corner clear",
+            background,
+            artwork.getPixel(centerX - 69.dp.roundToPx(), backplateEdge)
+        )
         val ringTolerance = 2.dp.roundToPx()
         for (radius in listOf(93.dp, 111.dp)) {
             val ringX = centerX - radius.roundToPx()
@@ -154,22 +174,41 @@ class HomeLoginScreenTest {
         }
     }
 
-    private fun assertRetryIcon(action: SemanticsNodeInteraction, context: Context) =
-        with(compose.density) {
-            val label = compose.onNodeWithText(
-                context.getString(R.string.home_login_action),
-                useUnmergedTree = true
-            )
-            val textStart =
-                label.getUnclippedBoundsInRoot().left - action.getUnclippedBoundsInRoot().left
-            val iconCenter = (textStart - 18.dp).roundToPx()
-            val button = action.captureToImage().asAndroidBitmap()
-            assertEquals(
-                "The account icon is visible before the QQ retry text",
-                context.getColor(R.color.on_primary),
-                button.getPixel(iconCenter, button.height / 2 - 6.dp.roundToPx())
-            )
+    private fun assertRetryIcon(
+        action: SemanticsNodeInteraction,
+        context: Context,
+        layoutDirection: LayoutDirection
+    ) = with(compose.density) {
+        val label = compose.onNodeWithText(
+            context.getString(R.string.home_login_action),
+            useUnmergedTree = true
+        ).getUnclippedBoundsInRoot()
+        val actionLeft = action.getUnclippedBoundsInRoot().left
+        val iconCenter = if (layoutDirection == LayoutDirection.Rtl) {
+            label.right + 18.dp
+        } else {
+            label.left - 18.dp
         }
+        val sampleX = (iconCenter - actionLeft).roundToPx()
+        val button = action.captureToImage().asAndroidBitmap()
+        val centerY = button.height / 2
+        val buttonColor = context.getColor(R.color.primary)
+        assertEquals(
+            "The account icon has a filled rim",
+            context.getColor(R.color.on_primary),
+            button.getPixel(sampleX, centerY - 6.dp.roundToPx())
+        )
+        assertEquals(
+            "The account icon has a head cutout",
+            buttonColor,
+            button.getPixel(sampleX, centerY - 2.dp.roundToPx())
+        )
+        assertEquals(
+            "The account icon has a shoulders cutout",
+            buttonColor,
+            button.getPixel(sampleX, centerY + 4.dp.roundToPx())
+        )
+    }
 }
 
 private object LoginRequiredStore : IdentityStore {
