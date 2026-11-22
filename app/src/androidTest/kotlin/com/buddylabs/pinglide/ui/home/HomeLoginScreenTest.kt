@@ -18,7 +18,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -112,6 +114,64 @@ class HomeLoginScreenTest {
         compose.assertAccountActionIcon(action, retryLabel, context.getColor(R.color.on_primary))
         action.performClick()
         compose.runOnIdle { assertEquals(1, retries) }
+    }
+
+    @Test
+    fun mismatchedAccountShowsOriginalAccountGuidanceAndRetriesAuthorization() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val app = checkNotNull(context.applicationContext as? PinGlideApplication)
+        val renewalScope = CoroutineScope(Dispatchers.Main)
+        var authorizations = 0
+        val restoration = SenderRestoration(
+            store = LoginRequiredStore,
+            authorization = { "qq-code-${++authorizations}" },
+            service = { _, _, _ -> LoginRequiredStore.identity("other-account") },
+            renewal = CredentialRenewal(
+                LoginRequiredStore,
+                { _, _ -> error("Restoration requires QQ authorization") },
+                renewalScope
+            ),
+            deviceName = { "Test Sender" }
+        )
+        val home = HomeViewModel(app.ownPairings, restoration) { null }
+        try {
+            compose.setContent {
+                val state by home.loginRestoration.collectAsState()
+                LaunchedEffect(Unit) { home.restoreLogin() }
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    LocalizedContent(AppLanguage.SimplifiedChinese) {
+                        PinGlideTheme {
+                            HomeLoginScreen(
+                                state,
+                                home::restoreLogin,
+                                home::cancelLogin,
+                                home::leaveLogin
+                            )
+                        }
+                    }
+                }
+            }
+
+            val heading = compose.onNode(
+                SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading) and
+                    hasText("请使用原 QQ 账号")
+            )
+            heading.assertIsDisplayed()
+            compose.onNodeWithText(
+                "本次授权无法恢复当前设备的原注册。请确认使用原 QQ 账号重试；若要切换账号，请返回设置操作。"
+            ).assertIsDisplayed()
+            val retryLabel = "使用 QQ 重新登录"
+            val retry = compose.onNodeWithText(retryLabel).assertIsDisplayed()
+            compose.assertAccountActionIcon(retry, retryLabel, context.getColor(R.color.on_primary))
+            retry.assertHeightIsEqualTo(48.dp).performClick()
+            heading.assertIsDisplayed()
+            compose.runOnIdle { assertEquals(2, authorizations) }
+            compose.onNodeWithContentDescription("返回").performClick()
+            compose.runOnIdle { assertEquals(RestorationState.Idle, home.loginRestoration.value) }
+        } finally {
+            home.viewModelScope.cancel()
+            renewalScope.cancel()
+        }
     }
 
     @Test
@@ -270,27 +330,29 @@ class HomeLoginScreenTest {
 
 private object LoginRequiredStore : IdentityStore {
     override suspend fun read(): IdentitySnapshot = IdentitySnapshot(
-        identity = SenderIdentity(
-            "account",
-            "sender",
-            ManagementCredential("management", EXPIRY),
-            UploadCredential("upload", EXPIRY),
-            RefreshCredential("refresh", EXPIRY)
-        ),
+        identity = identity("account"),
         refreshState = RefreshState.LoginRequired
+    )
+
+    fun identity(accountId: String) = SenderIdentity(
+        accountId,
+        "sender",
+        ManagementCredential("management", EXPIRY),
+        UploadCredential("upload", EXPIRY),
+        RefreshCredential("refresh", EXPIRY)
     )
 
     override suspend fun updateRenewal(
         expected: IdentitySnapshot,
         replacement: IdentitySnapshot,
         attempt: LoginAttempt
-    ): Boolean = error("Pending restoration must not update credentials")
+    ): Boolean = error("Unsuccessful restoration must not update credentials")
 
     override suspend fun accept(
         expectedGeneration: Long,
         identity: SenderIdentity,
         attempt: LoginAttempt
-    ): Boolean = error("Pending restoration must not replace the Sender")
+    ): Boolean = error("Unsuccessful restoration must not replace the Sender")
 
     private const val EXPIRY = "2099-01-01T00:00:00Z"
 }
