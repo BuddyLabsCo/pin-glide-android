@@ -72,7 +72,7 @@ internal fun QqEmblem(size: Dp = 92.dp) {
 }
 
 @Composable
-internal fun QqLoadingEmblem() {
+internal fun QqLoadingEmblem(progressModifier: Modifier = Modifier.size(168.dp)) {
     var motionEnabled by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val durationScale = coroutineContext[MotionDurationScale]
@@ -92,8 +92,8 @@ internal fun QqLoadingEmblem() {
     }
     val arc = MaterialTheme.colorScheme.primary
     val track = MaterialTheme.colorScheme.surfaceContainerHigh
-    Box(Modifier.size(168.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.matchParentSize().progressSemantics()) {
+    Box(contentAlignment = Alignment.Center) {
+        Canvas(progressModifier.progressSemantics()) {
             val stroke = Stroke(6.dp.toPx())
             val diameter = (size.minDimension - stroke.width).coerceAtLeast(0f)
             val radius = diameter / 2f
