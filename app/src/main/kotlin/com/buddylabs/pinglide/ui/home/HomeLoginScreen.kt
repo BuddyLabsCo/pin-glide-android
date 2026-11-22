@@ -24,7 +24,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -63,10 +62,6 @@ internal fun HomeLoginScreen(
     onBack: () -> Unit
 ) {
     val loading = state == RestorationState.Loading
-    val framedEmblemLayout = when (state) {
-        RestorationState.Loading, RestorationState.Cancelled, RestorationState.Error -> true
-        else -> false
-    }
     val strings = when (state) {
         RestorationState.Loading -> R.string.home_login_loading to R.string.home_login_loading_copy
 
@@ -83,49 +78,37 @@ internal fun HomeLoginScreen(
     BackHandler(onBack = onBack)
     LaunchedEffect(state) { titleFocus.requestFocus() }
     ScreenLayout {
-        HomeLoginHeader(framedEmblemLayout, onBack)
+        HomeLoginHeader(onBack)
         Column(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                 .padding(
                     when (state) {
                         RestorationState.Loading -> PaddingValues(top = 12.dp, bottom = 53.dp)
                         RestorationState.Cancelled -> PaddingValues(top = 12.dp, bottom = 58.dp)
-                        RestorationState.Error -> PaddingValues(top = 12.dp, bottom = 63.dp)
-                        else -> PaddingValues(vertical = 24.dp)
+                        else -> PaddingValues(top = 12.dp, bottom = 63.dp)
                     }
                 ).semantics {
                     paneTitle = title
                     liveRegion = LiveRegionMode.Polite
                 },
-            verticalArrangement = Arrangement.spacedBy(
-                if (framedEmblemLayout) 0.dp else 24.dp,
-                Alignment.CenterVertically
-            ),
+            verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            HomeLoginEmblem(loading, framedEmblemLayout)
+            HomeLoginEmblem(loading)
             HomeLoginText(
                 title,
                 stringResource(strings.second),
                 titleFocus,
-                framedEmblemLayout,
                 state
             )
         }
-        HomeLoginAction(state, framedEmblemLayout, onCancel, onRetry)
+        HomeLoginAction(state, onCancel, onRetry)
     }
 }
 
 @Composable
-private fun HomeLoginAction(
-    state: RestorationState,
-    framedEmblemLayout: Boolean,
-    onCancel: () -> Unit,
-    onRetry: () -> Unit
-) {
-    val modifier = Modifier.fillMaxWidth().imePadding().padding(
-        vertical = if (framedEmblemLayout) 0.dp else 16.dp
-    ).heightIn(min = if (framedEmblemLayout) 48.dp else 56.dp)
+private fun HomeLoginAction(state: RestorationState, onCancel: () -> Unit, onRetry: () -> Unit) {
+    val modifier = Modifier.fillMaxWidth().imePadding().heightIn(min = 48.dp)
     if (state == RestorationState.Loading) {
         TextButton(onClick = onCancel, modifier = modifier) {
             Text(
@@ -138,66 +121,42 @@ private fun HomeLoginAction(
         }
     } else {
         Button(onClick = onRetry, modifier = modifier) {
-            if (framedEmblemLayout) {
-                HomeActionLabel(R.drawable.ic_account_circle, R.string.home_login_action)
-            } else {
-                Text(stringResource(R.string.home_login_action))
-            }
+            HomeActionLabel(R.drawable.ic_account_circle, R.string.home_login_action)
         }
     }
 }
 
 @Composable
-private fun HomeLoginHeader(framedEmblemLayout: Boolean, onBack: () -> Unit) {
+private fun HomeLoginHeader(onBack: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().then(
-            if (framedEmblemLayout) {
-                Modifier.padding(top = 16.dp, bottom = 8.dp).heightIn(min = 64.dp)
-            } else {
-                Modifier.padding(vertical = 16.dp)
-            }
-        ),
-        horizontalArrangement = Arrangement.spacedBy(if (framedEmblemLayout) 12.dp else 0.dp),
+        Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp).heightIn(min = 64.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) {
             Icon(
-                painterResource(
-                    if (framedEmblemLayout) R.drawable.ic_back_chevron else R.drawable.ic_back
-                ),
+                painterResource(R.drawable.ic_back_chevron),
                 stringResource(R.string.setup_back),
-                modifier = if (framedEmblemLayout) Modifier.size(18.dp) else Modifier,
-                tint = if (framedEmblemLayout) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    LocalContentColor.current
-                }
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Text(
             stringResource(R.string.app_name),
-            style = if (framedEmblemLayout) {
-                MaterialTheme.typography.titleLarge.copy(
-                    fontSize = 20.sp,
-                    lineHeight = 22.sp,
-                    fontWeight = FontWeight(740),
-                    letterSpacing = (-0.7).sp
-                )
-            } else {
-                MaterialTheme.typography.titleLarge
-            }
+            style = MaterialTheme.typography.titleLarge.copy(
+                fontSize = 20.sp,
+                lineHeight = 22.sp,
+                fontWeight = FontWeight(740),
+                letterSpacing = (-0.7).sp
+            )
         )
     }
 }
 
 @Composable
-private fun HomeLoginEmblem(loading: Boolean, framedEmblemLayout: Boolean) {
+private fun HomeLoginEmblem(loading: Boolean) {
     if (!loading) {
-        if (framedEmblemLayout) {
-            RingedEmblem(RoundedCornerShape(44.dp)) { QqEmblem() }
-        } else {
-            QqEmblem()
-        }
+        RingedEmblem(RoundedCornerShape(44.dp)) { QqEmblem() }
         return
     }
     val colors = MaterialTheme.colorScheme
@@ -220,7 +179,6 @@ private fun HomeLoginText(
     title: String,
     description: String,
     titleFocus: FocusRequester,
-    framedEmblemLayout: Boolean,
     state: RestorationState
 ) {
     val typography = MaterialTheme.typography
@@ -228,45 +186,28 @@ private fun HomeLoginText(
     val titleSpacing = when (state) {
         RestorationState.Loading -> 17.dp
         RestorationState.Cancelled -> 4.dp
-        RestorationState.Error -> 7.dp
-        else -> 0.dp
+        else -> 7.dp
     }
     Text(
         title,
-        style = if (framedEmblemLayout) {
-            typography.headlineMedium.copy(
-                fontSize = 26.sp,
-                lineHeight = 30.sp,
-                fontWeight = FontWeight(750),
-                letterSpacing = (-1.17).sp
-            )
-        } else {
-            typography.headlineLarge
-        },
+        style = typography.headlineMedium.copy(
+            fontSize = 26.sp,
+            lineHeight = 30.sp,
+            fontWeight = FontWeight(750),
+            letterSpacing = (-1.17).sp
+        ),
         textAlign = TextAlign.Center,
         modifier = Modifier.padding(top = titleSpacing)
             .focusRequester(titleFocus).focusable().semantics { heading() }
     )
     Text(
         description,
-        modifier = if (framedEmblemLayout) {
-            Modifier.padding(top = if (cancelled) 8.dp else 12.dp).widthIn(max = 305.dp)
-        } else {
-            Modifier
-        },
-        style = if (framedEmblemLayout) {
-            typography.bodyMedium.copy(
-                lineHeight = 22.sp,
-                letterSpacing = if (cancelled) 0.sp else typography.bodyMedium.letterSpacing
-            )
-        } else {
-            typography.bodyLarge
-        },
-        color = if (framedEmblemLayout) {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        } else {
-            LocalContentColor.current
-        },
+        modifier = Modifier.padding(top = if (cancelled) 8.dp else 12.dp).widthIn(max = 305.dp),
+        style = typography.bodyMedium.copy(
+            lineHeight = 22.sp,
+            letterSpacing = if (cancelled) 0.sp else typography.bodyMedium.letterSpacing
+        ),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center
     )
 }
