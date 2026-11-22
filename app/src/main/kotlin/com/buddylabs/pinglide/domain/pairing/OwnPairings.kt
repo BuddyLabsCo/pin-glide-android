@@ -31,6 +31,7 @@ class OwnPairings(
     private var snapshot: PairingSnapshot? = null
     private var presence = emptyMap<String, RemotePairing>()
     private var presenceOwner: Pair<String, String>? = null
+    private var presenceInvalidated = false
     private val removals = mutableSetOf<String>()
 
     init {
@@ -65,7 +66,7 @@ class OwnPairings(
     private suspend fun refreshCurrent() {
         try {
             stateGate.withLock {
-                presence = emptyMap()
+                presenceInvalidated = true
                 publish(store.readPairings(), refreshing = true)
             }
             if (!fetch()) fetch()
@@ -81,7 +82,11 @@ class OwnPairings(
             refreshFailed()
         } finally {
             withContext(NonCancellable) {
-                stateGate.withLock { mutableState.value = state.value.copy(refreshing = false) }
+                stateGate.withLock {
+                    if (presenceInvalidated) presence = emptyMap()
+                    presenceInvalidated = false
+                    mutableState.value = state.value.copy(refreshing = false)
+                }
             }
         }
     }
@@ -116,6 +121,7 @@ class OwnPairings(
                 val accepted = store.reconcile(expected, items)
                 presence = if (accepted) items.associateBy { it.pairingId } else emptyMap()
                 presenceOwner = identity.accountId to identity.senderId
+                presenceInvalidated = false
                 publish(store.readPairings(), refreshing = true, listRefreshFailed = !accepted)
                 accepted
             }
@@ -440,13 +446,15 @@ class OwnPairings(
                     it.receiverId == pairing.receiverId &&
                         presenceOwner == (owner?.accountId to owner?.senderId)
                 }
+                val visible = remote.takeUnless { presenceInvalidated }
                 TargetDevice(
                     pairing.pairingId,
                     pairing.alias,
                     pairing.enabled && pairing.keyUsable,
                     pairing.keyUsable,
-                    remote?.presence ?: Presence.Unknown,
-                    remote?.stateChangedAt
+                    visible?.presence ?: Presence.Unknown,
+                    visible?.stateChangedAt,
+                    lastConfirmedPresence = remote?.presence ?: Presence.Unknown
                 )
             },
             listed = current.listed,

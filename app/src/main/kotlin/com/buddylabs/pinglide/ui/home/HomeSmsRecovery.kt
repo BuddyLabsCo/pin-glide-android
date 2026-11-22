@@ -26,11 +26,14 @@ import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.HomeReadiness
 import com.buddylabs.pinglide.domain.pairing.HomeState
+import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.ui.components.WarningInfoCard
 
 @Composable
 internal fun HomeSmsRecovery(state: HomeState, pending: Boolean, onRestore: () -> Unit) {
-    val hint = if (state.listed && state.isReadyWithSmsPermission) {
+    val hint = if (state.listed && state.isReadyWithSmsPermission &&
+        state.hasConfirmedOnlineTarget
+    ) {
         R.string.home_sms_resume_hint
     } else {
         R.string.home_sms_hint
@@ -98,3 +101,9 @@ internal fun SmsRecoveryNotice(
 
 private val HomeState.isReadyWithSmsPermission: Boolean
     get() = readiness(smsGranted = true) == HomeReadiness.Ready && !failed
+
+private val HomeState.hasConfirmedOnlineTarget: Boolean
+    get() = targets.any { target ->
+        val presence = if (refreshing) target.lastConfirmedPresence else target.presence
+        target.enabled && target.keyUsable && presence == Presence.Online
+    }

@@ -77,6 +77,42 @@ class OwnPairingsTest {
     }
 
     @Test
+    fun refreshInvalidatesDisplayedPresenceButKeepsConfirmedPresenceUntilTheResponse() =
+        runBlocking {
+            withTimeout(5_000) {
+                val scope = CoroutineScope(coroutineContext + Job())
+                try {
+                    val store = MemoryStore(identity("initial", now.plusSeconds(3_600)))
+                    val refreshed = CompletableDeferred<Presence>()
+                    var requests = 0
+                    val home = OwnPairings(
+                        store,
+                        PairingService {
+                            val status = if (++requests == 1) Presence.Online else refreshed.await()
+                            listOf(
+                                RemotePairing("pairing", "receiver", "Desk", status, now.toString())
+                            )
+                        },
+                        renewal(store, scope),
+                        scope
+                    )
+                    home.refresh()
+                    val refresh = launch(start = CoroutineStart.UNDISPATCHED) { home.refresh() }
+                    val pending = home.state.value.targets.single()
+                    assertEquals(Presence.Unknown, pending.presence)
+                    assertEquals(Presence.Online, pending.lastConfirmedPresence)
+                    refreshed.complete(Presence.Offline)
+                    refresh.join()
+                    val settled = home.state.value.targets.single()
+                    assertEquals(Presence.Offline, settled.presence)
+                    assertEquals(Presence.Offline, settled.lastConfirmedPresence)
+                } finally {
+                    scope.cancel()
+                }
+            }
+        }
+
+    @Test
     fun obsoleteRowsCannotOverwriteNewerPreferences() = withHome { home, store ->
         val obsolete = home.state.value
         home.select(obsolete, "pairing", false)

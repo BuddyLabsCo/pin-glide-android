@@ -5,8 +5,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -92,12 +94,7 @@ class HomeSmsRecoveryScreenTest {
         val approvedHint = compose.onNodeWithText(
             "重新开启短信权限后，转发会自动恢复；无需重新登录或重新配对。"
         )
-        approvedHint.assertIsDisplayed()
-        compose.runOnIdle { homeState.value = state.copy(refreshing = true) }
-        approvedHint.assertIsDisplayed()
-        compose.runOnIdle { homeState.value = homeState.value.copy(listed = false) }
-        compose.onNodeWithText("满足其他转发条件时会自动恢复", substring = true)
-            .assertIsDisplayed()
+        assertRefreshGuidance(homeState, approvedHint)
         compose.runOnIdle { homeState.value = state }
         state.targets.forEach { target ->
             compose.onNodeWithContentDescription("${target.alias}接收短信")
@@ -107,4 +104,41 @@ class HomeSmsRecoveryScreenTest {
         restore.assertIsDisplayed().assertIsEnabled().performClick()
         restore.assertIsNotEnabled()
     }
+
+    private fun assertRefreshGuidance(
+        homeState: MutableState<HomeState>,
+        approvedHint: SemanticsNodeInteraction
+    ) {
+        val online = homeState.value
+        val offline = online.copy(
+            targets = online.targets.map {
+                it.copy(presence = Presence.Offline, lastConfirmedPresence = Presence.Offline)
+            }
+        )
+        val cautiousHint = compose.onNodeWithText("满足其他转发条件时会自动恢复", substring = true)
+        approvedHint.assertIsDisplayed()
+        compose.runOnIdle { homeState.value = online.withPresenceInvalidated() }
+        approvedHint.assertIsDisplayed()
+        compose.runOnIdle { homeState.value = homeState.value.copy(listed = false) }
+        cautiousHint.assertIsDisplayed()
+        compose.runOnIdle {
+            val refreshing = online.withPresenceInvalidated()
+            homeState.value = refreshing.copy(
+                targets = refreshing.targets.map { it.copy(enabled = false) }
+            )
+        }
+        cautiousHint.assertIsDisplayed()
+
+        compose.runOnIdle { homeState.value = offline }
+        cautiousHint.assertIsDisplayed()
+        compose.runOnIdle { homeState.value = offline.withPresenceInvalidated() }
+        cautiousHint.assertIsDisplayed()
+        compose.runOnIdle { homeState.value = offline }
+        cautiousHint.assertIsDisplayed()
+    }
+
+    private fun HomeState.withPresenceInvalidated(): HomeState = copy(
+        refreshing = true,
+        targets = targets.map { it.copy(presence = Presence.Unknown, stateChangedAt = null) }
+    )
 }

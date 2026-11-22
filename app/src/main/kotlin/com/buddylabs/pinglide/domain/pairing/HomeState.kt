@@ -19,7 +19,8 @@ data class TargetDevice(
     val enabled: Boolean,
     val keyUsable: Boolean,
     val presence: Presence = Presence.Unknown,
-    val stateChangedAt: String? = null
+    val stateChangedAt: String? = null,
+    val lastConfirmedPresence: Presence = presence
 )
 
 data class HomeState(
