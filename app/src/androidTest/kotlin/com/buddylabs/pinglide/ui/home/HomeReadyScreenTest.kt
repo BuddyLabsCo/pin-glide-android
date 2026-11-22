@@ -274,6 +274,8 @@ class HomeReadyScreenTest {
         }
         compose.onNode(hasText("Allow SMS permission again") and hasClickAction())
             .assertIsDisplayed()
+        compose.onNodeWithText("when its other requirements are met", substring = true)
+            .assertIsDisplayed()
         compose.onNodeWithText("Device list temporarily unavailable").assertDoesNotExist()
     }
 

@@ -93,7 +93,9 @@
     <string name="home_refresh_error_copy">网络或服务暂时不可用。请检查网络后下拉设备列表重试。</string>
     <string name="home_cached_notice">已有配对仍保留。当前无法确认设备是否在线。</string>
     <string name="home_sms_title">转发已暂停</string>
+    <string name="home_sms_badge">权限失效</string>
     <string name="home_sms_copy">短信权限已被关闭，新短信不会进入处理流程。</string>
+    <string name="home_sms_resume_hint">重新开启短信权限后，转发会自动恢复；无需重新登录或重新配对。</string>
     <string name="home_sms_hint">重新开启短信权限后，满足其他转发条件时会自动恢复；已有配对将保留。</string>
     <string name="home_sms_restore">重新开启短信权限</string>
     <string name="home_sms_denied">短信权限未开启</string>
