@@ -1,7 +1,6 @@
 package com.buddylabs.pinglide.ui.home
 
 import android.content.res.Configuration
-import android.graphics.Bitmap
 import android.os.LocaleList
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
@@ -241,7 +240,10 @@ class HomeReadyScreenTest {
             compose.onNodeWithText("添加第一台设备").assertDoesNotExist()
 
             val list = compose.onNodeWithContentDescription("设备列表，可下拉刷新或按 Enter 刷新")
-            assertInitialFailureArtwork(list.captureToImage().asAndroidBitmap())
+            compose.density.assertInitialFailureArtwork(
+                list.captureToImage().asAndroidBitmap(),
+                compose.activity
+            )
             val refresh = list.fetchSemanticsNode().config[SemanticsActions.CustomActions]
                 .single { it.label == "刷新设备列表" }
             compose.runOnIdle { assertTrue(refresh.action()) }
@@ -254,27 +256,6 @@ class HomeReadyScreenTest {
             compose.onNode(hasText("添加第一台设备") and hasClickAction()).assertIsDisplayed()
         } finally {
             scope.cancel()
-        }
-    }
-
-    private fun assertInitialFailureArtwork(screenshot: Bitmap) {
-        with(compose.density) {
-            val heroTop = 14.dp.roundToPx()
-            val heroLeft = screenshot.getPixel(20.dp.roundToPx(), heroTop)
-            val heroMiddle = screenshot.getPixel(120.dp.roundToPx(), heroTop)
-            assertTrue("The warning hero has a gradient", heroLeft != heroMiddle)
-            val emblemColor = compose.activity.getColor(R.color.primary_container)
-            val centerX = screenshot.width / 2
-            val emblemRows = (0 until screenshot.height)
-                .filter { row -> screenshot.getPixel(centerX, row) == emblemColor }
-            assertTrue("The cloud-off emblem is visible", emblemRows.isNotEmpty())
-            val slashOffset = 11.dp.roundToPx()
-            val slashY = (emblemRows.first() + emblemRows.last()) / 2 - slashOffset
-            assertEquals(
-                "The cloud-off slash extends above and left of the cloud",
-                compose.activity.getColor(R.color.primary),
-                screenshot.getPixel(centerX - slashOffset, slashY)
-            )
         }
     }
 
@@ -309,7 +290,20 @@ class HomeReadyScreenTest {
         renderHome(AppLanguage.English, homeState = { state.value })
 
         assertRefreshing()
-        compose.onNodeWithText("Ready to forward").assertIsDisplayed()
+        val refreshing = compose.onNodeWithText("Refreshing").assert(
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.ProgressBarRangeInfo,
+                ProgressBarRangeInfo.Indeterminate
+            )
+        )
+        val hero = compose.onNodeWithText("Ready to forward").assertIsDisplayed()
+        val devices = compose.onNodeWithText("My devices").assertIsDisplayed()
+        assertTrue(
+            hero.getUnclippedBoundsInRoot().bottom <= refreshing.getUnclippedBoundsInRoot().top
+        )
+        assertTrue(
+            refreshing.getUnclippedBoundsInRoot().bottom <= devices.getUnclippedBoundsInRoot().top
+        )
         compose.onNodeWithText("Loading device list").assertDoesNotExist()
         compose.onNodeWithText("Cached device").assertIsDisplayed()
         compose.onNodeWithText("Add device").assertDoesNotExist()
