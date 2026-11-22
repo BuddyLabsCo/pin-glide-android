@@ -103,7 +103,8 @@
     <string name="home_sms_enabled">短信权限已开启</string>
     <string name="home_sms_restored">短信权限已开启，转发已恢复</string>
     <string name="home_login_title">需要重新登录</string>
-    <string name="home_login_copy">当前登录无法自动恢复，转发已暂停。使用原 QQ 账号重新登录，可保留当前设备已有的配对。</string>
+    <string name="home_login_badge">登录失效</string>
+    <string name="home_login_copy">登录凭据已失效，无法自动续期。使用原 QQ 账号重新登录，可保留当前设备已有的配对。</string>
     <string name="home_revoked_title">设备注册已撤销</string>
     <string name="home_revoked_copy">当前发送端注册已永久关闭，转发已停止。</string>
     <string name="home_details">打开设备详情</string>

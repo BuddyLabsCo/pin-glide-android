@@ -364,21 +364,24 @@ private fun HomeSummary(
     refreshHint: @Composable () -> Unit
 ) {
     val spacing = summarySpacing(state, readiness, showListProgress)
+    val loginRequired = readiness == HomeReadiness.LoginRequired
     Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
         Column {
-            Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(if (loginRequired) 12.dp else spacing)
+            ) {
                 HomeHero(state, readiness)
-                if (readiness == HomeReadiness.LoginRequired) {
+                if (loginRequired) {
                     Button(
                         onClick = onRestoreLogin,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                     ) {
-                        Text(stringResource(R.string.home_login_action))
+                        HomeActionLabel(R.drawable.ic_account_circle, R.string.home_login_action)
                     }
                 } else if (!smsGranted) {
                     HomeSmsRecovery(state, smsRecovery == SmsRecovery.Pending, onRestoreSms)
                 }
-                if (state.hasCachedListFailure) {
+                if (state.hasCachedListFailure && !loginRequired) {
                     WarningInfoCard(R.string.home_cached_notice)
                 }
             }
@@ -402,6 +405,8 @@ private fun HomeSummary(
 private fun summarySpacing(state: HomeState, readiness: HomeReadiness, showListProgress: Boolean) =
     when {
         showListProgress || state.hasInitialListFailure(readiness) -> 0.dp
+
+        readiness == HomeReadiness.LoginRequired -> 16.dp
 
         readiness == HomeReadiness.Empty || readiness == HomeReadiness.SmsRequired ||
             state.hasCachedListFailure -> 14.dp
