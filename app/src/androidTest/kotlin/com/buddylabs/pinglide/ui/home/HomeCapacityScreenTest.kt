@@ -15,8 +15,10 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -25,6 +27,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
@@ -90,6 +93,31 @@ class HomeCapacityScreenTest {
         list.performScrollToNode(hasText("4 台"))
         compose.onNodeWithText("4 台").assertIsDisplayed()
         compose.runOnIdle { assertEquals(listOf("pairing-4"), removedPairingIds) }
+    }
+
+    @Test
+    fun deviceDetailsGroupsActionsInPrototypeOrder() {
+        openHome(Configuration.UI_MODE_NIGHT_NO)
+        val target = compose.onNodeWithText("我的电脑")
+        target.performClick()
+        val inSheet = hasAnyAncestor(SemanticsMatcher.keyIsDefined(SemanticsProperties.PaneTitle))
+        val receive = compose.onNode(hasContentDescription("我的电脑接收短信") and inSheet)
+            .assertIsDisplayed().assertIsOn()
+        val actions = listOf("发送测试消息", "重命名设备", "移除这台设备的配对", "关闭")
+            .map { compose.onNodeWithText(it).assertIsDisplayed().assertHasClickAction() }
+        val bounds = (listOf(receive) + actions).map { it.getUnclippedBoundsInRoot() }
+        assertTrue(
+            "Each action has a 48 dp touch target",
+            bounds.all {
+                it.bottom - it.top >= 48.dp
+            }
+        )
+        assertTrue(
+            "Receive, test, rename, remove, and close appear in that order",
+            bounds.zipWithNext().all { (above, below) -> above.bottom <= below.top }
+        )
+        actions.last().performClick().assertDoesNotExist()
+        target.assertIsDisplayed()
     }
 
     @Test
