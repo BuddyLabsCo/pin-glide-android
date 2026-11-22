@@ -5,6 +5,7 @@ import android.os.LocaleList
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
@@ -22,12 +23,14 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -82,18 +85,20 @@ class HomeReadyScreenTest {
         val scannedPairingId = mutableStateOf<String?>(null)
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         compose.setContent {
-            LocalizedContent(AppLanguage.English) {
-                PinGlideTheme {
-                    HomeScreen(
-                        state,
-                        smsGranted = true,
-                        smsRecovery = SmsRecovery.Idle,
-                        home = home,
-                        onRestoreSms = {},
-                        onAdd = {},
-                        onSettings = {},
-                        highlightedPairingId = scannedPairingId.value
-                    )
+            Box(Modifier.height(520.dp)) {
+                LocalizedContent(AppLanguage.English) {
+                    PinGlideTheme {
+                        HomeScreen(
+                            state,
+                            smsGranted = true,
+                            smsRecovery = SmsRecovery.Idle,
+                            home = home,
+                            onRestoreSms = {},
+                            onAdd = {},
+                            onSettings = {},
+                            highlightedPairingId = scannedPairingId.value
+                        )
+                    }
                 }
             }
         }
@@ -101,6 +106,10 @@ class HomeReadyScreenTest {
         val notice = compose.onNodeWithText("This target is already added")
         val enabled = compose.onNodeWithContentDescription("Receive SMS on My computer")
         val disabled = compose.onNodeWithContentDescription("Receive SMS on Office computer")
+        val list = compose.onNode(hasScrollAction())
+        val before = disabled.getUnclippedBoundsInRoot()
+        val beforeBottom = list.getUnclippedBoundsInRoot().bottom
+        assertTrue(before.top < beforeBottom && before.bottom > beforeBottom)
         compose.runOnIdle { scannedPairingId.value = "office" }
         compose.onNode(hasText("Office computer") and hasText(cue)).assertIsDisplayed()
         compose.onAllNodes(hasText(cue)).assertCountEquals(1)
@@ -108,12 +117,17 @@ class HomeReadyScreenTest {
             .assert(
                 SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
             )
-        enabled.assertIsOn()
+        assertTrue(
+            compose.onNodeWithText(cue, useUnmergedTree = true).getUnclippedBoundsInRoot().bottom +
+                15.dp <= list.getUnclippedBoundsInRoot().bottom
+        )
         disabled.assertIsOff()
 
         compose.runOnIdle { scannedPairingId.value = null }
         compose.onNodeWithText(cue).assertDoesNotExist()
+        compose.mainClock.advanceTimeBy(3_000)
         notice.assertDoesNotExist()
+        list.performScrollToNode(hasText("My computer"))
         enabled.assertIsOn()
         disabled.assertIsOff()
     }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -57,6 +59,7 @@ import com.buddylabs.pinglide.domain.pairing.TargetDevice
 import com.buddylabs.pinglide.ui.components.BrandIcon
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 import java.time.Instant
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 @Composable
@@ -74,6 +77,8 @@ fun HomeScreen(
     val action by home.action.collectAsState()
     val restoration by home.loginRestoration.collectAsState()
     val listState = rememberLazyListState()
+    val density = LocalDensity.current.density
+    val outlineClearance = (TargetOutlineClearance.value * density).roundToInt()
     var selectedId by rememberSaveable(state.owner) { mutableStateOf<String?>(null) }
     var lastSelectedId by rememberSaveable(state.owner) { mutableStateOf<String?>(null) }
     var restoreFocus by remember { mutableStateOf(false) }
@@ -100,9 +105,11 @@ fun HomeScreen(
         if (highlightedPairingId != null) {
             selectedId = null
             lastSelectedId = highlightedPairingId
+            withFrameNanos { }
             listState.revealTarget(
                 state.targets.indexOfFirst { it.pairingId == highlightedPairingId },
-                highlightedPairingId
+                highlightedPairingId,
+                outlineClearance
             )
         }
     }
@@ -159,6 +166,7 @@ fun HomeScreen(
         headingFocus,
         listState,
         highlightedPairingId,
+        rememberDuplicateNotice(highlightedPairingId, state.owner),
         now
     )
     LoginRestorationNotice(restoration, state.refreshing, home::dismissLoginNotice)
@@ -209,6 +217,7 @@ private fun HomeContent(
     headingFocus: FocusRequester,
     listState: LazyListState,
     highlightedPairingId: String?,
+    showDuplicateNotice: Boolean,
     now: Instant
 ) {
     LaunchedEffect(Unit) { headingFocus.requestFocus() }
@@ -222,6 +231,7 @@ private fun HomeContent(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = TargetOutlineClearance),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         item(key = "home-summary") {
@@ -254,31 +264,20 @@ private fun HomeContent(
                         }
                     }
                 }
-                if (action.result == PairingChange.Removed && action.owner == state.owner) {
-                    val bottomGap = if (showAdd) {
-                        minOf(48.dp, viewportHeight / 16)
-                    } else {
-                        minOf(140.dp, viewportHeight / 3)
-                    }
-                    HomeNotice(
-                        R.string.home_removed,
-                        Modifier.align(Alignment.CenterHorizontally)
-                            .padding(start = 4.dp, top = 4.dp, end = 4.dp, bottom = bottomGap)
-                    )
-                }
+                HomeFooterNotice(
+                    showDuplicateNotice,
+                    action.result == PairingChange.Removed && action.owner == state.owner,
+                    showAdd,
+                    viewportHeight
+                )
                 if (showAdd) {
                     AddDeviceAction(
                         onAdd,
-                        Modifier.align(Alignment.End).padding(top = 12.dp, bottom = 24.dp)
+                        Modifier.align(
+                            Alignment.End
+                        ).padding(top = HomeAddTop, bottom = HomeAddBottom)
                     )
                 }
-            }
-            if (highlightedPairingId != null) {
-                HomeNotice(
-                    R.string.pairing_already_added,
-                    Modifier.align(Alignment.BottomCenter)
-                        .padding(bottom = minOf(140.dp, viewportHeight / 5))
-                )
             }
         }
     }
@@ -288,7 +287,7 @@ private fun HomeContent(
 private fun AddDeviceAction(onAdd: () -> Unit, modifier: Modifier) {
     FloatingActionButton(
         onClick = onAdd,
-        modifier = modifier,
+        modifier = modifier.heightIn(min = HomeAddHeight),
         shape = RoundedCornerShape(16.dp),
         containerColor = MaterialTheme.colorScheme.primary,
         contentColor = MaterialTheme.colorScheme.onPrimary
@@ -388,9 +387,14 @@ private fun HomeSummary(
     }
 }
 
-private suspend fun LazyListState.revealTarget(index: Int, pairingId: String?) {
-    if (index >= 0 && layoutInfo.visibleItemsInfo.none { it.key == pairingId }) {
-        scrollToItem(index + 1)
+private suspend fun LazyListState.revealTarget(index: Int, pairingId: String?, clearance: Int = 0) {
+    if (index < 0) return
+    val layout = layoutInfo
+    val item = layout.visibleItemsInfo.find { it.key == pairingId }
+    if (item == null || item.offset < layout.viewportStartOffset + clearance ||
+        item.offset + item.size > layout.viewportEndOffset - clearance
+    ) {
+        scrollToItem(index + 1, -clearance)
     }
 }
 

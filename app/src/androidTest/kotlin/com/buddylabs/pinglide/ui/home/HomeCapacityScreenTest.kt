@@ -119,7 +119,7 @@ class HomeCapacityScreenTest {
                     changedAt.toString()
                 )
             }
-        val store = CapacityStore(targets, now.plusSeconds(3600).toString())
+        val store = HomePairingStore(targets, now.plusSeconds(3600).toString())
         val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)
         val service = object : PairingService {
             private val remote = targets.associateBy { it.pairingId }.toMutableMap()
@@ -160,7 +160,7 @@ class HomeCapacityScreenTest {
     }
 }
 
-private class CapacityStore(targets: List<RemotePairing>, expiresAt: String) :
+internal class HomePairingStore(targets: List<RemotePairing>, expiresAt: String) :
     IdentityStore,
     PairingStore {
     private val authority = IdentitySnapshot(

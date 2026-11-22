@@ -57,6 +57,10 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
+private val TargetOutlineOutset = 4.dp
+private val TargetOutlineWidth = 2.dp
+internal val TargetOutlineClearance = TargetOutlineOutset + TargetOutlineWidth / 2
+
 @Composable
 internal fun TargetRow(
     target: TargetDevice,
@@ -129,14 +133,14 @@ private fun Modifier.scanHalo(shape: RoundedCornerShape, color: Color, opacity: 
         spread = (6 + 2 * pulse).dp.toPx()
         alpha = opacity * (0.12f + 0.08f * pulse)
     }.drawBehind {
-        val outset = 4.dp.toPx()
+        val outset = TargetOutlineOutset.toPx()
         drawRoundRect(
             color = color,
             topLeft = Offset(-outset, -outset),
             size = Size(size.width + 2 * outset, size.height + 2 * outset),
             cornerRadius = CornerRadius(20.dp.toPx()),
             alpha = opacity,
-            style = Stroke(2.dp.toPx())
+            style = Stroke(TargetOutlineWidth.toPx())
         )
     }
 }

@@ -117,6 +117,7 @@ class HomeViewModel(
 
     fun beginPairing() {
         showTestTarget(null)
+        clearAction()
         recoveryGeneration++
         mutableSmsRecovery.value = SmsRecovery.Idle
     }
