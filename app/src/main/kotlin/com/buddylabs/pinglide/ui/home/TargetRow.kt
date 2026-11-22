@@ -10,6 +10,7 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -99,20 +100,42 @@ internal fun TargetRow(
         ) {
             TargetCardDetails(target, name, now, highlightAlpha)
         }
-        val switchLabel = stringResource(R.string.home_receive, name)
-        Switch(
+        TargetReceiveSwitch(
             checked = target.enabled,
-            onCheckedChange = onSelect,
             enabled = enabled && target.keyUsable,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = colors.onPrimary,
-                uncheckedThumbColor = colors.onSurfaceVariant,
-                uncheckedTrackColor = colors.surfaceContainerHigh,
-                uncheckedBorderColor = colors.outline
-            ),
-            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = switchLabel }
+            label = stringResource(R.string.home_receive, name),
+            onSelect = onSelect
         )
     }
+}
+
+@Composable
+private fun TargetReceiveSwitch(
+    checked: Boolean,
+    enabled: Boolean,
+    label: String,
+    onSelect: (Boolean) -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    Switch(
+        checked = checked,
+        onCheckedChange = onSelect,
+        enabled = enabled,
+        thumbContent = if (!checked && enabled) {
+            { Box(Modifier.size(22.dp).background(colors.onSurfaceVariant, CircleShape)) }
+        } else {
+            null
+        },
+        colors = SwitchDefaults.colors(
+            checkedThumbColor = colors.onPrimary,
+            uncheckedThumbColor = Color.Transparent,
+            uncheckedTrackColor = colors.surfaceContainerHigh,
+            uncheckedBorderColor = colors.onSurface.copy(
+                alpha = if (isSystemInDarkTheme()) 0.32f else 0.34f
+            )
+        ),
+        modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = label }
+    )
 }
 
 @Composable

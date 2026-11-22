@@ -52,18 +52,19 @@ internal fun HomeState.hasInitialListFailure(readiness: HomeReadiness): Boolean 
 internal val HomeState.hasCachedListFailure: Boolean
     get() = listRefreshFailed && targets.isNotEmpty()
 
+private fun HomeState.showsIllustratedWarning(readiness: HomeReadiness): Boolean =
+    when (readiness) {
+        HomeReadiness.Empty, HomeReadiness.Disabled, HomeReadiness.Offline -> true
+        HomeReadiness.Ready -> hasCachedListFailure
+        HomeReadiness.Unknown -> hasInitialListFailure(readiness) || hasCachedListFailure
+        else -> false
+    }
+
 @Composable
 internal fun HomeHero(state: HomeState, readiness: HomeReadiness) {
     val strings = heroStrings(state, readiness)
-    val cachedWarning = when (readiness) {
-        HomeReadiness.Ready, HomeReadiness.Unknown, HomeReadiness.Disabled ->
-            state.hasCachedListFailure
-
-        else -> false
-    }
-    val warningBadge = warningBadges[readiness]
-    if (warningBadge != null || state.hasInitialListFailure(readiness) || cachedWarning) {
-        IllustratedWarningHero(strings, warningBadge)
+    if (state.showsIllustratedWarning(readiness)) {
+        IllustratedWarningHero(strings, warningBadges[readiness])
         return
     }
     val preparing = readiness == HomeReadiness.Unknown && !state.listed
@@ -84,7 +85,7 @@ private fun HeroCopy(
     strings: Pair<Int, Int>,
     prominent: Boolean,
     modifier: Modifier = Modifier,
-    copyColor: Color = Color.Unspecified
+    bodyColor: Color = Color.Unspecified
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(if (prominent) 8.dp else 12.dp)) {
         Text(
@@ -101,7 +102,7 @@ private fun HeroCopy(
         )
         Text(
             stringResource(strings.second),
-            color = copyColor,
+            color = bodyColor,
             style = if (prominent) {
                 MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp)
             } else {
@@ -116,12 +117,12 @@ private fun HeroCopy(
 private fun IllustratedWarningHero(strings: Pair<Int, Int>, @StringRes badge: Int?) {
     val colors = MaterialTheme.colorScheme
     val warning = colorResource(R.color.setup_warning_container)
-    val dark = isSystemInDarkTheme()
-    val headingColor = if (dark) Color.White else colors.onPrimaryContainer
-    val copyColor = if (dark) Color.White else headingColor.copy(alpha = 0.78f)
+    val darkTheme = isSystemInDarkTheme()
+    val titleColor = if (darkTheme) Color.White else colors.onPrimaryContainer
+    val bodyColor = if (darkTheme) titleColor else titleColor.copy(alpha = 0.78f)
     Surface(
         color = Color.Transparent,
-        contentColor = headingColor,
+        contentColor = titleColor,
         shape = RoundedCornerShape(28.dp),
         modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }
     ) {
@@ -131,10 +132,10 @@ private fun IllustratedWarningHero(strings: Pair<Int, Int>, @StringRes badge: In
                 .padding(18.dp)
         ) {
             if (badge == null) {
-                HeroCopy(strings, prominent = true, copyColor = copyColor)
+                HeroCopy(strings, prominent = true, bodyColor = bodyColor)
             } else if (maxWidth < 264.dp * LocalDensity.current.fontScale) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HeroCopy(strings, prominent = true, copyColor = copyColor)
+                    HeroCopy(strings, prominent = true, bodyColor = bodyColor)
                     WarningBadge(badge)
                 }
             } else {
@@ -143,7 +144,7 @@ private fun IllustratedWarningHero(strings: Pair<Int, Int>, @StringRes badge: In
                         strings,
                         prominent = true,
                         modifier = Modifier.weight(1f),
-                        copyColor = copyColor
+                        bodyColor = bodyColor
                     )
                     WarningBadge(badge)
                 }

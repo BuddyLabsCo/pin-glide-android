@@ -5,17 +5,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsOn
-import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -103,12 +97,7 @@ class HomeOfflineScreenTest {
         copy.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
         assertEquals(expectedCopyColor, layouts.single().layoutInput.style.color)
 
-        val hero = compose.onNode(
-            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite) and
-                hasAnyDescendant(hasText(title)),
-            useUnmergedTree = true
-        )
-        compose.density.assertWarningHeroArtwork(hero.captureToImage().asAndroidBitmap())
+        compose.assertWarningHeroArtwork(hasText(title))
 
         val list = compose.onNode(hasScrollAction())
         val offlineStatus = hasText("离线 · 状态变化", substring = true)

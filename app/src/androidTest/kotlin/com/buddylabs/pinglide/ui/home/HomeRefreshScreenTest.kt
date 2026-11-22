@@ -1,14 +1,19 @@
 package com.buddylabs.pinglide.ui.home
 
+import android.content.res.Configuration
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
@@ -24,8 +29,8 @@ import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
-import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -37,6 +42,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
@@ -52,6 +58,8 @@ import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -80,6 +88,40 @@ class HomeRefreshScreenTest {
 
     @After
     fun stopFixture() = scope.cancel()
+
+    @Test
+    fun allReceiveSwitchesOffShowsWarningUntilAnOnlineTargetIsEnabled() {
+        val aliases = listOf("我的电脑", "办公室电脑")
+        openHome(aliases, initiallyDisabled = listOf(0, 1))
+        val warningTitle = hasText("尚未选择接收设备")
+        compose.onNode(warningTitle).assertIsDisplayed()
+        val warningBody = compose.onNodeWithText("开启至少一台设备的接收开关后，鹊信才会转发新短信。")
+        warningBody.assertIsDisplayed()
+        assertWarningBodyColor(warningBody)
+        compose.assertWarningHeroArtwork(warningTitle)
+        compose.onNodeWithText("添加设备").assertIsDisplayed()
+
+        val first = compose.onNodeWithContentDescription("我的电脑接收短信")
+        val second = compose.onNodeWithContentDescription("办公室电脑接收短信")
+        first.assertIsEnabled().assertIsOff()
+        second.assertIsEnabled().assertIsOff()
+        val switchImage = first.captureToImage().asAndroidBitmap()
+        val thumbColor = Color(0xFF52635E).toArgb()
+        val thumbWidth = (0 until switchImage.width).count { column ->
+            switchImage.getPixel(column, switchImage.height / 2) == thumbColor
+        }
+        assertEquals(22f, thumbWidth / compose.density.density, 1f)
+        compose.onNode(hasText(aliases.first()) and hasText("在线 · 状态变化：2020/1/15 17:00"))
+            .assertIsDisplayed()
+        compose.onNode(hasText(aliases.last()) and hasText("在线 · 状态变化：2021/1/15 17:00"))
+            .assertIsDisplayed()
+
+        first.performTouchInput { click() }.assertIsOn()
+        second.assertIsOff()
+        compose.onNode(warningTitle).assertDoesNotExist()
+        compose.onNodeWithText("转发已就绪").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(1, selectionAttempts) }
+    }
 
     @Test
     fun pullingPastTheThresholdRefreshesOnReleaseAndKeepsDeviceRows() {
@@ -128,7 +170,7 @@ class HomeRefreshScreenTest {
     @Test
     fun failedRefreshRetainsPairingsAndPullingAgainRestoresPresence() {
         val aliases = listOf("我的电脑", "办公室电脑")
-        openHome(aliases, initiallyDisabled = 1)
+        openHome(aliases, initiallyDisabled = listOf(1))
         val list = compose.onNode(hasScrollAction())
         val warning = compose.onNodeWithText("已有配对仍保留。当前无法确认设备是否在线。")
         val heading = compose.onNodeWithText("我的设备")
@@ -141,12 +183,7 @@ class HomeRefreshScreenTest {
         compose.waitUntil { compose.onAllNodes(heroTitle).fetchSemanticsNodes().size == 1 }
 
         warning.assertIsDisplayed()
-        val hero = compose.onNode(
-            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite) and
-                hasAnyDescendant(heroTitle),
-            useUnmergedTree = true
-        )
-        compose.density.assertWarningHeroArtwork(hero.captureToImage().asAndroidBitmap())
+        compose.assertWarningHeroArtwork(heroTitle)
         val bounds = list.getUnclippedBoundsInRoot()
         val warningBounds = warning.getUnclippedBoundsInRoot()
         compose.density.assertCachedFailureNoticeArtwork(
@@ -264,6 +301,13 @@ class HomeRefreshScreenTest {
 
     private fun refreshList() = compose.onNodeWithContentDescription("设备列表，可下拉刷新或按 Enter 刷新")
 
+    private fun assertWarningBodyColor(body: SemanticsNodeInteraction) {
+        val layouts = mutableListOf<TextLayoutResult>()
+        body.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val expected = Color(0xFF003832).copy(alpha = 0.78f)
+        assertEquals(expected, layouts.single().layoutInput.style.color)
+    }
+
     private fun SemanticsNodeInteraction.pullToRefresh() = performTouchInput {
         down(center)
         moveBy(Offset(0f, 216.dp.toPx()))
@@ -273,17 +317,19 @@ class HomeRefreshScreenTest {
     private fun openHome(
         aliases: List<String>,
         modifier: Modifier = Modifier,
-        initiallyDisabled: Int? = null,
+        initiallyDisabled: List<Int> = emptyList(),
         rejectSelection: Boolean = false
     ): List<RemotePairing> {
         val now = Instant.now()
         val targets = aliases.mapIndexed { index, alias ->
+            val changedAt = LocalDateTime.of(2020 + index, 1, 15, 17, 0)
+                .atZone(ZoneId.systemDefault()).toInstant()
             RemotePairing(
                 "pairing-$index",
                 "receiver-$index",
                 alias,
                 Presence.Online,
-                now.toString()
+                changedAt.toString()
             )
         }
         val service = object : PairingService {
@@ -304,8 +350,8 @@ class HomeRefreshScreenTest {
         val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)
         val pairings = OwnPairings(pairingStore, service, renewal, scope)
         runBlocking(Dispatchers.Main) {
-            if (initiallyDisabled != null) {
-                store.select(store.readPairings(), targets[initiallyDisabled].pairingId, false)
+            initiallyDisabled.forEach { index ->
+                store.select(store.readPairings(), targets[index].pairingId, false)
             }
             pairings.refresh()
         }
@@ -314,18 +360,24 @@ class HomeRefreshScreenTest {
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         compose.setContent {
             val state = home.state.collectAsState().value
-            LocalizedContent(AppLanguage.SimplifiedChinese) {
-                PinGlideTheme {
-                    Box(modifier) {
-                        HomeScreen(
-                            state,
-                            smsGranted = true,
-                            smsRecovery = SmsRecovery.Idle,
-                            home = home,
-                            onRestoreSms = {},
-                            onAdd = {},
-                            onSettings = {}
-                        )
+            val configuration = Configuration(LocalConfiguration.current).apply {
+                uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
+                    Configuration.UI_MODE_NIGHT_NO
+            }
+            CompositionLocalProvider(LocalConfiguration provides configuration) {
+                LocalizedContent(AppLanguage.SimplifiedChinese) {
+                    PinGlideTheme {
+                        Box(modifier) {
+                            HomeScreen(
+                                state,
+                                smsGranted = true,
+                                smsRecovery = SmsRecovery.Idle,
+                                home = home,
+                                onRestoreSms = {},
+                                onAdd = {},
+                                onSettings = {}
+                            )
+                        }
                     }
                 }
             }
