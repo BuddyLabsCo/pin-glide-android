@@ -3,6 +3,7 @@ package com.buddylabs.pinglide.ui.home
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -78,8 +79,13 @@ internal fun HomeRefreshContainer(
     listState: LazyListState,
     onRefresh: () -> Unit,
     modifier: Modifier,
+    enabled: Boolean,
     content: @Composable (refreshHint: @Composable () -> Unit) -> Unit
 ) {
+    if (!enabled) {
+        Box(modifier.fillMaxWidth()) { content {} }
+        return
+    }
     val pull = rememberPullToRefreshState()
     val viewport = remember { LayoutBoundsHolder() }
     var refreshLabelVisible by remember { mutableStateOf(false) }
@@ -116,14 +122,13 @@ internal fun HomeRefreshContainer(
     ) {
         content {
             val distanceFraction = pull.distanceFraction
-            val hint = when {
-                showListProgress -> null
-                state.refreshing -> R.string.home_refreshing
-                pull.isAnimating -> null
-                distanceFraction >= 1f -> R.string.home_pull_release
-                distanceFraction > 0f -> R.string.home_pull_down
-                else -> null
-            }
+            val hint =
+                refreshHintLabel(
+                    showListProgress,
+                    state.refreshing,
+                    pull.isAnimating,
+                    distanceFraction
+                )
             if (hint != null) {
                 val visibility = if (state.refreshing) {
                     Modifier.onVisibilityChanged(viewportBounds = viewport) { visible ->
@@ -142,6 +147,20 @@ internal fun HomeRefreshContainer(
             }
         }
     }
+}
+
+private fun refreshHintLabel(
+    showListProgress: Boolean,
+    refreshing: Boolean,
+    animating: Boolean,
+    distance: Float
+): Int? = when {
+    showListProgress -> null
+    refreshing -> R.string.home_refreshing
+    animating -> null
+    distance >= 1f -> R.string.home_pull_release
+    distance > 0f -> R.string.home_pull_down
+    else -> null
 }
 
 @Composable

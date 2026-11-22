@@ -102,7 +102,8 @@
     <string name="home_sms_enabled">SMS permission is on</string>
     <string name="home_sms_restored">SMS permission is on. Forwarding has resumed.</string>
     <string name="home_login_title">Sign in again</string>
-    <string name="home_login_copy">Your credentials cannot be renewed. Signing in with the original QQ account preserves this Sender’s Pairings.</string>
+    <string name="home_login_badge">Sign-in expired</string>
+    <string name="home_login_copy">Your sign-in credentials have expired and cannot be renewed automatically. Signing in with the original QQ account preserves this Sender’s Pairings.</string>
     <string name="home_revoked_title">Device registration revoked</string>
     <string name="home_revoked_copy">This Sender registration is permanently closed. Forwarding has stopped.</string>
     <string name="home_details">Open target details</string>

@@ -89,6 +89,7 @@ internal fun TargetRow(
     ) {
         Row(
             modifier.weight(1f).heightIn(min = 54.dp)
+                .alpha(if (enabled) 1f else 0.38f)
                 .clickable(
                     enabled = enabled,
                     role = Role.Button,
@@ -98,7 +99,12 @@ internal fun TargetRow(
             horizontalArrangement = Arrangement.spacedBy(9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TargetCardDetails(target, name, now, highlightAlpha)
+            val visibleTarget = if (enabled) {
+                target
+            } else {
+                target.copy(presence = Presence.Unknown, stateChangedAt = null)
+            }
+            TargetCardDetails(visibleTarget, name, now, highlightAlpha)
         }
         TargetReceiveSwitch(
             checked = target.enabled,
@@ -134,12 +140,14 @@ private fun TargetReceiveSwitch(
             uncheckedThumbColor = Color.Transparent,
             uncheckedTrackColor = colors.surfaceContainerHigh,
             uncheckedBorderColor = uncheckedBorder,
+            disabledCheckedThumbColor = colors.onPrimary,
+            disabledCheckedTrackColor = colors.primary,
             disabledUncheckedThumbColor = Color.Transparent,
             disabledUncheckedTrackColor = colors.surfaceContainerHigh,
             disabledUncheckedBorderColor = uncheckedBorder
         ),
         modifier = Modifier.heightIn(min = 48.dp)
-            .alpha(if (!enabled && !checked) 0.38f else 1f)
+            .alpha(if (enabled) 1f else 0.38f)
             .semantics { contentDescription = label }
     )
 }

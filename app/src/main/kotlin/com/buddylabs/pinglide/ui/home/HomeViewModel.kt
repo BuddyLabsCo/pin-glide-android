@@ -231,4 +231,10 @@ data class TargetAction(
     val pending: Boolean = false,
     val removing: Boolean = false,
     val result: PairingChange? = null
-)
+) {
+    internal fun forTarget(
+        selectedId: String?,
+        selectedOwner: Pair<String, String>?
+    ): TargetAction =
+        if (pairingId == selectedId && owner == selectedOwner) this else TargetAction()
+}
