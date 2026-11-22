@@ -193,7 +193,20 @@ class HomeReadyScreenTest {
         renderHome(AppLanguage.English, homeState = { state.value })
 
         assertRefreshing()
-        compose.onNodeWithText("Ready to forward").assertIsDisplayed()
+        val refreshing = compose.onNodeWithText("Refreshing").assert(
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.ProgressBarRangeInfo,
+                ProgressBarRangeInfo.Indeterminate
+            )
+        )
+        val hero = compose.onNodeWithText("Ready to forward").assertIsDisplayed()
+        val devices = compose.onNodeWithText("My devices").assertIsDisplayed()
+        assertTrue(
+            hero.getUnclippedBoundsInRoot().bottom <= refreshing.getUnclippedBoundsInRoot().top
+        )
+        assertTrue(
+            refreshing.getUnclippedBoundsInRoot().bottom <= devices.getUnclippedBoundsInRoot().top
+        )
         compose.onNodeWithText("Loading device list").assertDoesNotExist()
         compose.onNodeWithText("Cached device").assertIsDisplayed()
         compose.onNodeWithText("Add device").assertDoesNotExist()
