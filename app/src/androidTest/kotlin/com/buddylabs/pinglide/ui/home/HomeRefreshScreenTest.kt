@@ -26,6 +26,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.captureToImage
@@ -44,6 +45,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
@@ -88,6 +90,31 @@ class HomeRefreshScreenTest {
 
     @After
     fun stopFixture() = scope.cancel()
+
+    @Test
+    fun missingPairingKeyDisablesOnlyTheAffectedReceiveSwitch() {
+        openHome(listOf("我的电脑", "办公室电脑"), missingKeyIndex = 0)
+        val keyError = hasText("密钥丢失或损坏")
+        compose.onNode(hasText("我的电脑") and keyError).assertIsDisplayed().assertIsEnabled()
+        compose.onAllNodes(keyError).assertCountEquals(1)
+        compose.onNodeWithText("转发已就绪").assertIsDisplayed()
+        compose.onNodeWithText("添加设备").assertIsDisplayed()
+        val affected = compose.onNodeWithContentDescription("我的电脑接收短信")
+        val other = compose.onNodeWithContentDescription("办公室电脑接收短信")
+        affected.assertIsNotEnabled().assertIsOff()
+        other.assertIsEnabled().assertIsOn()
+        affected.performTouchInput { click() }.assertIsOff()
+        compose.runOnIdle { assertEquals(0, selectionAttempts) }
+        other.performTouchInput { click() }.assertIsOff()
+        other.performTouchInput { click() }.assertIsOn()
+        affected.assertIsNotEnabled().assertIsOff()
+        compose.runOnIdle { assertEquals(2, selectionAttempts) }
+
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNode(keyError, useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertEquals(11.sp, layouts.single().layoutInput.style.fontSize)
+    }
 
     @Test
     fun allReceiveSwitchesOffShowsWarningUntilAnOnlineTargetIsEnabled() {
@@ -318,7 +345,8 @@ class HomeRefreshScreenTest {
         aliases: List<String>,
         modifier: Modifier = Modifier,
         initiallyDisabled: List<Int> = emptyList(),
-        rejectSelection: Boolean = false
+        rejectSelection: Boolean = false,
+        missingKeyIndex: Int? = null
     ): List<RemotePairing> {
         val now = Instant.now()
         val targets = aliases.mapIndexed { index, alias ->
@@ -336,7 +364,11 @@ class HomeRefreshScreenTest {
             override suspend fun list(managementToken: String) =
                 if (++requests == 2) response.await() else targets
         }
-        val store = HomePairingStore(targets, now.plusSeconds(3600).toString())
+        val store = HomePairingStore(
+            targets,
+            now.plusSeconds(3600).toString(),
+            missingKeyId = missingKeyIndex?.let { targets[it].pairingId }
+        )
         val pairingStore = object : PairingStore by store {
             override suspend fun select(
                 expected: PairingSnapshot,
