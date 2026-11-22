@@ -262,7 +262,7 @@ class HomeReadyScreenTest {
     @Test
     fun failedFirstListKeepsLoginAndSmsRecoverySeparateFromTheListFailure() {
         val state = mutableStateOf(
-            HomeState(failed = true, authorization = AuthorizationState.LoginRequired)
+            HomeState(listRefreshFailed = true, authorization = AuthorizationState.LoginRequired)
         )
         renderHome(AppLanguage.English, smsGranted = false, homeState = { state.value })
 
@@ -319,8 +319,11 @@ class HomeReadyScreenTest {
         compose.onNodeWithText("All selected devices are offline").assertIsDisplayed()
 
         compose.runOnIdle {
-            state.value =
-                state.value.copy(targets = listOf(target), refreshing = false, failed = true)
+            state.value = state.value.copy(
+                targets = listOf(target),
+                refreshing = false,
+                listRefreshFailed = true
+            )
         }
         compose.onNodeWithText("Refreshing").assertDoesNotExist()
         compose.onNodeWithText("Device status not updated").assertIsDisplayed()

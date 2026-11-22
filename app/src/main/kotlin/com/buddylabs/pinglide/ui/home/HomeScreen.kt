@@ -223,7 +223,7 @@ private fun HomeContent(
 ) {
     LaunchedEffect(Unit) { headingFocus.requestFocus() }
     val showListProgress = readiness == HomeReadiness.Unknown && state.refreshing &&
-        !state.listed && !state.failed && state.targets.isEmpty()
+        !state.listed && !state.listRefreshFailed && state.targets.isEmpty()
     ScreenLayout {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val viewportHeight = maxHeight

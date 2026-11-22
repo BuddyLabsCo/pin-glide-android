@@ -41,10 +41,10 @@ import com.buddylabs.pinglide.domain.pairing.HomeReadiness
 import com.buddylabs.pinglide.domain.pairing.HomeState
 
 internal fun HomeState.hasInitialListFailure(readiness: HomeReadiness): Boolean =
-    readiness == HomeReadiness.Unknown && failed && !listed && targets.isEmpty()
+    readiness == HomeReadiness.Unknown && listRefreshFailed && !listed && targets.isEmpty()
 
 internal val HomeState.hasCachedListFailure: Boolean
-    get() = failed && targets.isNotEmpty()
+    get() = listRefreshFailed && targets.isNotEmpty()
 
 @Composable
 internal fun HomeHero(state: HomeState, readiness: HomeReadiness) {
@@ -62,7 +62,7 @@ internal fun HomeHero(state: HomeState, readiness: HomeReadiness) {
         return
     }
     val preparing = readiness == HomeReadiness.Unknown && !state.listed
-    val prominent = !state.failed && (readiness == HomeReadiness.Ready || preparing)
+    val prominent = !state.listRefreshFailed && (readiness == HomeReadiness.Ready || preparing)
     Surface(
         color = if (prominent) Color.Transparent else colorResource(R.color.home_warning_container),
         contentColor = if (prominent) Color.White else colorResource(R.color.home_on_warning),
@@ -224,7 +224,7 @@ private fun heroStrings(state: HomeState, readiness: HomeReadiness): Pair<Int, I
         HomeReadiness.Offline -> R.string.home_offline_title to R.string.home_offline_copy
 
         HomeReadiness.Unknown -> when {
-            !state.failed -> R.string.home_loading_title to R.string.home_loading_copy
+            !state.listRefreshFailed -> R.string.home_loading_title to R.string.home_loading_copy
 
             state.targets.isEmpty() ->
                 R.string.home_load_error_title to R.string.home_load_error_copy
@@ -232,7 +232,7 @@ private fun heroStrings(state: HomeState, readiness: HomeReadiness): Pair<Int, I
             else -> R.string.home_refresh_error_title to R.string.home_refresh_error_copy
         }
 
-        HomeReadiness.Ready -> if (state.failed) {
+        HomeReadiness.Ready -> if (state.listRefreshFailed) {
             R.string.home_refresh_error_title to R.string.home_refresh_error_copy
         } else {
             R.string.home_ready_title to R.string.home_ready_copy
