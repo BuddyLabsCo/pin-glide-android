@@ -18,6 +18,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -26,14 +30,20 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.LayoutBoundsHolder
+import androidx.compose.ui.layout.layoutBounds
+import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
@@ -69,14 +79,22 @@ internal fun HomeRefreshContainer(
     content: @Composable (refreshHint: @Composable () -> Unit) -> Unit
 ) {
     val pull = rememberPullToRefreshState()
+    val viewport = remember { LayoutBoundsHolder() }
+    var refreshHintVisible by remember { mutableStateOf(false) }
     val refreshLabel = stringResource(R.string.home_refresh)
+    val refreshingLabel = stringResource(R.string.home_refreshing)
     val listLabel = stringResource(R.string.home_list_accessibility)
     PullToRefreshBox(
         isRefreshing = state.refreshing,
         onRefresh = onRefresh,
         state = pull,
-        modifier = modifier.fillMaxWidth().semantics {
+        modifier = modifier.fillMaxWidth().layoutBounds(viewport).semantics {
             contentDescription = listLabel
+            if (state.refreshing && !showListProgress && !refreshHintVisible) {
+                stateDescription = refreshingLabel
+                progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                liveRegion = LiveRegionMode.Polite
+            }
             customActions = listOf(
                 CustomAccessibilityAction(refreshLabel) {
                     onRefresh()
@@ -94,33 +112,45 @@ internal fun HomeRefreshContainer(
         indicator = {}
     ) {
         content {
-            val distance = pull.distanceFraction
+            val distanceFraction = pull.distanceFraction
             val hint = when {
                 showListProgress -> null
                 state.refreshing -> R.string.home_refreshing
                 pull.isAnimating -> null
-                distance >= 1f -> R.string.home_pull_release
-                distance > 0f -> R.string.home_pull_down
+                distanceFraction >= 1f -> R.string.home_pull_release
+                distanceFraction > 0f -> R.string.home_pull_down
                 else -> null
             }
             if (hint != null) {
-                HomeRefreshHint(hint, state.refreshing, distance)
+                val visibility = if (state.refreshing) {
+                    Modifier.onVisibilityChanged(viewportBounds = viewport) { visible ->
+                        refreshHintVisible = visible
+                    }
+                } else {
+                    Modifier
+                }
+                HomeRefreshHint(hint, state.refreshing, distanceFraction, visibility)
             }
         }
     }
 }
 
 @Composable
-private fun HomeRefreshHint(label: Int, refreshing: Boolean, distance: Float) {
+private fun HomeRefreshHint(
+    label: Int,
+    refreshing: Boolean,
+    distanceFraction: Float,
+    modifier: Modifier
+) {
     val dimensions = if (refreshing) {
         Modifier.heightIn(min = 48.dp).progressSemantics()
     } else {
-        Modifier.height(48.dp * distance.coerceIn(0f, 1f))
+        Modifier.height(64.dp * distanceFraction.coerceIn(0f, 1f))
             .clipToBounds().wrapContentHeight(unbounded = true)
     }
     val color = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        Modifier.fillMaxWidth().then(dimensions).semantics(mergeDescendants = true) {
+        modifier.fillMaxWidth().then(dimensions).semantics(mergeDescendants = true) {
             liveRegion = LiveRegionMode.Polite
         },
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
