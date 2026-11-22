@@ -32,7 +32,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -88,7 +87,7 @@ internal fun HomeLoginScreen(
                             bottom = 53.dp
                         )
                     } else {
-                        PaddingValues(24.dp)
+                        PaddingValues(vertical = 24.dp)
                     }
                 ).semantics {
                     paneTitle = title
@@ -146,9 +145,9 @@ private fun HomeLoginHeader(loading: Boolean, onBack: () -> Unit) {
     ) {
         IconButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) {
             Icon(
-                painterResource(if (loading) R.drawable.ic_chevron else R.drawable.ic_back),
+                painterResource(if (loading) R.drawable.ic_back_chevron else R.drawable.ic_back),
                 stringResource(R.string.setup_back),
-                modifier = if (loading) Modifier.size(18.dp).rotate(180f) else Modifier,
+                modifier = if (loading) Modifier.size(18.dp) else Modifier,
                 tint = if (loading) {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 } else {
