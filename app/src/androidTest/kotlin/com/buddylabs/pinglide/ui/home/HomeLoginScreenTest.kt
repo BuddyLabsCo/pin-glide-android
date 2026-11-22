@@ -1,18 +1,29 @@
 package com.buddylabs.pinglide.ui.home
 
+import android.content.Context
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewModelScope
 import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.R
@@ -35,6 +46,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -95,16 +107,24 @@ class HomeLoginScreenTest {
 
             compose.waitUntil { authorizationCancelled.isCompleted }
             assertEquals(RestorationState.Cancelled, home.loginRestoration.value)
-            compose.onNodeWithText(
-                resources.getString(R.string.home_login_cancelled)
-            ).assertIsDisplayed()
+            val heading = compose.onNodeWithText(resources.getString(R.string.home_login_cancelled))
+                .assertIsDisplayed()
+            assertCancelledEmblem(heading)
+            val headingLayouts = mutableListOf<TextLayoutResult>()
+            heading.performSemanticsAction(SemanticsActions.GetTextLayoutResult) {
+                it(headingLayouts)
+            }
+            val headingStyle = headingLayouts.single().layoutInput.style
+            assertEquals(26.sp, headingStyle.fontSize)
+            assertEquals(FontWeight(750), headingStyle.fontWeight)
             compose.onNodeWithText(
                 resources.getString(R.string.home_login_cancelled_copy)
             ).assertIsDisplayed()
-            compose.onNodeWithText(resources.getString(R.string.home_login_action))
+            val retry = compose.onNodeWithText(resources.getString(R.string.home_login_action))
                 .assertIsDisplayed()
                 .assertHeightIsEqualTo(48.dp)
-                .performClick()
+            assertRetryIcon(retry, context)
+            retry.performClick()
             compose.onNodeWithText(
                 resources.getString(R.string.home_login_loading)
             ).assertIsDisplayed()
@@ -113,6 +133,43 @@ class HomeLoginScreenTest {
             renewalScope.cancel()
         }
     }
+
+    private fun assertCancelledEmblem(heading: SemanticsNodeInteraction) = with(compose.density) {
+        val root = compose.onRoot()
+        val artwork = root.captureToImage().asAndroidBitmap()
+        val headingTop = heading.getUnclippedBoundsInRoot().top
+        val rootTop = root.getUnclippedBoundsInRoot().top
+        val centerY = (headingTop - rootTop - 115.dp).roundToPx()
+        val centerX = artwork.width / 2
+        val background = artwork.getPixel(centerX - 102.dp.roundToPx(), centerY)
+        val ringTolerance = 2.dp.roundToPx()
+        for (radius in listOf(93.dp, 111.dp)) {
+            val ringX = centerX - radius.roundToPx()
+            assertTrue(
+                "The $radius ring is visible around the QQ emblem",
+                (ringX - ringTolerance..ringX + ringTolerance).any {
+                    artwork.getPixel(it, centerY) != background
+                }
+            )
+        }
+    }
+
+    private fun assertRetryIcon(action: SemanticsNodeInteraction, context: Context) =
+        with(compose.density) {
+            val label = compose.onNodeWithText(
+                context.getString(R.string.home_login_action),
+                useUnmergedTree = true
+            )
+            val textStart =
+                label.getUnclippedBoundsInRoot().left - action.getUnclippedBoundsInRoot().left
+            val iconCenter = (textStart - 18.dp).roundToPx()
+            val button = action.captureToImage().asAndroidBitmap()
+            assertEquals(
+                "The account icon is visible before the QQ retry text",
+                context.getColor(R.color.on_primary),
+                button.getPixel(iconCenter, button.height / 2 - 6.dp.roundToPx())
+            )
+        }
 }
 
 private object LoginRequiredStore : IdentityStore {
