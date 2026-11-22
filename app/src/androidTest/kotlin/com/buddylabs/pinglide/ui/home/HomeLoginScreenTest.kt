@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -96,6 +97,16 @@ class HomeLoginScreenTest {
             assertEquals(RestorationState.Cancelled, home.loginRestoration.value)
             compose.onNodeWithText(
                 resources.getString(R.string.home_login_cancelled)
+            ).assertIsDisplayed()
+            compose.onNodeWithText(
+                resources.getString(R.string.home_login_cancelled_copy)
+            ).assertIsDisplayed()
+            compose.onNodeWithText(resources.getString(R.string.home_login_action))
+                .assertIsDisplayed()
+                .assertHeightIsEqualTo(48.dp)
+                .performClick()
+            compose.onNodeWithText(
+                resources.getString(R.string.home_login_loading)
             ).assertIsDisplayed()
         } finally {
             home.viewModelScope.cancel()
