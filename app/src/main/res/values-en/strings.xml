@@ -144,7 +144,7 @@
     <string name="home_login_cancelled">Sign-in incomplete</string>
     <string name="home_login_cancelled_copy">QQ authorization was cancelled. Forwarding is still paused. Your Pairings and names are unchanged.</string>
     <string name="home_login_error">Unable to sign in right now</string>
-    <string name="home_login_error_copy">This Sender could not be restored right now. Your Pairings are retained. Try signing in again later.</string>
+    <string name="home_login_error_copy">The network or service is temporarily unavailable. Your existing Pairings are retained. Try signing in again later.</string>
     <string name="home_login_mismatch">Use the original QQ account</string>
     <string name="home_login_mismatch_copy">This authorization cannot restore the original Sender. Retry with the original QQ account. To switch accounts, return to Settings.</string>
     <string name="home_login_restored">Sign-in restored. Your existing Pairings are retained.</string>

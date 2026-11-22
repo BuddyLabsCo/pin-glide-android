@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -40,6 +41,39 @@ import org.junit.Test
 class HomeLoginScreenTest {
     @get:Rule
     val compose = createComposeRule()
+
+    @Test
+    fun failedRestorationShowsPairingRetentionAndOffersRetry() {
+        val resources = InstrumentationRegistry.getInstrumentation().targetContext.resources
+        var retries = 0
+        compose.setContent {
+            PinGlideTheme {
+                HomeLoginScreen(
+                    state = RestorationState.Error,
+                    onRetry = { retries++ },
+                    onCancel = { error("Failed restoration has no pending QQ authorization") },
+                    onBack = { error("Retry must stay in the restoration flow") }
+                )
+            }
+        }
+
+        val approvedCopy = if (resources.configuration.locales[0].language == "en") {
+            "The network or service is temporarily unavailable. " +
+                "Your existing Pairings are retained. Try signing in again later."
+        } else {
+            "网络或服务暂时不可用。原有配对仍保留，请稍后重新登录。"
+        }
+        compose.onNodeWithText(resources.getString(R.string.home_login_error)).assertIsDisplayed()
+        compose.onNodeWithText(approvedCopy).assertIsDisplayed()
+        compose.onNode(
+            SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)
+        ).assertDoesNotExist()
+        compose.onNodeWithText(resources.getString(R.string.home_login_action))
+            .assertIsDisplayed()
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
+        compose.runOnIdle { assertEquals(1, retries) }
+    }
 
     @Test
     fun pendingRestorationShowsProgressAndCancelStopsQqAuthorization() {

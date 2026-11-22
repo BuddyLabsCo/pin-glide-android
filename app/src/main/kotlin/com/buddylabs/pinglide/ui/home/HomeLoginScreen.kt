@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -45,6 +46,7 @@ import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
@@ -61,6 +63,7 @@ internal fun HomeLoginScreen(
     onBack: () -> Unit
 ) {
     val loading = state == RestorationState.Loading
+    val centered = loading || state == RestorationState.Error
     val strings = when (state) {
         RestorationState.Loading -> R.string.home_login_loading to R.string.home_login_loading_copy
 
@@ -77,78 +80,88 @@ internal fun HomeLoginScreen(
     BackHandler(onBack = onBack)
     LaunchedEffect(state) { titleFocus.requestFocus() }
     ScreenLayout {
-        HomeLoginHeader(loading, onBack)
+        HomeLoginHeader(centered, onBack)
         Column(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                 .padding(
-                    if (loading) {
-                        PaddingValues(
-                            top = 12.dp,
-                            bottom = 53.dp
-                        )
-                    } else {
-                        PaddingValues(vertical = 24.dp)
+                    when {
+                        loading -> PaddingValues(top = 12.dp, bottom = 53.dp)
+                        centered -> PaddingValues(top = 12.dp, bottom = 63.dp)
+                        else -> PaddingValues(vertical = 24.dp)
                     }
                 ).semantics {
                     paneTitle = title
                     liveRegion = LiveRegionMode.Polite
                 },
             verticalArrangement = Arrangement.spacedBy(
-                if (loading) 0.dp else 24.dp,
+                if (centered) 0.dp else 24.dp,
                 Alignment.CenterVertically
             ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (loading) HomeLoginProgressEmblem() else QqEmblem()
-            HomeLoginText(title, stringResource(strings.second), titleFocus, loading)
+            if (centered) HomeLoginEmblem(loading) else QqEmblem()
+            HomeLoginText(
+                title,
+                stringResource(strings.second),
+                titleFocus,
+                centered,
+                if (loading) 17.dp else 7.dp
+            )
         }
-        Column(
-            Modifier.fillMaxWidth().imePadding().padding(vertical = if (loading) 0.dp else 16.dp)
-        ) {
-            if (loading) {
-                TextButton(
-                    onClick = onCancel,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                ) {
-                    Text(
-                        stringResource(R.string.setup_cancel),
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.14.sp
-                        )
-                    )
-                }
+        HomeLoginAction(loading, centered, onCancel, onRetry)
+    }
+}
+
+@Composable
+private fun HomeLoginAction(
+    loading: Boolean,
+    centered: Boolean,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit
+) {
+    val modifier = Modifier.fillMaxWidth().imePadding().padding(
+        vertical = if (centered) 0.dp else 16.dp
+    ).heightIn(min = if (centered) 48.dp else 56.dp)
+    if (loading) {
+        TextButton(onClick = onCancel, modifier = modifier) {
+            Text(
+                stringResource(R.string.setup_cancel),
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.14.sp
+                )
+            )
+        }
+    } else {
+        Button(onClick = onRetry, modifier = modifier) {
+            if (centered) {
+                HomeActionLabel(R.drawable.ic_account_circle, R.string.home_login_action)
             } else {
-                Button(
-                    onClick = onRetry,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                ) {
-                    Text(stringResource(R.string.home_login_action))
-                }
+                Text(stringResource(R.string.home_login_action))
             }
         }
     }
 }
 
 @Composable
-private fun HomeLoginHeader(loading: Boolean, onBack: () -> Unit) {
+private fun HomeLoginHeader(centered: Boolean, onBack: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().then(
-            if (loading) {
+            if (centered) {
                 Modifier.padding(top = 16.dp, bottom = 8.dp).heightIn(min = 64.dp)
             } else {
                 Modifier.padding(vertical = 16.dp)
             }
         ),
-        horizontalArrangement = Arrangement.spacedBy(if (loading) 12.dp else 0.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (centered) 12.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) {
             Icon(
-                painterResource(if (loading) R.drawable.ic_back_chevron else R.drawable.ic_back),
+                painterResource(if (centered) R.drawable.ic_back_chevron else R.drawable.ic_back),
                 stringResource(R.string.setup_back),
-                modifier = if (loading) Modifier.size(18.dp) else Modifier,
-                tint = if (loading) {
+                modifier = if (centered) Modifier.size(18.dp) else Modifier,
+                tint = if (centered) {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 } else {
                     LocalContentColor.current
@@ -157,7 +170,7 @@ private fun HomeLoginHeader(loading: Boolean, onBack: () -> Unit) {
         }
         Text(
             stringResource(R.string.app_name),
-            style = if (loading) {
+            style = if (centered) {
                 MaterialTheme.typography.titleLarge.copy(
                     fontSize = 20.sp,
                     lineHeight = 22.sp,
@@ -172,19 +185,22 @@ private fun HomeLoginHeader(loading: Boolean, onBack: () -> Unit) {
 }
 
 @Composable
-private fun HomeLoginProgressEmblem() {
+private fun HomeLoginEmblem(loading: Boolean) {
     val colors = MaterialTheme.colorScheme
+    val outline = colors.primary.copy(alpha = 0.22f)
+    val gradient = Brush.linearGradient(listOf(colors.primaryContainer, colors.secondaryContainer))
     Box(
-        Modifier.size(222.dp).border(1.dp, colors.primary.copy(alpha = 0.22f), CircleShape),
+        Modifier.size(222.dp).border(1.dp, outline, CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Box(
-            Modifier.size(168.dp).background(
-                Brush.linearGradient(listOf(colors.primaryContainer, colors.secondaryContainer)),
-                CircleShape
-            )
-        )
-        QqLoadingEmblem(Modifier.offset(14.dp, 14.dp).size(196.dp))
+        if (loading) {
+            Box(Modifier.size(168.dp).background(gradient, CircleShape))
+            QqLoadingEmblem(Modifier.offset(14.dp, 14.dp).size(196.dp))
+        } else {
+            Box(Modifier.size(186.dp).border(1.dp, outline, CircleShape))
+            Box(Modifier.size(148.dp).background(gradient, RoundedCornerShape(44.dp)))
+            QqEmblem()
+        }
     }
 }
 
@@ -193,12 +209,13 @@ private fun HomeLoginText(
     title: String,
     description: String,
     titleFocus: FocusRequester,
-    loading: Boolean
+    centered: Boolean,
+    titleSpacing: Dp
 ) {
     val typography = MaterialTheme.typography
     Text(
         title,
-        style = if (loading) {
+        style = if (centered) {
             typography.headlineMedium.copy(
                 fontSize = 26.sp,
                 lineHeight = 30.sp,
@@ -209,20 +226,20 @@ private fun HomeLoginText(
             typography.headlineLarge
         },
         textAlign = TextAlign.Center,
-        modifier = Modifier.padding(top = if (loading) 17.dp else 0.dp)
+        modifier = Modifier.padding(top = if (centered) titleSpacing else 0.dp)
             .focusRequester(titleFocus).focusable().semantics { heading() }
     )
     Text(
         description,
-        modifier = if (loading) Modifier.padding(top = 12.dp).widthIn(max = 305.dp) else Modifier,
-        style = if (loading) {
+        modifier = if (centered) Modifier.padding(top = 12.dp).widthIn(max = 305.dp) else Modifier,
+        style = if (centered) {
             typography.bodyMedium.copy(
                 lineHeight = 22.sp
             )
         } else {
             typography.bodyLarge
         },
-        color = if (loading) {
+        color = if (centered) {
             MaterialTheme.colorScheme.onSurfaceVariant
         } else {
             LocalContentColor.current
