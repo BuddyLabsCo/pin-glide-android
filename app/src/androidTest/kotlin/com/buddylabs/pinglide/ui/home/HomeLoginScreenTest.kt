@@ -3,15 +3,12 @@ package com.buddylabs.pinglide.ui.home
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
-import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -95,19 +92,8 @@ class HomeLoginScreenTest {
         ).assertDoesNotExist()
         val action = compose.onNodeWithText(retryLabel)
         action.assertIsDisplayed().assertHeightIsAtLeast(48.dp)
-        with(compose.density) {
-            val label = compose.onNodeWithText(retryLabel, useUnmergedTree = true)
-            val labelStart =
-                label.getUnclippedBoundsInRoot().left - action.getUnclippedBoundsInRoot().left
-            val iconCenter = labelStart - 18.dp
-            val button = action.captureToImage().asAndroidBitmap()
-            val context = InstrumentationRegistry.getInstrumentation().targetContext
-            assertEquals(
-                "The account icon is visible before the retry label",
-                context.getColor(R.color.on_primary),
-                button.getPixel(iconCenter.roundToPx(), button.height / 2 - 6.dp.roundToPx())
-            )
-        }
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        compose.assertAccountActionIcon(action, retryLabel, context.getColor(R.color.on_primary))
         action.performClick()
         compose.runOnIdle { assertEquals(1, retries) }
     }

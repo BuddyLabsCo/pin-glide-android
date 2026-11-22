@@ -17,7 +17,6 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -174,9 +173,10 @@ class HomeLoginExpiredScreenTest {
         compose.onNodeWithText(
             "登录凭据已失效，无法自动续期。使用原 QQ 账号重新登录，可保留当前设备已有的配对。"
         ).assertIsDisplayed()
-        val action = compose.onNodeWithText("使用 QQ 重新登录").assertIsDisplayed().assertIsEnabled()
+        val retryLabel = "使用 QQ 重新登录"
+        val action = compose.onNodeWithText(retryLabel).assertIsDisplayed().assertIsEnabled()
         compose.assertWarningHeroArtwork(hasText("需要重新登录"))
-        assertActionIcon(action, colors)
+        compose.assertAccountActionIcon(action, retryLabel, colors.getColor(R.color.on_primary))
         compose.onNodeWithText("已有配对仍保留。当前无法确认设备是否在线。").assertDoesNotExist()
         compose.onNodeWithText("添加设备").assertDoesNotExist()
         compose.onAllNodesWithText("状态待更新").assertCountEquals(2)
@@ -188,20 +188,6 @@ class HomeLoginExpiredScreenTest {
         }
         assertDisabledArtwork(colors)
     }
-
-    private fun assertActionIcon(action: SemanticsNodeInteraction, colors: Context) =
-        with(compose.density) {
-            val label = compose.onNodeWithText("使用 QQ 重新登录", useUnmergedTree = true)
-            val textStart =
-                label.getUnclippedBoundsInRoot().left - action.getUnclippedBoundsInRoot().left
-            val iconCenter = textStart - 18.dp
-            val button = action.captureToImage().asAndroidBitmap()
-            assertEquals(
-                "The account icon is visible before the QQ action text",
-                colors.getColor(R.color.on_primary),
-                button.getPixel(iconCenter.roundToPx(), button.height / 2 - 6.dp.roundToPx())
-            )
-        }
 
     private fun assertDisabledArtwork(colors: Context) = with(compose.density) {
         val mutedPrimary = Color(colors.getColor(R.color.primary)).copy(alpha = 0.38f)

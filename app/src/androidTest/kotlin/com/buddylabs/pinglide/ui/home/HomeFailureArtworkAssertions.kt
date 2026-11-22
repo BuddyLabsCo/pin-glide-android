@@ -7,9 +7,12 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.junit4.ComposeTestRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -17,6 +20,22 @@ import com.buddylabs.pinglide.R
 import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+
+internal fun ComposeTestRule.assertAccountActionIcon(
+    action: SemanticsNodeInteraction,
+    label: String,
+    expectedColor: Int
+) = with(density) {
+    val text = onNodeWithText(label, useUnmergedTree = true)
+    val textStart = text.getUnclippedBoundsInRoot().left - action.getUnclippedBoundsInRoot().left
+    val iconCenter = textStart - 18.dp
+    val button = action.captureToImage().asAndroidBitmap()
+    assertEquals(
+        "The account icon is visible before the action label",
+        expectedColor,
+        button.getPixel(iconCenter.roundToPx(), button.height / 2 - 6.dp.roundToPx())
+    )
+}
 
 internal fun Density.assertInitialFailureArtwork(screenshot: Bitmap, context: Context) {
     val heroTop = 14.dp.roundToPx()
