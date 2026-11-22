@@ -24,6 +24,7 @@ import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
@@ -38,6 +39,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.unit.dp
+import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
@@ -80,6 +82,43 @@ class HomeRefreshScreenTest {
 
     @After
     fun stopFixture() = scope.cancel()
+
+    @Test
+    fun allReceiveSwitchesOffShowsWarningUntilAnOnlineTargetIsEnabled() {
+        openHome(listOf("我的电脑", "办公室电脑"), initiallyDisabled = listOf(0, 1))
+        val warningTitle = hasText("尚未选择接收设备")
+        compose.onNode(warningTitle).assertIsDisplayed()
+        compose.onNodeWithText("开启至少一台设备的接收开关后，鹊信才会转发新短信。")
+            .assertIsDisplayed()
+        val hero = compose.onNode(
+            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite) and
+                hasAnyDescendant(warningTitle),
+            useUnmergedTree = true
+        )
+        compose.density.assertWarningHeroArtwork(hero.captureToImage().asAndroidBitmap())
+        compose.onNodeWithText("添加设备").assertIsDisplayed()
+
+        val first = compose.onNodeWithContentDescription("我的电脑接收短信")
+        val second = compose.onNodeWithContentDescription("办公室电脑接收短信")
+        first.assertIsEnabled().assertIsOff()
+        second.assertIsEnabled().assertIsOff()
+        val switchImage = first.captureToImage().asAndroidBitmap()
+        val thumbColor = compose.activity.getColor(R.color.on_surface_variant)
+        val thumbWidth = (0 until switchImage.width).count { column ->
+            switchImage.getPixel(column, switchImage.height / 2) == thumbColor
+        }
+        assertEquals(22f, thumbWidth / compose.density.density, 1f)
+        compose.onNode(hasText("我的电脑") and hasText("在线 · 状态变化：刚刚"))
+            .assertIsDisplayed()
+        compose.onNode(hasText("办公室电脑") and hasText("在线 · 状态变化：2分钟前"))
+            .assertIsDisplayed()
+
+        first.performTouchInput { click() }.assertIsOn()
+        second.assertIsOff()
+        compose.onNode(warningTitle).assertDoesNotExist()
+        compose.onNodeWithText("转发已就绪").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(1, selectionAttempts) }
+    }
 
     @Test
     fun pullingPastTheThresholdRefreshesOnReleaseAndKeepsDeviceRows() {
@@ -128,7 +167,7 @@ class HomeRefreshScreenTest {
     @Test
     fun failedRefreshRetainsPairingsAndPullingAgainRestoresPresence() {
         val aliases = listOf("我的电脑", "办公室电脑")
-        openHome(aliases, initiallyDisabled = 1)
+        openHome(aliases, initiallyDisabled = listOf(1))
         val list = compose.onNode(hasScrollAction())
         val warning = compose.onNodeWithText("已有配对仍保留。当前无法确认设备是否在线。")
         val heading = compose.onNodeWithText("我的设备")
@@ -146,7 +185,7 @@ class HomeRefreshScreenTest {
                 hasAnyDescendant(heroTitle),
             useUnmergedTree = true
         )
-        compose.density.assertCachedFailureHeroArtwork(hero.captureToImage().asAndroidBitmap())
+        compose.density.assertWarningHeroArtwork(hero.captureToImage().asAndroidBitmap())
         val bounds = list.getUnclippedBoundsInRoot()
         val warningBounds = warning.getUnclippedBoundsInRoot()
         compose.density.assertCachedFailureNoticeArtwork(
@@ -273,7 +312,7 @@ class HomeRefreshScreenTest {
     private fun openHome(
         aliases: List<String>,
         modifier: Modifier = Modifier,
-        initiallyDisabled: Int? = null,
+        initiallyDisabled: List<Int> = emptyList(),
         rejectSelection: Boolean = false
     ): List<RemotePairing> {
         val now = Instant.now()
@@ -283,7 +322,7 @@ class HomeRefreshScreenTest {
                 "receiver-$index",
                 alias,
                 Presence.Online,
-                now.toString()
+                now.minusSeconds(if (index == 1) 125 else 0).toString()
             )
         }
         val service = object : PairingService {
@@ -304,8 +343,8 @@ class HomeRefreshScreenTest {
         val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)
         val pairings = OwnPairings(pairingStore, service, renewal, scope)
         runBlocking(Dispatchers.Main) {
-            if (initiallyDisabled != null) {
-                store.select(store.readPairings(), targets[initiallyDisabled].pairingId, false)
+            initiallyDisabled.forEach { index ->
+                store.select(store.readPairings(), targets[index].pairingId, false)
             }
             pairings.refresh()
         }

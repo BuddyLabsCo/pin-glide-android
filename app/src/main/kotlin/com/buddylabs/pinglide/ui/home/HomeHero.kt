@@ -46,18 +46,18 @@ internal fun HomeState.hasInitialListFailure(readiness: HomeReadiness): Boolean 
 internal val HomeState.hasCachedListFailure: Boolean
     get() = listRefreshFailed && targets.isNotEmpty()
 
+private fun HomeState.showsIllustratedWarning(readiness: HomeReadiness): Boolean =
+    when (readiness) {
+        HomeReadiness.Empty, HomeReadiness.Disabled -> true
+        HomeReadiness.Ready -> hasCachedListFailure
+        HomeReadiness.Unknown -> hasInitialListFailure(readiness) || hasCachedListFailure
+        else -> false
+    }
+
 @Composable
 internal fun HomeHero(state: HomeState, readiness: HomeReadiness) {
     val strings = heroStrings(state, readiness)
-    val cachedWarning = when (readiness) {
-        HomeReadiness.Ready, HomeReadiness.Unknown, HomeReadiness.Disabled ->
-            state.hasCachedListFailure
-
-        else -> false
-    }
-    if (readiness == HomeReadiness.Empty || state.hasInitialListFailure(readiness) ||
-        cachedWarning
-    ) {
+    if (state.showsIllustratedWarning(readiness)) {
         IllustratedWarningHero(strings, showWaitingBadge = readiness == HomeReadiness.Empty)
         return
     }
