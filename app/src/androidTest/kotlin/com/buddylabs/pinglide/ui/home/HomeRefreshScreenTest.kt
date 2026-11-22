@@ -25,6 +25,7 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -136,12 +137,19 @@ class HomeRefreshScreenTest {
         list.pullToRefresh()
         compose.waitUntil { compose.onAllNodes(hasText("正在刷新")).fetchSemanticsNodes().size == 1 }
         response.completeExceptionally(PairingServiceException(PairingFailure.Unavailable))
-        compose.waitUntil { compose.onAllNodes(hasText("设备状态未更新")).fetchSemanticsNodes().size == 1 }
+        val heroTitle = hasText("设备状态未更新")
+        compose.waitUntil { compose.onAllNodes(heroTitle).fetchSemanticsNodes().size == 1 }
 
         warning.assertIsDisplayed()
+        val hero = compose.onNode(
+            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite) and
+                hasAnyDescendant(heroTitle),
+            useUnmergedTree = true
+        )
+        compose.density.assertCachedFailureHeroArtwork(hero.captureToImage().asAndroidBitmap())
         val bounds = list.getUnclippedBoundsInRoot()
         val warningBounds = warning.getUnclippedBoundsInRoot()
-        compose.density.assertCachedFailureArtwork(
+        compose.density.assertCachedFailureNoticeArtwork(
             list.captureToImage().asAndroidBitmap(),
             compose.activity,
             warningBounds.left - bounds.left,
