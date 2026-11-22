@@ -14,10 +14,12 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
@@ -34,7 +36,9 @@ import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
+import com.buddylabs.pinglide.domain.pairing.PairingFailure
 import com.buddylabs.pinglide.domain.pairing.PairingService
+import com.buddylabs.pinglide.domain.pairing.PairingServiceException
 import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import com.buddylabs.pinglide.domain.settings.AppLanguage
@@ -113,6 +117,38 @@ class HomeRefreshScreenTest {
     }
 
     @Test
+    fun failedRefreshRetainsPairingsAndPullingAgainRestoresPresence() {
+        val aliases = listOf("我的电脑", "办公室电脑")
+        openHome(aliases)
+        val list = compose.onNode(hasScrollAction())
+        val warning = compose.onNodeWithText("已有配对仍保留。当前无法确认设备是否在线。")
+        val heading = compose.onNodeWithText("我的设备")
+        val stalePresence = hasText("状态待更新")
+
+        list.pullToRefresh()
+        compose.waitUntil { compose.onAllNodes(hasText("正在刷新")).fetchSemanticsNodes().size == 1 }
+        response.completeExceptionally(PairingServiceException(PairingFailure.Unavailable))
+        compose.waitUntil { compose.onAllNodes(hasText("设备状态未更新")).fetchSemanticsNodes().size == 1 }
+
+        warning.assertIsDisplayed()
+        assertTrue(
+            warning.getUnclippedBoundsInRoot().bottom < heading.getUnclippedBoundsInRoot().top
+        )
+        compose.onNodeWithText("添加设备").assertDoesNotExist()
+        aliases.forEach { alias ->
+            compose.onNodeWithText(alias).assertIsDisplayed().assert(stalePresence)
+            compose.onNodeWithContentDescription("${alias}接收短信").assertIsOn()
+        }
+
+        list.pullToRefresh()
+        compose.waitUntil { compose.onAllNodes(stalePresence).fetchSemanticsNodes().isEmpty() }
+        warning.assertDoesNotExist()
+        compose.onNodeWithText("添加设备").assertIsDisplayed()
+        aliases.forEach { compose.onNodeWithText(it).assertIsDisplayed() }
+        compose.runOnIdle { assertEquals(3, requests) }
+    }
+
+    @Test
     fun refreshingThroughAccessibilityKeepsProgressAvailableAfterScrolling() {
         val aliases = (1..5).map { "设备 $it" }
         val targets = openHome(aliases, Modifier.height(300.dp))
@@ -182,6 +218,12 @@ class HomeRefreshScreenTest {
 
     private fun refreshList() = compose.onNodeWithContentDescription("设备列表，可下拉刷新或按 Enter 刷新")
 
+    private fun SemanticsNodeInteraction.pullToRefresh() = performTouchInput {
+        down(center)
+        moveBy(Offset(0f, 216.dp.toPx()))
+        up()
+    }
+
     private fun openHome(
         aliases: List<String>,
         modifier: Modifier = Modifier
@@ -198,7 +240,7 @@ class HomeRefreshScreenTest {
         }
         val service = object : PairingService {
             override suspend fun list(managementToken: String) =
-                if (++requests == 1) targets else response.await()
+                if (++requests == 2) response.await() else targets
         }
         val store = HomePairingStore(targets, now.plusSeconds(3600).toString())
         val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)

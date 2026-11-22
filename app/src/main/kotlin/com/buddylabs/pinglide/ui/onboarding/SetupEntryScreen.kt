@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.ui.components.BrandIcon
 import com.buddylabs.pinglide.ui.components.ScreenLayout
+import com.buddylabs.pinglide.ui.components.WarningInfoCard
 
 @Composable
 fun SmsPermissionScreen(
@@ -94,7 +95,11 @@ fun SmsPermissionScreen(
                 )
             }
         },
-        notice = { if (denied) SmsPermissionWarning() }
+        notice = {
+            if (denied) {
+                WarningInfoCard(R.string.setup_sms_denied_hint, Modifier.padding(top = 14.dp))
+            }
+        }
     ) {
         if (denied) {
             DeniedSmsActions(requestPending, onSettings, onCheckAgain)
@@ -182,34 +187,6 @@ internal fun CompactSetupButton(
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.14.sp
         )
-    }
-}
-
-@Composable
-private fun SmsPermissionWarning() {
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
-        color = colorResource(R.color.setup_warning_container),
-        contentColor = colorResource(R.color.setup_on_warning),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(13.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(
-                painterResource(R.drawable.ic_info),
-                contentDescription = null,
-                modifier = Modifier.padding(top = 1.dp).size(18.dp)
-            )
-            Text(
-                stringResource(R.string.setup_sms_denied_hint),
-                style = MaterialTheme.typography.bodySmall.copy(
-                    lineHeight = 18.sp,
-                    letterSpacing = 0.sp
-                )
-            )
-        }
     }
 }
 

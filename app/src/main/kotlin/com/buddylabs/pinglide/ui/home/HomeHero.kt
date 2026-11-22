@@ -43,10 +43,21 @@ import com.buddylabs.pinglide.domain.pairing.HomeState
 internal fun HomeState.hasInitialListFailure(readiness: HomeReadiness): Boolean =
     readiness == HomeReadiness.Unknown && failed && !listed && targets.isEmpty()
 
+internal val HomeState.hasCachedListFailure: Boolean
+    get() = failed && targets.isNotEmpty()
+
 @Composable
 internal fun HomeHero(state: HomeState, readiness: HomeReadiness) {
     val strings = heroStrings(state, readiness)
-    if (readiness == HomeReadiness.Empty || state.hasInitialListFailure(readiness)) {
+    val cachedWarning = when (readiness) {
+        HomeReadiness.Ready, HomeReadiness.Unknown, HomeReadiness.Disabled ->
+            state.hasCachedListFailure
+
+        else -> false
+    }
+    if (readiness == HomeReadiness.Empty || state.hasInitialListFailure(readiness) ||
+        cachedWarning
+    ) {
         IllustratedWarningHero(strings, showWaitingBadge = readiness == HomeReadiness.Empty)
         return
     }
