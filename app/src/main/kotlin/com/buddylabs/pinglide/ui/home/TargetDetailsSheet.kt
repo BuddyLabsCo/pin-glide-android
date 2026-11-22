@@ -55,6 +55,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -128,9 +129,11 @@ internal fun TargetDetailsSheet(
         scrimColor = if (showingDetails) detailsScrim() else BottomSheetDefaults.ScrimColor,
         dragHandle = {
             if (showingDetails) {
+                val label = stringResource(R.string.home_details_drag_handle)
                 Box(
                     Modifier.padding(top = 11.dp, bottom = 18.dp).size(36.dp, 4.dp)
                         .background(colors.outlineVariant, CircleShape)
+                        .semantics { contentDescription = label }
                 )
             } else {
                 BottomSheetDefaults.DragHandle()

@@ -101,17 +101,20 @@ class HomeCapacityScreenTest {
         val target = compose.onNodeWithText("我的电脑")
         target.performClick()
         val inSheet = hasAnyAncestor(SemanticsMatcher.keyIsDefined(SemanticsProperties.PaneTitle))
+        val dragHandle = compose.onNode(hasContentDescription("拖动手柄") and inSheet)
+            .assertIsDisplayed().assertHasClickAction()
         val receive = compose.onNode(hasContentDescription("我的电脑接收短信") and inSheet)
-            .assertIsDisplayed().assertIsOn()
+            .assertIsDisplayed().assertHasClickAction().assertIsOn()
         val actions = listOf("发送测试消息", "重命名设备", "移除这台设备的配对", "关闭")
             .map { compose.onNodeWithText(it).assertIsDisplayed().assertHasClickAction() }
-        val bounds = (listOf(receive) + actions).map { it.getUnclippedBoundsInRoot() }
-        assertTrue(
-            "Each action has a 48 dp touch target",
-            bounds.all {
-                it.bottom - it.top >= 48.dp
-            }
-        )
+        val controls = listOf(receive) + actions
+        val minimumTouchSize = with(compose.density) { 48.dp.toPx() }
+        (listOf(dragHandle) + controls).forEach { control ->
+            val touchBounds = control.fetchSemanticsNode().touchBoundsInRoot
+            assertTrue("Touch width is at least 48 dp", touchBounds.width >= minimumTouchSize)
+            assertTrue("Touch height is at least 48 dp", touchBounds.height >= minimumTouchSize)
+        }
+        val bounds = controls.map { it.getUnclippedBoundsInRoot() }
         assertTrue(
             "Receive, test, rename, remove, and close appear in that order",
             bounds.zipWithNext().all { (above, below) -> above.bottom <= below.top }
