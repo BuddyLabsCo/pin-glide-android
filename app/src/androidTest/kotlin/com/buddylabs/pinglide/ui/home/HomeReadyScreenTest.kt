@@ -124,11 +124,25 @@ class HomeReadyScreenTest {
         renderHome(AppLanguage.English, homeState = { state.value })
 
         assertRefreshing()
+        compose.onNodeWithText("Ready to forward").assertIsDisplayed()
         compose.onNodeWithText("Loading device list").assertDoesNotExist()
         compose.onNodeWithText("Cached device").assertIsDisplayed()
         compose.onNodeWithText("Add device").assertDoesNotExist()
 
-        compose.runOnIdle { state.value = state.value.copy(refreshing = false, failed = true) }
+        compose.runOnIdle {
+            state.value = state.value.copy(targets = listOf(target.copy(enabled = false)))
+        }
+        compose.onNodeWithText("No receiving devices selected").assertIsDisplayed()
+        compose.runOnIdle {
+            state.value =
+                state.value.copy(targets = listOf(target.copy(presence = Presence.Offline)))
+        }
+        compose.onNodeWithText("All selected devices are offline").assertIsDisplayed()
+
+        compose.runOnIdle {
+            state.value =
+                state.value.copy(targets = listOf(target), refreshing = false, failed = true)
+        }
         compose.onNodeWithText("Refreshing").assertDoesNotExist()
         compose.onNodeWithText("Device status not updated").assertIsDisplayed()
         compose.onNodeWithText("Existing Pairings are retained.", substring = true)
