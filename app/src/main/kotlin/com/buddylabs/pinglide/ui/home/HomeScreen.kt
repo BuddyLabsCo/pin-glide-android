@@ -1,8 +1,10 @@
 package com.buddylabs.pinglide.ui.home
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,11 +12,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -36,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.colorResource
@@ -46,6 +51,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
@@ -212,51 +218,79 @@ private fun HomeContent(
 ) {
     LaunchedEffect(Unit) { headingFocus.requestFocus() }
     ScreenLayout {
-        HomeHeader(headingFocus, onSettings)
-        HomeRefreshContainer(state, onRefresh, Modifier.weight(1f)) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                item(key = "home-summary") {
-                    HomeSummary(
-                        state,
-                        readiness,
-                        action,
-                        smsGranted,
-                        smsRecovery,
-                        onRestoreSms,
-                        onAdd,
-                        onRestoreLogin
-                    )
-                }
-                items(state.targets, key = { it.pairingId }) { target ->
-                    TargetRow(
-                        target,
-                        enabled = readiness != HomeReadiness.LoginRequired,
-                        onOpen = {
-                            onOpen(target.pairingId)
-                        },
-                        onSelect = { onSelect(target.pairingId, it) },
-                        highlighted = target.pairingId == highlightedPairingId,
-                        now = now,
-                        modifier = if (target.pairingId == lastSelectedId) {
-                            Modifier.focusRequester(rowFocus)
-                        } else {
-                            Modifier
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                HomeHeader(headingFocus, onSettings)
+                HomeRefreshContainer(state, onRefresh, Modifier.weight(1f)) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        item(key = "home-summary") {
+                            HomeSummary(
+                                state,
+                                readiness,
+                                smsGranted,
+                                smsRecovery,
+                                onRestoreSms,
+                                onAdd,
+                                onRestoreLogin
+                            )
                         }
+                        items(state.targets, key = { it.pairingId }) { target ->
+                            TargetRow(
+                                target,
+                                enabled = readiness != HomeReadiness.LoginRequired,
+                                onOpen = {
+                                    onOpen(target.pairingId)
+                                },
+                                onSelect = { onSelect(target.pairingId, it) },
+                                highlighted = target.pairingId == highlightedPairingId,
+                                now = now,
+                                modifier = if (target.pairingId == lastSelectedId) {
+                                    Modifier.focusRequester(rowFocus)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                        }
+                    }
+                }
+                if (state.targets.isNotEmpty() && state.targets.size < 5 && canAdd(readiness)) {
+                    AddDeviceAction(
+                        onAdd,
+                        Modifier.align(Alignment.End).padding(top = 12.dp, bottom = 24.dp)
                     )
                 }
             }
-        }
-        if (state.targets.isNotEmpty() && state.targets.size < 5 && canAdd(readiness)) {
-            AddDeviceAction(
-                onAdd,
-                Modifier.align(Alignment.End).padding(top = 12.dp, bottom = 24.dp)
-            )
+            if (action.result == PairingChange.Removed && action.owner == state.owner) {
+                RemovalNotice(
+                    Modifier.align(Alignment.BottomCenter)
+                        .padding(horizontal = 4.dp)
+                        .padding(bottom = minOf(140.dp, maxHeight / 3))
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun RemovalNotice(modifier: Modifier) {
+    val colors = MaterialTheme.colorScheme
+    Text(
+        stringResource(R.string.home_removed),
+        modifier = modifier.widthIn(max = 280.dp)
+            .shadow(8.dp, CircleShape)
+            .background(colors.onSurface.copy(alpha = 0.88f), CircleShape)
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        color = colors.surface,
+        fontSize = 12.sp,
+        lineHeight = 17.sp,
+        fontWeight = FontWeight(650),
+        textAlign = TextAlign.Center
+    )
 }
 
 @Composable
@@ -326,7 +360,6 @@ private fun HomeHeader(headingFocus: FocusRequester, onSettings: () -> Unit) {
 private fun HomeSummary(
     state: HomeState,
     readiness: HomeReadiness,
-    action: TargetAction,
     smsGranted: Boolean,
     smsRecovery: SmsRecovery,
     onRestoreSms: () -> Unit,
@@ -344,12 +377,6 @@ private fun HomeSummary(
             }
         } else if (!smsGranted) {
             HomeSmsRecovery(smsRecovery == SmsRecovery.Pending, onRestoreSms)
-        }
-        if (action.result == PairingChange.Removed && action.owner == state.owner) {
-            Text(
-                stringResource(R.string.home_removed),
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-            )
         }
         if (state.failed && state.targets.isNotEmpty()) {
             Text(

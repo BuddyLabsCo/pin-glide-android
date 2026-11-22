@@ -8,9 +8,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -67,10 +72,16 @@ class HomeCapacityScreenTest {
         compose.onNodeWithText("移除这台设备的配对").performClick()
         compose.onNodeWithText("移除配对").performClick()
 
-        compose.onNodeWithText("配对已移除").assertIsDisplayed()
+        compose.onNodeWithText("配对已移除")
+            .assertIsDisplayed()
+            .assert(!hasAnyAncestor(hasScrollAction()))
+            .assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+            )
+        compose.onNodeWithText("添加设备").assertIsDisplayed().assertHasClickAction()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("4 台"))
         compose.onNodeWithText("4 台").assertIsDisplayed()
         compose.onNodeWithText(target).assertDoesNotExist()
-        compose.onNodeWithText("添加设备").assertIsDisplayed().assertHasClickAction()
     }
 
     @Test
