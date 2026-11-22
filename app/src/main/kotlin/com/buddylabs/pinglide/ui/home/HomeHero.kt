@@ -1,5 +1,6 @@
 package com.buddylabs.pinglide.ui.home
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +41,11 @@ import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.HomeReadiness
 import com.buddylabs.pinglide.domain.pairing.HomeState
 
+private val warningBadges = mapOf(
+    HomeReadiness.Empty to R.string.home_waiting_for_devices,
+    HomeReadiness.Offline to R.string.home_all_offline
+)
+
 internal fun HomeState.hasInitialListFailure(readiness: HomeReadiness): Boolean =
     readiness == HomeReadiness.Unknown && listRefreshFailed && !listed && targets.isEmpty()
 
@@ -48,7 +54,7 @@ internal val HomeState.hasCachedListFailure: Boolean
 
 private fun HomeState.showsIllustratedWarning(readiness: HomeReadiness): Boolean =
     when (readiness) {
-        HomeReadiness.Empty, HomeReadiness.Disabled -> true
+        HomeReadiness.Empty, HomeReadiness.Disabled, HomeReadiness.Offline -> true
         HomeReadiness.Ready -> hasCachedListFailure
         HomeReadiness.Unknown -> hasInitialListFailure(readiness) || hasCachedListFailure
         else -> false
@@ -58,7 +64,7 @@ private fun HomeState.showsIllustratedWarning(readiness: HomeReadiness): Boolean
 internal fun HomeHero(state: HomeState, readiness: HomeReadiness) {
     val strings = heroStrings(state, readiness)
     if (state.showsIllustratedWarning(readiness)) {
-        IllustratedWarningHero(strings, showWaitingBadge = readiness == HomeReadiness.Empty)
+        IllustratedWarningHero(strings, warningBadges[readiness])
         return
     }
     val preparing = readiness == HomeReadiness.Unknown && !state.listed
@@ -108,7 +114,7 @@ private fun HeroCopy(
 }
 
 @Composable
-private fun IllustratedWarningHero(strings: Pair<Int, Int>, showWaitingBadge: Boolean) {
+private fun IllustratedWarningHero(strings: Pair<Int, Int>, @StringRes badge: Int?) {
     val colors = MaterialTheme.colorScheme
     val warning = colorResource(R.color.setup_warning_container)
     val darkTheme = isSystemInDarkTheme()
@@ -125,12 +131,12 @@ private fun IllustratedWarningHero(strings: Pair<Int, Int>, showWaitingBadge: Bo
                 .warningHeroBackdrop(warning, colors.surfaceContainerHigh, colors.primary)
                 .padding(18.dp)
         ) {
-            if (!showWaitingBadge) {
+            if (badge == null) {
                 HeroCopy(strings, prominent = true, bodyColor = bodyColor)
             } else if (maxWidth < 264.dp * LocalDensity.current.fontScale) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     HeroCopy(strings, prominent = true, bodyColor = bodyColor)
-                    WaitingBadge()
+                    WarningBadge(badge)
                 }
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -140,7 +146,7 @@ private fun IllustratedWarningHero(strings: Pair<Int, Int>, showWaitingBadge: Bo
                         modifier = Modifier.weight(1f),
                         bodyColor = bodyColor
                     )
-                    WaitingBadge()
+                    WarningBadge(badge)
                 }
             }
         }
@@ -179,7 +185,7 @@ private fun Modifier.warningHeroBackdrop(
 }
 
 @Composable
-private fun WaitingBadge() {
+private fun WarningBadge(@StringRes label: Int) {
     val foreground = colorResource(R.color.setup_on_warning)
     Surface(
         color = colorResource(R.color.setup_warning_container),
@@ -192,7 +198,7 @@ private fun WaitingBadge() {
         ) {
             Box(Modifier.size(6.dp).background(foreground, CircleShape))
             Text(
-                stringResource(R.string.home_waiting_for_devices),
+                stringResource(label),
                 modifier = Modifier.padding(start = 12.dp),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight(750)

@@ -79,6 +79,7 @@
     <string name="home_disabled_title">No receiving devices selected</string>
     <string name="home_disabled_copy">Turn on receiving for at least one device to forward new SMS messages.</string>
     <string name="home_offline_title">All selected devices are offline</string>
+    <string name="home_all_offline">All offline</string>
     <string name="home_offline_copy">Selected devices must be online to receive new SMS messages. Messages received while offline will not be replayed.</string>
     <string name="home_loading_title">Preparing forwarding</string>
     <string name="home_loading_copy">Getting your devices and Pairings from the service.</string>
