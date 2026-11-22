@@ -1,6 +1,5 @@
 package com.buddylabs.pinglide.ui.home
 
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -82,6 +80,11 @@ internal fun TargetDetailsSheet(
         onClearAction()
         page = DetailsPage.Details
     }
+    val name = target.alias.ifBlank { stringResource(R.string.home_target_device) }
+    if (page == DetailsPage.Remove) {
+        PairingRemovalDialog(name, action, target.enabled, onRemove, returnToDetails, onDismiss)
+        return
+    }
     val sheet = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
         confirmValueChange = { it != SheetValue.Hidden || !pending }
@@ -89,7 +92,6 @@ internal fun TargetDetailsSheet(
     LaunchedEffect(action.result) {
         if (action.result == PairingChange.Renamed) page = DetailsPage.Details
     }
-    val name = target.alias.ifBlank { stringResource(R.string.home_target_device) }
     val title = if (page == DetailsPage.Rename) stringResource(R.string.home_rename) else name
     ModalBottomSheet(
         onDismissRequest = {
@@ -167,38 +169,9 @@ internal fun TargetDetailsSheet(
                     onClearAction()
                 }, onRename, returnToDetails)
 
-                DetailsPage.Remove -> {
-                    RemovalTitle(name, pending)
-                    Text(stringResource(R.string.home_remove_copy))
-                    Button(
-                        onClick = onRemove,
-                        enabled = !pending,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                            contentColor = MaterialTheme.colorScheme.onError
-                        ),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    ) {
-                        Text(
-                            stringResource(
-                                if (action.result == PairingChange.Unavailable) {
-                                    R.string.home_remove_retry
-                                } else {
-                                    R.string.home_remove_confirm
-                                }
-                            )
-                        )
-                    }
-                }
+                DetailsPage.Remove -> Unit
             }
-            ActionNotice(action, page, target.enabled)
-            if (page == DetailsPage.Remove) {
-                OutlinedButton(
-                    onClick = returnToDetails,
-                    enabled = !pending,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                ) { Text(stringResource(R.string.setup_cancel)) }
-            }
+            ActionNotice(action)
             if (page != DetailsPage.Rename) {
                 OutlinedButton(
                     onClick = onDismiss,
@@ -208,24 +181,6 @@ internal fun TargetDetailsSheet(
             }
         }
     }
-}
-
-@Composable
-private fun RemovalTitle(name: String, pending: Boolean) {
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
-    Text(
-        if (pending) {
-            stringResource(R.string.home_removing)
-        } else {
-            stringResource(R.string.home_remove_title, name)
-        },
-        style = MaterialTheme.typography.titleLarge,
-        modifier = Modifier.focusRequester(focus).focusable().semantics {
-            heading()
-            liveRegion = LiveRegionMode.Polite
-        }
-    )
 }
 
 @Composable
@@ -293,23 +248,12 @@ private fun KeyFailureNotice() {
 }
 
 @Composable
-private fun ActionNotice(action: TargetAction, page: DetailsPage, enabled: Boolean) {
+private fun ActionNotice(action: TargetAction) {
     val message = when {
         action.pending -> R.string.home_target_pending
-
         action.result == PairingChange.InvalidAlias -> R.string.home_alias_help
-
-        action.result == PairingChange.Unavailable && page == DetailsPage.Remove && enabled ->
-            R.string.home_target_busy
-
-        action.result == PairingChange.Unavailable -> if (page == DetailsPage.Remove) {
-            R.string.home_remove_error
-        } else {
-            R.string.home_rename_error
-        }
-
+        action.result == PairingChange.Unavailable -> R.string.home_rename_error
         action.result == PairingChange.Renamed -> R.string.home_renamed
-
         else -> return
     }
     Text(
