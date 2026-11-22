@@ -1,30 +1,55 @@
 package com.buddylabs.pinglide.ui.onboarding
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 
 @Composable
 fun FirstDeviceScreen(onLeave: () -> Unit, onScan: () -> Unit) {
-    SetupStepScreen(
+    CompactSetupStepScreen(
         step = 4,
-        icon = R.drawable.ic_devices,
         title = R.string.setup_first_device_title,
         description = R.string.setup_first_device_description,
-        onBack = onLeave
-    ) {
-        Button(onClick = onScan, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-            Text(stringResource(R.string.pairing_scan_title))
+        emblem = {
+            RingedSetupEmblem(RoundedCornerShape(44.dp)) {
+                Icon(
+                    painterResource(R.drawable.ic_qr),
+                    contentDescription = null,
+                    modifier = Modifier.size(54.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
         }
-        TextButton(onClick = onLeave, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text(stringResource(R.string.setup_later))
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            CompactSetupButton(R.string.pairing_scan_title, R.drawable.ic_qr, onScan)
+            TextButton(
+                onClick = onLeave,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    stringResource(R.string.setup_later),
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.14.sp
+                )
+            }
         }
     }
 }
