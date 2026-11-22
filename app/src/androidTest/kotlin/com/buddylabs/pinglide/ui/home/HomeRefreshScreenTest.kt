@@ -5,17 +5,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -42,7 +44,6 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
-import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
@@ -57,6 +58,8 @@ import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -103,22 +106,15 @@ class HomeRefreshScreenTest {
         first.assertIsEnabled().assertIsOff()
         second.assertIsEnabled().assertIsOff()
         val switchImage = first.captureToImage().asAndroidBitmap()
-        val thumbColor = compose.activity.getColor(R.color.on_surface_variant)
+        val thumbColor = Color(0xFF52635E).toArgb()
         val thumbWidth = (0 until switchImage.width).count { column ->
             switchImage.getPixel(column, switchImage.height / 2) == thumbColor
         }
         assertEquals(22f, thumbWidth / compose.density.density, 1f)
-        val onlinePrefix = "在线 · 状态变化："
-        val onlineWithChangeTime =
-            SemanticsMatcher("Shows online status and a status-change time") { node ->
-                node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { text ->
-                    text.text.startsWith(onlinePrefix) &&
-                        text.text.removePrefix(onlinePrefix).isNotBlank()
-                }
-            }
-        aliases.forEach { alias ->
-            compose.onNodeWithText(alias).assertIsDisplayed().assert(onlineWithChangeTime)
-        }
+        compose.onNode(hasText(aliases.first()) and hasText("在线 · 状态变化：2020/1/15 17:00"))
+            .assertIsDisplayed()
+        compose.onNode(hasText(aliases.last()) and hasText("在线 · 状态变化：2021/1/15 17:00"))
+            .assertIsDisplayed()
 
         first.performTouchInput { click() }.assertIsOn()
         second.assertIsOff()
@@ -308,13 +304,7 @@ class HomeRefreshScreenTest {
     private fun assertWarningBodyColor(body: SemanticsNodeInteraction) {
         val layouts = mutableListOf<TextLayoutResult>()
         body.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
-        val nightMode =
-            compose.activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-        val expected = if (nightMode == Configuration.UI_MODE_NIGHT_YES) {
-            Color.White
-        } else {
-            Color(compose.activity.getColor(R.color.on_primary_container)).copy(alpha = 0.78f)
-        }
+        val expected = Color(0xFF003832).copy(alpha = 0.78f)
         assertEquals(expected, layouts.single().layoutInput.style.color)
     }
 
@@ -332,12 +322,14 @@ class HomeRefreshScreenTest {
     ): List<RemotePairing> {
         val now = Instant.now()
         val targets = aliases.mapIndexed { index, alias ->
+            val changedAt = LocalDateTime.of(2020 + index, 1, 15, 17, 0)
+                .atZone(ZoneId.systemDefault()).toInstant()
             RemotePairing(
                 "pairing-$index",
                 "receiver-$index",
                 alias,
                 Presence.Online,
-                now.toString()
+                changedAt.toString()
             )
         }
         val service = object : PairingService {
@@ -368,18 +360,24 @@ class HomeRefreshScreenTest {
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         compose.setContent {
             val state = home.state.collectAsState().value
-            LocalizedContent(AppLanguage.SimplifiedChinese) {
-                PinGlideTheme {
-                    Box(modifier) {
-                        HomeScreen(
-                            state,
-                            smsGranted = true,
-                            smsRecovery = SmsRecovery.Idle,
-                            home = home,
-                            onRestoreSms = {},
-                            onAdd = {},
-                            onSettings = {}
-                        )
+            val configuration = Configuration(LocalConfiguration.current).apply {
+                uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
+                    Configuration.UI_MODE_NIGHT_NO
+            }
+            CompositionLocalProvider(LocalConfiguration provides configuration) {
+                LocalizedContent(AppLanguage.SimplifiedChinese) {
+                    PinGlideTheme {
+                        Box(modifier) {
+                            HomeScreen(
+                                state,
+                                smsGranted = true,
+                                smsRecovery = SmsRecovery.Idle,
+                                home = home,
+                                onRestoreSms = {},
+                                onAdd = {},
+                                onSettings = {}
+                            )
+                        }
                     }
                 }
             }
