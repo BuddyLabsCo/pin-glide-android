@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -15,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewModelScope
 import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.R
+import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.IdentitySnapshot
@@ -27,6 +29,7 @@ import com.buddylabs.pinglide.domain.identity.RestorationState
 import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import com.buddylabs.pinglide.domain.identity.SenderRestoration
 import com.buddylabs.pinglide.domain.identity.UploadCredential
+import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -40,6 +43,60 @@ import org.junit.Test
 class HomeLoginScreenTest {
     @get:Rule
     val compose = createComposeRule()
+
+    @Test
+    fun failedRestorationShowsPairingRetentionAndRetryInSimplifiedChinese() {
+        verifyFailedRestoration(
+            AppLanguage.SimplifiedChinese,
+            "暂时无法登录",
+            "网络或服务暂时不可用。原有配对仍保留，请稍后重新登录。",
+            "使用 QQ 重新登录"
+        )
+    }
+
+    @Test
+    fun failedRestorationShowsPairingRetentionAndRetryInEnglish() {
+        verifyFailedRestoration(
+            AppLanguage.English,
+            "Unable to sign in right now",
+            "The network or service is temporarily unavailable. " +
+                "Your existing Pairings are retained. Try signing in again later.",
+            "Sign in again with QQ"
+        )
+    }
+
+    private fun verifyFailedRestoration(
+        language: AppLanguage,
+        title: String,
+        approvedCopy: String,
+        retryLabel: String
+    ) {
+        var retries = 0
+        compose.setContent {
+            LocalizedContent(language) {
+                PinGlideTheme {
+                    HomeLoginScreen(
+                        state = RestorationState.Error,
+                        onRetry = { retries++ },
+                        onCancel = { error("Failed restoration has no pending QQ authorization") },
+                        onBack = { error("Retry must stay in the restoration flow") }
+                    )
+                }
+            }
+        }
+
+        compose.onNodeWithText(title).assertIsDisplayed()
+        compose.onNodeWithText(approvedCopy).assertIsDisplayed()
+        compose.onNode(
+            SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)
+        ).assertDoesNotExist()
+        val action = compose.onNodeWithText(retryLabel)
+        action.assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        compose.assertAccountActionIcon(action, retryLabel, context.getColor(R.color.on_primary))
+        action.performClick()
+        compose.runOnIdle { assertEquals(1, retries) }
+    }
 
     @Test
     fun pendingRestorationShowsProgressAndCancelStopsQqAuthorization() {
