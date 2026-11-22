@@ -1,8 +1,10 @@
 package com.buddylabs.pinglide.ui.home
 
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -26,6 +28,26 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.HomeState
+
+internal suspend fun LazyListState.revealTarget(
+    index: Int,
+    pairingId: String?,
+    clearance: Int = 0
+) {
+    if (index < 0) return
+    val layout = layoutInfo
+    val item = layout.visibleItemsInfo.find { it.key == pairingId }
+    if (item != null && item.offset >= layout.viewportStartOffset + clearance &&
+        item.offset + item.size <= layout.viewportEndOffset - clearance
+    ) {
+        return
+    }
+    scrollToItem(index + 1, -clearance)
+    val revealed = layoutInfo
+    val target = revealed.visibleItemsInfo.find { it.key == pairingId } ?: return
+    val hiddenBottom = target.offset + target.size + clearance - revealed.viewportEndOffset
+    if (hiddenBottom > 0) scrollBy(hiddenBottom.toFloat())
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
