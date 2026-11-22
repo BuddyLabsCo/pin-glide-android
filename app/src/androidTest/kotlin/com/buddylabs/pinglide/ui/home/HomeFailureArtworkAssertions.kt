@@ -30,7 +30,7 @@ internal fun Density.assertInitialFailureArtwork(screenshot: Bitmap, context: Co
     )
 }
 
-internal fun Density.assertCachedFailureHeroArtwork(hero: Bitmap) {
+internal fun Density.assertWarningHeroArtwork(hero: Bitmap) {
     val sampleRow = hero.height - 14.dp.roundToPx()
     val gradientLeft = hero.getPixel(hero.width / 4, sampleRow)
     val gradientMiddle = hero.getPixel(hero.width / 2, sampleRow)

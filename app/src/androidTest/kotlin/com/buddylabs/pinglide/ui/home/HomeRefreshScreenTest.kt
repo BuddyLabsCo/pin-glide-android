@@ -146,7 +146,7 @@ class HomeRefreshScreenTest {
                 hasAnyDescendant(heroTitle),
             useUnmergedTree = true
         )
-        compose.density.assertCachedFailureHeroArtwork(hero.captureToImage().asAndroidBitmap())
+        compose.density.assertWarningHeroArtwork(hero.captureToImage().asAndroidBitmap())
         val bounds = list.getUnclippedBoundsInRoot()
         val warningBounds = warning.getUnclippedBoundsInRoot()
         compose.density.assertCachedFailureNoticeArtwork(

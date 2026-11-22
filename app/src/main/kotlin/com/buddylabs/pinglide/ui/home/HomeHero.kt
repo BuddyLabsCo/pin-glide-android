@@ -1,5 +1,6 @@
 package com.buddylabs.pinglide.ui.home
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +41,11 @@ import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.HomeReadiness
 import com.buddylabs.pinglide.domain.pairing.HomeState
 
+private val warningBadges = mapOf(
+    HomeReadiness.Empty to R.string.home_waiting_for_devices,
+    HomeReadiness.Offline to R.string.home_all_offline
+)
+
 internal fun HomeState.hasInitialListFailure(readiness: HomeReadiness): Boolean =
     readiness == HomeReadiness.Unknown && listRefreshFailed && !listed && targets.isEmpty()
 
@@ -55,10 +61,9 @@ internal fun HomeHero(state: HomeState, readiness: HomeReadiness) {
 
         else -> false
     }
-    if (readiness == HomeReadiness.Empty || state.hasInitialListFailure(readiness) ||
-        cachedWarning
-    ) {
-        IllustratedWarningHero(strings, showWaitingBadge = readiness == HomeReadiness.Empty)
+    val warningBadge = warningBadges[readiness]
+    if (warningBadge != null || state.hasInitialListFailure(readiness) || cachedWarning) {
+        IllustratedWarningHero(strings, warningBadge)
         return
     }
     val preparing = readiness == HomeReadiness.Unknown && !state.listed
@@ -75,7 +80,12 @@ internal fun HomeHero(state: HomeState, readiness: HomeReadiness) {
 }
 
 @Composable
-private fun HeroCopy(strings: Pair<Int, Int>, prominent: Boolean, modifier: Modifier = Modifier) {
+private fun HeroCopy(
+    strings: Pair<Int, Int>,
+    prominent: Boolean,
+    modifier: Modifier = Modifier,
+    copyColor: Color = Color.Unspecified
+) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(if (prominent) 8.dp else 12.dp)) {
         Text(
             stringResource(strings.first),
@@ -91,6 +101,7 @@ private fun HeroCopy(strings: Pair<Int, Int>, prominent: Boolean, modifier: Modi
         )
         Text(
             stringResource(strings.second),
+            color = copyColor,
             style = if (prominent) {
                 MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp)
             } else {
@@ -102,12 +113,15 @@ private fun HeroCopy(strings: Pair<Int, Int>, prominent: Boolean, modifier: Modi
 }
 
 @Composable
-private fun IllustratedWarningHero(strings: Pair<Int, Int>, showWaitingBadge: Boolean) {
+private fun IllustratedWarningHero(strings: Pair<Int, Int>, @StringRes badge: Int?) {
     val colors = MaterialTheme.colorScheme
     val warning = colorResource(R.color.setup_warning_container)
+    val dark = isSystemInDarkTheme()
+    val headingColor = if (dark) Color.White else colors.onPrimaryContainer
+    val copyColor = if (dark) Color.White else headingColor.copy(alpha = 0.78f)
     Surface(
         color = Color.Transparent,
-        contentColor = if (isSystemInDarkTheme()) Color.White else colors.onPrimaryContainer,
+        contentColor = headingColor,
         shape = RoundedCornerShape(28.dp),
         modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }
     ) {
@@ -116,17 +130,22 @@ private fun IllustratedWarningHero(strings: Pair<Int, Int>, showWaitingBadge: Bo
                 .warningHeroBackdrop(warning, colors.surfaceContainerHigh, colors.primary)
                 .padding(18.dp)
         ) {
-            if (!showWaitingBadge) {
-                HeroCopy(strings, prominent = true)
+            if (badge == null) {
+                HeroCopy(strings, prominent = true, copyColor = copyColor)
             } else if (maxWidth < 264.dp * LocalDensity.current.fontScale) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HeroCopy(strings, prominent = true)
-                    WaitingBadge()
+                    HeroCopy(strings, prominent = true, copyColor = copyColor)
+                    WarningBadge(badge)
                 }
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HeroCopy(strings, prominent = true, modifier = Modifier.weight(1f))
-                    WaitingBadge()
+                    HeroCopy(
+                        strings,
+                        prominent = true,
+                        modifier = Modifier.weight(1f),
+                        copyColor = copyColor
+                    )
+                    WarningBadge(badge)
                 }
             }
         }
@@ -165,7 +184,7 @@ private fun Modifier.warningHeroBackdrop(
 }
 
 @Composable
-private fun WaitingBadge() {
+private fun WarningBadge(@StringRes label: Int) {
     val foreground = colorResource(R.color.setup_on_warning)
     Surface(
         color = colorResource(R.color.setup_warning_container),
@@ -178,7 +197,7 @@ private fun WaitingBadge() {
         ) {
             Box(Modifier.size(6.dp).background(foreground, CircleShape))
             Text(
-                stringResource(R.string.home_waiting_for_devices),
+                stringResource(label),
                 modifier = Modifier.padding(start = 12.dp),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight(750)
