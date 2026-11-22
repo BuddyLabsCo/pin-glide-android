@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
@@ -74,13 +75,14 @@ internal suspend fun LazyListState.revealTarget(
 internal fun HomeRefreshContainer(
     state: HomeState,
     showListProgress: Boolean,
+    listState: LazyListState,
     onRefresh: () -> Unit,
     modifier: Modifier,
     content: @Composable (refreshHint: @Composable () -> Unit) -> Unit
 ) {
     val pull = rememberPullToRefreshState()
     val viewport = remember { LayoutBoundsHolder() }
-    var refreshHintVisible by remember { mutableStateOf(false) }
+    var refreshLabelVisible by remember { mutableStateOf(false) }
     val refreshLabel = stringResource(R.string.home_refresh)
     val refreshingLabel = stringResource(R.string.home_refreshing)
     val listLabel = stringResource(R.string.home_list_accessibility)
@@ -90,7 +92,7 @@ internal fun HomeRefreshContainer(
         state = pull,
         modifier = modifier.fillMaxWidth().layoutBounds(viewport).semantics {
             contentDescription = listLabel
-            if (state.refreshing && !showListProgress && !refreshHintVisible) {
+            if (state.refreshing && !showListProgress && !refreshLabelVisible) {
                 stateDescription = refreshingLabel
                 progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
                 liveRegion = LiveRegionMode.Polite
@@ -103,6 +105,7 @@ internal fun HomeRefreshContainer(
             )
         }.onKeyEvent {
             if (it.key == Key.Enter && it.type == KeyEventType.KeyUp) {
+                listState.requestScrollToItem(0)
                 onRefresh()
                 true
             } else {
@@ -124,12 +127,18 @@ internal fun HomeRefreshContainer(
             if (hint != null) {
                 val visibility = if (state.refreshing) {
                     Modifier.onVisibilityChanged(viewportBounds = viewport) { visible ->
-                        refreshHintVisible = visible
+                        refreshLabelVisible = visible
                     }
                 } else {
                     Modifier
                 }
-                HomeRefreshHint(hint, state.refreshing, distanceFraction, visibility)
+                HomeRefreshHint(
+                    hint,
+                    state.refreshing,
+                    distanceFraction,
+                    refreshLabelVisible,
+                    visibility
+                )
             }
         }
     }
@@ -140,19 +149,26 @@ private fun HomeRefreshHint(
     label: Int,
     refreshing: Boolean,
     distanceFraction: Float,
-    modifier: Modifier
+    refreshLabelVisible: Boolean,
+    labelModifier: Modifier
 ) {
     val dimensions = if (refreshing) {
-        Modifier.heightIn(min = 48.dp).progressSemantics()
+        Modifier.heightIn(min = 48.dp)
     } else {
         Modifier.height(64.dp * distanceFraction.coerceIn(0f, 1f))
             .clipToBounds().wrapContentHeight(unbounded = true)
     }
+    val status = when {
+        !refreshing -> Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+
+        refreshLabelVisible -> Modifier.progressSemantics()
+            .semantics { liveRegion = LiveRegionMode.Polite }
+
+        else -> Modifier.semantics { hideFromAccessibility() }
+    }
     val color = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        modifier.fillMaxWidth().then(dimensions).semantics(mergeDescendants = true) {
-            liveRegion = LiveRegionMode.Polite
-        },
+        Modifier.fillMaxWidth().then(dimensions).semantics(mergeDescendants = true) {}.then(status),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -163,6 +179,7 @@ private fun HomeRefreshHint(
         }
         Text(
             stringResource(label),
+            modifier = labelModifier,
             color = color,
             style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, letterSpacing = 0.sp)
         )

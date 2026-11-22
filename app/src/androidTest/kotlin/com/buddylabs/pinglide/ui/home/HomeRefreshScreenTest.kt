@@ -7,12 +7,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -21,8 +24,11 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
@@ -41,6 +47,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -52,6 +59,10 @@ class HomeRefreshScreenTest {
     private val response = CompletableDeferred<List<RemotePairing>>()
     private val refreshInProgress =
         SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "正在刷新")
+    private val indeterminateProgress = SemanticsMatcher.expectValue(
+        SemanticsProperties.ProgressBarRangeInfo,
+        ProgressBarRangeInfo.Indeterminate
+    )
     private var requests = 0
 
     @After
@@ -106,7 +117,7 @@ class HomeRefreshScreenTest {
         val aliases = (1..5).map { "设备 $it" }
         val targets = openHome(aliases, Modifier.height(300.dp))
         val scroll = compose.onNode(hasScrollAction())
-        val list = compose.onNodeWithContentDescription("设备列表，可下拉刷新或按 Enter 刷新")
+        val list = refreshList()
         val heading = compose.onNodeWithText("我的设备")
         val lastDevice = compose.onNodeWithText(aliases.last())
         scroll.performScrollToNode(hasText(aliases.last()))
@@ -123,20 +134,53 @@ class HomeRefreshScreenTest {
             .assert(
                 SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
             )
-            .assert(
-                SemanticsMatcher.expectValue(
-                    SemanticsProperties.ProgressBarRangeInfo,
-                    ProgressBarRangeInfo.Indeterminate
-                )
-            )
+            .assert(indeterminateProgress)
         heading.assertIsNotDisplayed()
         lastDevice.assertIsDisplayed()
         compose.runOnIdle { assertEquals(2, requests) }
 
+        scroll.performScrollToNode(hasText("正在刷新"))
+        val hint = compose.onNodeWithText("正在刷新")
+        val viewportTop = scroll.getUnclippedBoundsInRoot().top
+        val scrollDistance = hint.getUnclippedBoundsInRoot().top - viewportTop + 8.dp
+        scroll.performSemanticsAction(SemanticsActions.ScrollBy) {
+            it(0f, with(compose.density) { scrollDistance.toPx() })
+        }
+        hint.assertIsDisplayed().assert(indeterminateProgress)
+        val clippedHint = hint.getUnclippedBoundsInRoot()
+        assertTrue(clippedHint.top < viewportTop && clippedHint.bottom > viewportTop)
+        list.assert(!refreshInProgress)
+        compose.onAllNodes(indeterminateProgress).assertCountEquals(1)
+
+        scroll.performScrollToNode(hasText(aliases.last()))
+        list.assert(refreshInProgress).assert(indeterminateProgress)
         response.complete(targets)
         compose.waitUntil { compose.onAllNodes(refreshInProgress).fetchSemanticsNodes().isEmpty() }
         lastDevice.assertIsDisplayed()
     }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun enterBringsInlineRefreshIntoViewFromAScrolledPosition() {
+        val aliases = (1..5).map { "设备 $it" }
+        val targets = openHome(aliases, Modifier.height(300.dp))
+        val scroll = compose.onNode(hasScrollAction())
+        val list = refreshList()
+        val hint = compose.onNodeWithText("正在刷新")
+        list.performSemanticsAction(SemanticsActions.RequestFocus)
+        scroll.performScrollToNode(hasText(aliases.last()))
+        compose.onNodeWithText("我的设备").assertIsNotDisplayed()
+
+        list.performKeyInput { pressKey(Key.Enter) }
+        hint.assertIsDisplayed().assert(indeterminateProgress)
+        list.assert(!refreshInProgress)
+        compose.runOnIdle { assertEquals(2, requests) }
+
+        response.complete(targets)
+        compose.waitUntil { compose.onAllNodes(hasText("正在刷新")).fetchSemanticsNodes().isEmpty() }
+    }
+
+    private fun refreshList() = compose.onNodeWithContentDescription("设备列表，可下拉刷新或按 Enter 刷新")
 
     private fun openHome(
         aliases: List<String>,

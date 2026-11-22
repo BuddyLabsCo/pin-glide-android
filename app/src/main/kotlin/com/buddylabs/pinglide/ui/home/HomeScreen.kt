@@ -233,6 +233,7 @@ private fun HomeContent(
                 HomeRefreshContainer(
                     state,
                     showListProgress,
+                    listState,
                     onRefresh,
                     Modifier.weight(1f)
                 ) { refreshHint ->
