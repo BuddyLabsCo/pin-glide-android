@@ -82,7 +82,7 @@ internal fun TargetDetailsSheet(
     }
     val name = target.alias.ifBlank { stringResource(R.string.home_target_device) }
     if (page == DetailsPage.Remove) {
-        PairingRemovalDialog(name, action, target.enabled, onRemove, returnToDetails, onDismiss)
+        PairingRemovalDialog(name, action, target.enabled, onRemove, returnToDetails)
         return
     }
     val sheet = rememberModalBottomSheetState(

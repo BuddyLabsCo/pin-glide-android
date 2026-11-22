@@ -2,12 +2,7 @@ package com.buddylabs.pinglide.ui.home
 
 import android.content.res.Configuration
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -25,9 +20,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.TextLayoutResult
-import com.buddylabs.pinglide.app.LocalizedContent
-import com.buddylabs.pinglide.app.PinGlideApplication
-import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.IdentitySnapshot
 import com.buddylabs.pinglide.domain.identity.IdentityStore
 import com.buddylabs.pinglide.domain.identity.LoginAttempt
@@ -36,19 +28,14 @@ import com.buddylabs.pinglide.domain.identity.RefreshCredential
 import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import com.buddylabs.pinglide.domain.identity.UploadCredential
 import com.buddylabs.pinglide.domain.pairing.OwnPairing
-import com.buddylabs.pinglide.domain.pairing.OwnPairings
-import com.buddylabs.pinglide.domain.pairing.PairingService
 import com.buddylabs.pinglide.domain.pairing.PairingSnapshot
 import com.buddylabs.pinglide.domain.pairing.PairingStore
 import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.RemotePairing
-import com.buddylabs.pinglide.domain.settings.AppLanguage
-import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -119,43 +106,8 @@ class HomeCapacityScreenTest {
                     changedAt.toString()
                 )
             }
-        val store = HomePairingStore(targets, now.plusSeconds(3600).toString())
-        val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)
-        val service = object : PairingService {
-            private val remote = targets.associateBy { it.pairingId }.toMutableMap()
-
-            override suspend fun list(managementToken: String) = remote.values.toList()
-
-            override suspend fun remove(managementToken: String, pairingId: String) {
-                removedPairingIds.add(pairingId)
-                checkNotNull(remote.remove(pairingId))
-            }
-        }
-        val pairings = OwnPairings(store, service, renewal, scope)
-        runBlocking(Dispatchers.Main) { pairings.refresh() }
-        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
-        val app = compose.activity.application as PinGlideApplication
-        val home = HomeViewModel(pairings, app.senderRestoration()) { null }
-        compose.setContent {
-            val state by home.state.collectAsState()
-            val configuration = Configuration(LocalConfiguration.current).apply {
-                uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or nightMode
-            }
-            CompositionLocalProvider(LocalConfiguration provides configuration) {
-                LocalizedContent(AppLanguage.SimplifiedChinese) {
-                    PinGlideTheme {
-                        HomeScreen(
-                            state,
-                            smsGranted = true,
-                            smsRecovery = SmsRecovery.Idle,
-                            home = home,
-                            onRestoreSms = {},
-                            onAdd = {},
-                            onSettings = {}
-                        )
-                    }
-                }
-            }
+        renderReadyHome(compose, targets, scope, nightMode = nightMode) { pairingId ->
+            removedPairingIds += pairingId
         }
     }
 }

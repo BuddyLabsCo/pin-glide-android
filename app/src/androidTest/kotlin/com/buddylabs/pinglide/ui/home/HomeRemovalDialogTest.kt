@@ -1,37 +1,36 @@
 package com.buddylabs.pinglide.ui.home
 
+import android.os.SystemClock
+import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
-import androidx.test.espresso.Espresso.pressBack
-import com.buddylabs.pinglide.app.LocalizedContent
-import com.buddylabs.pinglide.app.PinGlideApplication
-import com.buddylabs.pinglide.domain.identity.CredentialRenewal
-import com.buddylabs.pinglide.domain.pairing.OwnPairings
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.action.ViewActions.pressBack
+import androidx.test.espresso.matcher.RootMatchers
+import androidx.test.espresso.matcher.ViewMatchers.isRoot
+import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.domain.pairing.PairingFailure
-import com.buddylabs.pinglide.domain.pairing.PairingService
 import com.buddylabs.pinglide.domain.pairing.PairingServiceException
 import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import com.buddylabs.pinglide.domain.settings.AppLanguage
-import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -70,6 +69,44 @@ class HomeRemovalDialogTest {
     }
 
     @Test
+    fun keyboardStartsAtNamedHeadingAndTabsToCancel() {
+        renderHome(AppLanguage.English)
+        pressKey(KeyEvent.KEYCODE_TAB)
+        openConfirmation("My computer", "Remove this target’s Pairing")
+        dialogText("Remove “My computer”?").assertIsFocused()
+        pressKey(KeyEvent.KEYCODE_TAB)
+        dialogText("Cancel").assertIsFocused()
+        pressKey(KeyEvent.KEYCODE_ENTER)
+        assertTargetDetails()
+    }
+
+    @Test
+    fun backAndScrimReturnToDetailsBeforeSubmission() {
+        renderHome(AppLanguage.English)
+        openConfirmation("My computer", "Remove this target’s Pairing")
+        pressDialogBack()
+        assertTargetDetails()
+        openRemovalFromDetails()
+        tapScrim()
+        assertTargetDetails()
+    }
+
+    @Test
+    fun backAndScrimReturnToDetailsAfterFailure() {
+        renderHome(AppLanguage.English) {
+            throw PairingServiceException(PairingFailure.Unavailable)
+        }
+        openConfirmation("My computer", "Remove this target’s Pairing")
+        submitAndWaitForFailure()
+        pressDialogBack()
+        assertTargetDetails()
+        openRemovalFromDetails()
+        submitAndWaitForFailure()
+        tapScrim()
+        assertTargetDetails()
+    }
+
+    @Test
     fun pendingRemovalCannotBeDismissedAndFailureCanBeRetried() {
         val firstResponse = CompletableDeferred<Unit>()
         val requestedIds = mutableListOf<String>()
@@ -85,7 +122,8 @@ class HomeRemovalDialogTest {
         dialogText("Submitting, please wait").assertIsDisplayed()
         dialogText("Cancel").assertIsNotEnabled()
         dialogText("Remove Pairing").assertIsNotEnabled()
-        pressBack()
+        pressDialogBack()
+        tapScrim()
         dialogText("Submitting, please wait").assertIsDisplayed()
 
         firstResponse.complete(Unit)
@@ -104,12 +142,59 @@ class HomeRemovalDialogTest {
         compose.runOnIdle { assertEquals(listOf("home", "home"), requestedIds) }
     }
 
+    private fun submitAndWaitForFailure() {
+        dialogText("Remove Pairing").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodes(hasText("Retry removal")).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun assertTargetDetails() {
+        dialogText("Remove “My computer”?").assertDoesNotExist()
+        val remove = compose.onNodeWithText("Remove this target’s Pairing")
+        compose.waitUntil(5_000) { remove.isDisplayed() }
+    }
+
+    private fun openRemovalFromDetails() {
+        compose.onNodeWithText("Remove this target’s Pairing").performClick()
+        dialogText("Remove “My computer”?").assertIsDisplayed()
+    }
+
+    private fun pressDialogBack() =
+        onView(isRoot()).inRoot(RootMatchers.isDialog()).perform(pressBack())
+
+    private fun pressKey(keyCode: Int) =
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(keyCode)
+
+    private fun tapScrim() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val metrics = compose.activity.resources.displayMetrics
+        val downTime = SystemClock.uptimeMillis()
+        for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+            val event = MotionEvent.obtain(
+                downTime,
+                SystemClock.uptimeMillis(),
+                action,
+                8 * metrics.density,
+                metrics.heightPixels / 2f,
+                0
+            )
+            try {
+                instrumentation.sendPointerSync(event)
+            } finally {
+                event.recycle()
+            }
+        }
+        instrumentation.waitForIdleSync()
+    }
+
     private fun dialogText(text: String) =
         compose.onNode(hasText(text) and hasAnyAncestor(isDialog()))
 
     private fun openConfirmation(name: String, removeAction: String) {
         compose.onNodeWithText(name).performClick()
         compose.onNodeWithText(removeAction).performClick()
+        compose.onNode(isDialog(), useUnmergedTree = true).assertExists()
     }
 
     private fun renderHome(
@@ -126,40 +211,10 @@ class HomeRemovalDialogTest {
                 "office",
                 "receiver-office",
                 officeName,
-                Presence.Offline,
-                now.minusSeconds(1_320).toString()
+                Presence.Online,
+                now.minusSeconds(120).toString()
             )
         )
-        val store = HomePairingStore(targets, now.plusSeconds(3600).toString())
-        val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)
-        val remote = targets.associateBy { it.pairingId }.toMutableMap()
-        val service = object : PairingService {
-            override suspend fun list(managementToken: String) = remote.values.toList()
-            override suspend fun remove(managementToken: String, pairingId: String) {
-                remove(pairingId)
-                checkNotNull(remote.remove(pairingId))
-            }
-        }
-        val pairings = OwnPairings(store, service, renewal, scope)
-        runBlocking(Dispatchers.Main) { pairings.refresh() }
-        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
-        val app = compose.activity.application as PinGlideApplication
-        val home = HomeViewModel(pairings, app.senderRestoration()) { null }
-        compose.setContent {
-            val state by home.state.collectAsState()
-            LocalizedContent(language) {
-                PinGlideTheme {
-                    HomeScreen(
-                        state,
-                        smsGranted = true,
-                        smsRecovery = SmsRecovery.Idle,
-                        home = home,
-                        onRestoreSms = {},
-                        onAdd = {},
-                        onSettings = {}
-                    )
-                }
-            }
-        }
+        renderReadyHome(compose, targets, scope, language, onRemove = remove)
     }
 }
