@@ -42,6 +42,7 @@ import com.buddylabs.pinglide.domain.pairing.HomeReadiness
 import com.buddylabs.pinglide.domain.pairing.HomeState
 
 private val warningBadges = mapOf(
+    HomeReadiness.SmsRequired to R.string.home_sms_badge,
     HomeReadiness.Empty to R.string.home_waiting_for_devices,
     HomeReadiness.Offline to R.string.home_all_offline
 )
@@ -54,9 +55,13 @@ internal val HomeState.hasCachedListFailure: Boolean
 
 private fun HomeState.showsIllustratedWarning(readiness: HomeReadiness): Boolean =
     when (readiness) {
-        HomeReadiness.Empty, HomeReadiness.Disabled, HomeReadiness.Offline -> true
+        HomeReadiness.SmsRequired, HomeReadiness.Empty, HomeReadiness.Disabled,
+        HomeReadiness.Offline -> true
+
         HomeReadiness.Ready -> hasCachedListFailure
+
         HomeReadiness.Unknown -> hasInitialListFailure(readiness) || hasCachedListFailure
+
         else -> false
     }
 

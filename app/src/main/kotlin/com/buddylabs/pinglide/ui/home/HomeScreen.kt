@@ -304,18 +304,11 @@ private fun AddDeviceAction(onAdd: () -> Unit, modifier: Modifier) {
         containerColor = MaterialTheme.colorScheme.primary,
         contentColor = MaterialTheme.colorScheme.onPrimary
     ) {
-        Row(
-            Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(painterResource(R.drawable.ic_add), null, Modifier.size(20.dp))
-            Text(
-                stringResource(R.string.home_add),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        HomeActionLabel(
+            R.drawable.ic_add,
+            R.string.home_add,
+            Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+        )
     }
 }
 
@@ -383,7 +376,7 @@ private fun HomeSummary(
                         Text(stringResource(R.string.home_login_action))
                     }
                 } else if (!smsGranted) {
-                    HomeSmsRecovery(smsRecovery == SmsRecovery.Pending, onRestoreSms)
+                    HomeSmsRecovery(state, smsRecovery == SmsRecovery.Pending, onRestoreSms)
                 }
                 if (state.hasCachedListFailure) {
                     WarningInfoCard(R.string.home_cached_notice)
@@ -409,7 +402,10 @@ private fun HomeSummary(
 private fun summarySpacing(state: HomeState, readiness: HomeReadiness, showListProgress: Boolean) =
     when {
         showListProgress || state.hasInitialListFailure(readiness) -> 0.dp
-        readiness == HomeReadiness.Empty || state.hasCachedListFailure -> 14.dp
+
+        readiness == HomeReadiness.Empty || readiness == HomeReadiness.SmsRequired ||
+            state.hasCachedListFailure -> 14.dp
+
         else -> 16.dp
     }
 

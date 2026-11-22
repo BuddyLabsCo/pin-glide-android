@@ -1,43 +1,70 @@
 package com.buddylabs.pinglide.ui.home
 
 import android.widget.Toast
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.HomeReadiness
 import com.buddylabs.pinglide.domain.pairing.HomeState
+import com.buddylabs.pinglide.ui.components.WarningInfoCard
 
 @Composable
-internal fun HomeSmsRecovery(pending: Boolean, onRestore: () -> Unit) {
+internal fun HomeSmsRecovery(state: HomeState, pending: Boolean, onRestore: () -> Unit) {
+    val hint = if (state.canResumeForwarding) {
+        R.string.home_sms_resume_hint
+    } else {
+        R.string.home_sms_hint
+    }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Surface(
-            color = colorResource(R.color.home_warning_container),
-            contentColor = colorResource(R.color.home_on_warning),
-            shape = MaterialTheme.shapes.medium
-        ) {
-            Text(stringResource(R.string.home_sms_hint), Modifier.padding(16.dp))
-        }
+        WarningInfoCard(hint, icon = R.drawable.ic_warning)
         Button(
             onClick = onRestore,
             enabled = !pending,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) {
-            Text(stringResource(R.string.home_sms_restore))
+            HomeActionLabel(R.drawable.ic_settings_filled, R.string.home_sms_restore)
         }
+    }
+}
+
+@Composable
+internal fun HomeActionLabel(
+    @DrawableRes icon: Int,
+    @StringRes label: Int,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(painterResource(icon), null, Modifier.size(20.dp))
+        Text(
+            stringResource(label),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -48,13 +75,10 @@ internal fun SmsRecoveryNotice(
     recovery: SmsRecovery,
     onDismiss: (SmsRecovery) -> Unit
 ) {
-    val canForward = state.readiness(smsGranted) == HomeReadiness.Ready &&
-        !state.failed && !state.refreshing &&
-        state.targets.any { it.enabled && it.keyUsable }
     val messageId = when (recovery) {
         SmsRecovery.Granted, SmsRecovery.Denied -> when {
             !smsGranted -> R.string.home_sms_denied
-            canForward -> R.string.home_sms_restored
+            state.canResumeForwarding -> R.string.home_sms_restored
             else -> R.string.home_sms_enabled
         }
 
@@ -71,3 +95,6 @@ internal fun SmsRecoveryNotice(
         }
     }
 }
+
+private val HomeState.canResumeForwarding: Boolean
+    get() = readiness(smsGranted = true) == HomeReadiness.Ready && !failed && !refreshing

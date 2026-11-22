@@ -1,5 +1,6 @@
 package com.buddylabs.pinglide.ui.components
 
+import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -21,7 +22,11 @@ import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 
 @Composable
-internal fun WarningInfoCard(@StringRes message: Int, modifier: Modifier = Modifier) {
+internal fun WarningInfoCard(
+    @StringRes message: Int,
+    modifier: Modifier = Modifier,
+    @DrawableRes icon: Int = R.drawable.ic_info
+) {
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = colorResource(R.color.setup_warning_container),
@@ -33,7 +38,7 @@ internal fun WarningInfoCard(@StringRes message: Int, modifier: Modifier = Modif
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Icon(
-                painterResource(R.drawable.ic_info),
+                painterResource(icon),
                 contentDescription = null,
                 modifier = Modifier.padding(top = 1.dp).size(18.dp)
             )
