@@ -167,6 +167,7 @@ internal fun TargetDetailsSheet(
                     testMessage,
                     onSelect,
                     removalFocus,
+                    renameSaved = action.result == PairingChange.Renamed,
                     onRename = {
                         draft = target.alias
                         testMessage.leave()
@@ -253,11 +254,13 @@ private fun TargetDetailsActions(
     testMessage: TestMessageAction,
     onSelect: (Boolean) -> Unit,
     removalFocus: FocusRequester,
+    renameSaved: Boolean,
     onRename: () -> Unit,
     onRemove: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
     val offline = target.presence == Presence.Offline
+    val showTestChevron = offline || !target.enabled || !target.keyUsable || renameSaved
     val divider = colors.onSurface.copy(alpha = 0.17f)
     val dividerThickness = if (offline) 1.dp else 0.5.dp
     val danger = colorResource(R.color.error_emblem)
@@ -279,7 +282,7 @@ private fun TargetDetailsActions(
             testMessage,
             enabled = target.keyUsable,
             feedbackModifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-        ) { label, enabled, onClick ->
+        ) { label, enabled, sending, onClick ->
             val alpha = if (enabled) 1f else 0.38f
             val iconTint = colors.onSurfaceVariant.copy(alpha = alpha)
             TargetDetailsRow(
@@ -290,7 +293,7 @@ private fun TargetDetailsActions(
                 color = colors.onSurface.copy(alpha = alpha),
                 iconTint = iconTint
             ) {
-                if (offline && enabled) {
+                if (showTestChevron && !sending) {
                     Icon(
                         painterResource(R.drawable.ic_chevron),
                         null,

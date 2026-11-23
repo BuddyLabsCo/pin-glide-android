@@ -24,7 +24,12 @@ internal fun PairingTestAction(
     action: TestMessageAction,
     enabled: Boolean = true,
     feedbackModifier: Modifier = Modifier,
-    button: @Composable (String, Boolean, () -> Unit) -> Unit = { label, available, onClick ->
+    button: @Composable (
+        label: String,
+        available: Boolean,
+        sending: Boolean,
+        onClick: () -> Unit
+    ) -> Unit = { label, available, _, onClick ->
         Button(
             onClick = onClick,
             enabled = available,
@@ -46,6 +51,7 @@ internal fun PairingTestAction(
             if (state.pending) R.string.pairing_test_sending else R.string.pairing_test_send
         ),
         enabled && !state.pending,
+        state.pending,
         action::send
     )
     state.outcome?.let { delivery ->

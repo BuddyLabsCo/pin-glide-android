@@ -177,6 +177,11 @@ internal class HomePairingStore(
 
     override suspend fun reconcile(expected: PairingSnapshot, items: List<RemotePairing>): Boolean {
         pairings.keys.retainAll(items.map { it.pairingId }.toSet())
+        items.forEach { item ->
+            pairings[item.pairingId]?.let { pairing ->
+                pairings[item.pairingId] = pairing.copy(alias = item.alias)
+            }
+        }
         listed = true
         revision++
         return true
