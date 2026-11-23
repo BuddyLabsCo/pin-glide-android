@@ -11,6 +11,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -89,7 +90,8 @@ class PendingTargetTestMessageTest {
         val rename = sheetText("重命名设备")
         val send = sheetText("发送测试消息").assertIsDisplayed().assertIsEnabled()
         val idleBounds = sheetBounds(send)
-        val idleDivider = dividerStroke(idleBounds, sheetBounds(rename))
+        val idleRenameBounds = sheetBounds(rename)
+        val idleDivider = dividerStroke(idleBounds, idleRenameBounds)
         send.performSemanticsAction(SemanticsActions.OnClick) { click ->
             click()
             click()
@@ -129,12 +131,40 @@ class PendingTargetTestMessageTest {
             delivery.complete(TestMessageOutcome("我的电脑", TestMessageResult.Received))
         }
         send.assertIsEnabled()
-        sheetText("测试消息已发送").assertIsDisplayed()
         assertEquals(
             "The same divider recovers its initial thickness and contrast",
             idleDivider,
             dividerStroke(sheetBounds(send), sheetBounds(rename))
         )
+        assertSuccessFeedback(idleBounds, idleRenameBounds, rename)
+    }
+
+    private fun assertSuccessFeedback(
+        sendBounds: Rect,
+        renameBounds: Rect,
+        rename: SemanticsNodeInteraction
+    ) {
+        val successLabel = hasText("测试消息已发送")
+        compose.onAllNodes(successLabel).assertCountEquals(1)
+        val success = compose.onNode(inSheet and successLabel).assertIsDisplayed()
+            .assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+            )
+        val successBounds = sheetBounds(success)
+        assertEquals(
+            "Success is centered over the target actions",
+            sendBounds.center.x,
+            successBounds.center.x,
+            1f
+        )
+        assertTrue(
+            "Success $successBounds overlays the boundary between Send and Rename $renameBounds",
+            successBounds.top < renameBounds.top && successBounds.bottom > renameBounds.top
+        )
+        assertEquals("Success leaves Rename in place", renameBounds, sheetBounds(rename))
+        compose.waitUntil(timeoutMillis = 6_000) {
+            compose.onAllNodes(successLabel).fetchSemanticsNodes().isEmpty()
+        }
     }
 
     private fun sheetText(label: String) = compose.onNode(inSheet and hasText(label))

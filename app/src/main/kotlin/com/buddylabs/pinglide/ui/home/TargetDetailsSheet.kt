@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -71,6 +72,7 @@ import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.TargetDevice
 import com.buddylabs.pinglide.ui.components.PairingTestAction
+import com.buddylabs.pinglide.ui.components.PairingTestReceivedNotice
 import com.buddylabs.pinglide.ui.components.TestMessageAction
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -124,6 +126,7 @@ internal fun TargetDetailsSheet(
     }
     val title = if (page == DetailsPage.Rename) stringResource(R.string.home_rename) else name
     val showingDetails = page == DetailsPage.Details
+    val subtitle = if (showingDetails) presenceLabel else stringResource(R.string.home_alias_scope)
     val colors = MaterialTheme.colorScheme
     val confirmation = stringResource(R.string.home_renamed)
         .takeIf { action.result == PairingChange.Renamed }
@@ -161,65 +164,73 @@ internal fun TargetDetailsSheet(
         contentWindowInsets = { WindowInsets.safeDrawing },
         modifier = Modifier.imePadding().then(sheetShadow).semantics { paneTitle = title }
     ) {
-        Column(
-            Modifier.fillMaxWidth().verticalScroll(scroll)
-                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
-        ) {
-            TargetDetailsHeader(
-                title,
-                if (showingDetails) presenceLabel else stringResource(R.string.home_alias_scope),
-                Modifier.padding(bottom = if (showingDetails) 14.dp else 18.dp),
-                confirmation.takeIf { showingDetails }
-            )
-            if (showingDetails) {
-                if (!target.keyUsable) KeyFailureNotice()
-                TargetDetailsActions(
-                    target,
-                    name,
-                    testMessage,
-                    onSelect,
-                    removalFocus,
-                    renameSaved = action.result == PairingChange.Renamed,
-                    onRename = {
-                        draft = target.alias
-                        testMessage.leave()
-                        onClearAction()
-                        page = DetailsPage.Rename
-                    },
-                    onRemove = {
-                        testMessage.leave()
-                        onClearAction()
-                        page = DetailsPage.Remove
-                    }
+        Box {
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(scroll)
+                    .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
+            ) {
+                TargetDetailsHeader(
+                    title,
+                    subtitle,
+                    Modifier.padding(bottom = if (showingDetails) 14.dp else 18.dp),
+                    confirmation.takeIf { showingDetails }
                 )
-                val window = LocalWindowInfo.current
-                LaunchedEffect(window, restoreRemovalFocus) {
-                    if (restoreRemovalFocus) {
-                        snapshotFlow { window.isWindowFocused }.first { it }
-                        removalFocus.requestFocus()
-                        restoreRemovalFocus = false
+                if (showingDetails) {
+                    if (!target.keyUsable) KeyFailureNotice()
+                    TargetDetailsActions(
+                        target,
+                        name,
+                        testMessage,
+                        onSelect,
+                        removalFocus,
+                        renameSaved = action.result == PairingChange.Renamed,
+                        onRename = {
+                            draft = target.alias
+                            testMessage.leave()
+                            onClearAction()
+                            page = DetailsPage.Rename
+                        },
+                        onRemove = {
+                            testMessage.leave()
+                            onClearAction()
+                            page = DetailsPage.Remove
+                        }
+                    )
+                    val window = LocalWindowInfo.current
+                    LaunchedEffect(window, restoreRemovalFocus) {
+                        if (restoreRemovalFocus) {
+                            snapshotFlow { window.isWindowFocused }.first { it }
+                            removalFocus.requestFocus()
+                            restoreRemovalFocus = false
+                        }
                     }
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        enabled = !pending,
+                        border = BorderStroke(1.dp, colors.onSurface.copy(alpha = 0.34f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    ) {
+                        Text(stringResource(R.string.close), fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    TargetRenameContent(
+                        draft,
+                        otherAliases,
+                        action,
+                        {
+                            draft = it
+                            onClearAction()
+                        },
+                        onRename,
+                        returnToDetails
+                    )
                 }
-                OutlinedButton(
-                    onClick = onDismiss,
-                    enabled = !pending,
-                    border = BorderStroke(1.dp, colors.onSurface.copy(alpha = 0.34f)),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                ) {
-                    Text(stringResource(R.string.close), fontWeight = FontWeight.Bold)
-                }
-            } else {
-                TargetRenameContent(
-                    draft,
-                    otherAliases,
-                    action,
-                    {
-                        draft = it
-                        onClearAction()
-                    },
-                    onRename,
-                    returnToDetails
+            }
+            if (showingDetails) {
+                PairingTestReceivedNotice(
+                    testMessage,
+                    Modifier.align(Alignment.BottomCenter).offset(y = (-164).dp)
                 )
             }
         }
@@ -299,7 +310,8 @@ private fun TargetDetailsActions(
         PairingTestAction(
             testMessage,
             enabled = target.keyUsable,
-            feedbackModifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+            feedbackModifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            overlayReceived = true
         ) { label, enabled, sending, onClick ->
             val alpha = if (enabled) 1f else disabledAlpha
             val iconTint = colors.onSurfaceVariant.copy(alpha = alpha)

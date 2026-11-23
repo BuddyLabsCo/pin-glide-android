@@ -4,6 +4,7 @@ import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -33,18 +34,24 @@ class TestMessageAction(
         mutableState.value = TestMessageState()
     }
 
-    fun send() {
+    fun send(receivedNoticeMillis: Long?) {
         val target = pairingId ?: return
-        if (operation?.isActive == true || state.value.announceReceived) return
+        if (state.value.pending || state.value.announceReceived) return
+        operation?.cancel()
         val expected = epoch
         mutableState.value = TestMessageState(pending = true)
         operation = scope.launch {
             val result = sendTest(target)
             if (expected == epoch) {
+                val received = result?.result == TestMessageResult.Received
                 mutableState.value = TestMessageState(
                     outcome = result,
-                    announceReceived = result?.result == TestMessageResult.Received
+                    announceReceived = received && receivedNoticeMillis == null
                 )
+                if (received && receivedNoticeMillis != null) {
+                    delay(receivedNoticeMillis)
+                    mutableState.value = TestMessageState()
+                }
             }
         }
     }
