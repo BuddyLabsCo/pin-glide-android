@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+internal val anchoredTestMessageResults =
+    setOf(TestMessageResult.Received, TestMessageResult.Rejected)
+
 class TestMessageAction(
     private val scope: CoroutineScope,
     private val sendTest: suspend (String) -> TestMessageOutcome?
@@ -34,7 +37,7 @@ class TestMessageAction(
         mutableState.value = TestMessageState()
     }
 
-    fun send(receivedNoticeMillis: Long?) {
+    fun send(noticeMillis: Long?) {
         val target = pairingId ?: return
         if (state.value.pending || state.value.announceReceived) return
         operation?.cancel()
@@ -46,10 +49,10 @@ class TestMessageAction(
                 val received = result?.result == TestMessageResult.Received
                 mutableState.value = TestMessageState(
                     outcome = result,
-                    announceReceived = received && receivedNoticeMillis == null
+                    announceReceived = received && noticeMillis == null
                 )
-                if (received && receivedNoticeMillis != null) {
-                    delay(receivedNoticeMillis)
+                if (result?.result in anchoredTestMessageResults && noticeMillis != null) {
+                    delay(noticeMillis)
                     mutableState.value = TestMessageState()
                 }
             }
