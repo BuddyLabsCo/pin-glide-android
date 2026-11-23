@@ -49,6 +49,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.colorResource
@@ -130,6 +132,7 @@ internal fun TargetDetailsSheet(
     val subtitle = if (showingDetails) presenceLabel else stringResource(R.string.home_alias_scope)
     val colors = MaterialTheme.colorScheme
     val accessibility = LocalAccessibilityManager.current
+    var titleVisible by remember(target.pairingId) { mutableStateOf(false) }
     val confirmation = stringResource(R.string.home_renamed)
         .takeIf { action.result == PairingChange.Renamed }
     val sheetShadow = if (showingDetails) {
@@ -168,7 +171,7 @@ internal fun TargetDetailsSheet(
     ) {
         val contentModifier = Modifier.fillMaxWidth().verticalScroll(scroll)
             .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
-        AnchoredPairingTestAction(testMessage, accessibility, showingDetails) {
+        AnchoredPairingTestAction(testMessage, accessibility, showingDetails, titleVisible) {
                 testState,
                 sendTest,
                 anchor
@@ -178,7 +181,10 @@ internal fun TargetDetailsSheet(
                     title,
                     subtitle,
                     Modifier.padding(bottom = if (showingDetails) 14.dp else 18.dp),
-                    confirmation.takeIf { showingDetails }
+                    confirmation.takeIf { showingDetails },
+                    Modifier.onGloballyPositioned {
+                        titleVisible = it.boundsInRoot().height >= it.size.height
+                    }
                 )
                 if (showingDetails) {
                     if (!target.keyUsable) KeyFailureNotice()
@@ -247,7 +253,8 @@ private fun TargetDetailsHeader(
     title: String,
     subtitle: String,
     modifier: Modifier,
-    confirmation: String?
+    confirmation: String?,
+    titleModifier: Modifier
 ) {
     Row(
         modifier.fillMaxWidth(),
@@ -259,7 +266,7 @@ private fun TargetDetailsHeader(
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight(750),
                 letterSpacing = (-0.96).sp,
-                modifier = Modifier.semantics {
+                modifier = titleModifier.semantics {
                     heading()
                     liveRegion = LiveRegionMode.Polite
                     if (confirmation != null) stateDescription = confirmation

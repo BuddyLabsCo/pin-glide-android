@@ -203,6 +203,14 @@ internal class HomePairingStore(
         return true
     }
 
+    override suspend fun reserveEncryption(expected: PairingSnapshot, pairingId: String): Boolean {
+        val pairing = pairings[pairingId] ?: return false
+        if (expected.revision != revision || !pairing.keyUsable) return false
+        pairings[pairingId] = pairing.copy(encryptions = pairing.encryptions + 1)
+        revision++
+        return true
+    }
+
     override suspend fun accept(
         expectedGeneration: Long,
         identity: SenderIdentity,

@@ -4,7 +4,6 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.UiAutomation
 import android.content.res.Configuration
 import android.graphics.Color
-import android.os.ParcelFileDescriptor
 import android.view.View
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -88,53 +87,6 @@ class PendingTargetTestMessageTest {
     }
 
     @Test
-    fun lightDetailsShowsRejectedDeliveryOverTheSendDivider() {
-        assertRejectedFeedback(Configuration.UI_MODE_NIGHT_NO)
-    }
-
-    @Test
-    fun darkDetailsShowsRejectedDeliveryOverTheSendDivider() {
-        assertRejectedFeedback(Configuration.UI_MODE_NIGHT_YES)
-    }
-
-    private fun assertRejectedFeedback(nightMode: Int) {
-        val sentTo = mutableListOf<String>()
-        renderReadyHome(
-            compose,
-            targets(),
-            scope,
-            nightMode = nightMode,
-            accessibilityManager = accessibility,
-            sendTest = { pairingId ->
-                sentTo += pairingId
-                TestMessageOutcome("我的电脑", TestMessageResult.Rejected)
-            }
-        ) { error("Unexpected Pairing removal") }
-        compose.onNodeWithText("我的电脑").performClick()
-        val send = sheetText("发送测试消息")
-        val rename = sheetText("重命名设备")
-        val sendBounds = sheetBounds(send)
-        val renameBounds = sheetBounds(rename)
-        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-        val feedback = TestMessageFeedbackEvents(REJECTED_MESSAGE)
-        automation.setOnAccessibilityEventListener(feedback)
-        try {
-            send.performClick().assertIsEnabled()
-
-            val label = hasText(REJECTED_MESSAGE)
-            assertOverlayFeedback(label, sendBounds, renameBounds, rename)
-            compose.waitUntil(3_000L) { feedback.status.isNotEmpty() }
-            assertTrue(feedback.status.first().isVisibleToUser)
-            compose.waitUntil(7_000L) { compose.onAllNodes(label).fetchSemanticsNodes().isEmpty() }
-            assertEquals(1, feedback.status.size)
-            assertTrue(feedback.announcementsOrToasts.isEmpty())
-            compose.runOnIdle { assertEquals(listOf("home"), sentTo) }
-        } finally {
-            automation.setOnAccessibilityEventListener(null)
-        }
-    }
-
-    @Test
     fun androidAccessibilityReportsOneSuccessWithoutAToast() {
         val automation = InstrumentationRegistry.getInstrumentation()
             .getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
@@ -195,7 +147,7 @@ class PendingTargetTestMessageTest {
     }
 
     @Suppress("DEPRECATION")
-    private class TestMessageFeedbackEvents(private val message: String) :
+    internal class TestMessageFeedbackEvents(private val message: String) :
         UiAutomation.OnAccessibilityEventListener {
         val status = ConcurrentLinkedQueue<AccessibilityNodeInfo>()
         val talkBackSpeech = ConcurrentLinkedQueue<String>()
@@ -260,18 +212,20 @@ class PendingTargetTestMessageTest {
 
     @Test
     fun delayedSuccessStaysWithTheDividerInAShortSheetAtDoubleFontScale() {
-        val originalSize = shell("wm size")
+        val originalSize = runHomeTestShell("wm size")
         val overrideSize = Regex(
             "Override size: (\\d+x\\d+)"
         ).find(originalSize)?.groupValues?.get(1)
-        val originalFont = shell("settings get system font_scale").trim()
+        val originalFont = runHomeTestShell("settings get system font_scale").trim()
         val density = compose.activity.resources.displayMetrics.density
         val delivery = CompletableDeferred<TestMessageOutcome>()
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         val feedback = TestMessageFeedbackEvents(SUCCESS_MESSAGE)
         try {
-            shell("settings put system font_scale 2.0")
-            shell("wm size ${(366 * density).roundToInt()}x${(260 * density).roundToInt()}")
+            runHomeTestShell("settings put system font_scale 2.0")
+            runHomeTestShell(
+                "wm size ${(366 * density).roundToInt()}x${(260 * density).roundToInt()}"
+            )
             compose.waitUntil(5_000) {
                 compose.runOnUiThread {
                     val configuration = compose.activity.resources.configuration
@@ -315,11 +269,11 @@ class PendingTargetTestMessageTest {
             assertSuccessFeedback(sheetBounds(send), sheetBounds(rename), rename)
         } finally {
             automation.setOnAccessibilityEventListener(null)
-            shell("wm size ${overrideSize ?: "reset"}")
+            runHomeTestShell("wm size ${overrideSize ?: "reset"}")
             if (originalFont == "null") {
-                shell("settings delete system font_scale")
+                runHomeTestShell("settings delete system font_scale")
             } else {
-                shell("settings put system font_scale $originalFont")
+                runHomeTestShell("settings put system font_scale $originalFont")
             }
             compose.waitUntil(5_000) {
                 compose.runOnUiThread {
@@ -329,10 +283,6 @@ class PendingTargetTestMessageTest {
             }
         }
     }
-
-    private fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
-        InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
-    ).bufferedReader().use { it.readText() }
 
     private fun targets(): List<RemotePairing> {
         val now = Instant.now().toString()
@@ -415,16 +365,9 @@ class PendingTargetTestMessageTest {
         sendBounds: Rect,
         renameBounds: Rect,
         rename: SemanticsNodeInteraction
-    ) = assertOverlayFeedback(successLabel, sendBounds, renameBounds, rename)
-
-    private fun assertOverlayFeedback(
-        label: SemanticsMatcher,
-        sendBounds: Rect,
-        renameBounds: Rect,
-        rename: SemanticsNodeInteraction
     ) {
-        compose.onAllNodes(label).assertCountEquals(1)
-        val notice = compose.onNode(inSheet and label).assertIsDisplayed()
+        compose.onAllNodes(successLabel).assertCountEquals(1)
+        val notice = compose.onNode(inSheet and successLabel).assertIsDisplayed()
         val noticeBounds = sheetBounds(notice)
         assertEquals(
             "Feedback is centered over the target actions",
@@ -479,7 +422,6 @@ class PendingTargetTestMessageTest {
     private companion object {
         const val STARTED_SENDING = "正在发送"
         const val SUCCESS_MESSAGE = "测试消息已发送"
-        const val REJECTED_MESSAGE = "测试消息未发送：配对已移除"
         const val SUCCESS_TIMEOUT = 5_000L
         const val TALKBACK_PACKAGE = "com.google.android.marvin.talkback"
     }

@@ -9,8 +9,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-internal val anchoredTestMessageResults =
-    setOf(TestMessageResult.Received, TestMessageResult.Rejected)
+internal val TestMessageOutcome.hasAnchoredNotice: Boolean
+    get() = result == TestMessageResult.Received || pairingRemoved
 
 class TestMessageAction(
     private val scope: CoroutineScope,
@@ -51,7 +51,7 @@ class TestMessageAction(
                     outcome = result,
                     announceReceived = received && noticeMillis == null
                 )
-                if (result?.result in anchoredTestMessageResults && noticeMillis != null) {
+                if (result?.hasAnchoredNotice == true && noticeMillis != null) {
                     delay(noticeMillis)
                     mutableState.value = TestMessageState()
                 }

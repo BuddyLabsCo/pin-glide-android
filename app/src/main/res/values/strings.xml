@@ -54,6 +54,7 @@
     <string name="setup_later">稍后配对</string>
     <string name="home_devices">我的设备</string>
     <string name="home_target_device">目标设备</string>
+    <string name="home_test_pairing_removed">测试消息未发送：配对已移除</string>
     <string name="home_details_drag_handle">拖动手柄</string>
     <string name="home_count">%1$d 台</string>
     <string name="home_capacity">已满5台</string>

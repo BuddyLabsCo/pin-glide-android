@@ -35,7 +35,11 @@ enum class TestMessageResult {
     LoginRequired
 }
 
-data class TestMessageOutcome(val targetAlias: String, val result: TestMessageResult)
+data class TestMessageOutcome(
+    val targetAlias: String,
+    val result: TestMessageResult,
+    val pairingRemoved: Boolean = false
+)
 
 class DeliveryItem(val target: OwnPairing, val encrypted: TestCiphertext)
 

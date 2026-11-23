@@ -53,6 +53,7 @@
     <string name="setup_later">Set up later</string>
     <string name="home_devices">My devices</string>
     <string name="home_target_device">Target device</string>
+    <string name="home_test_pairing_removed">Test message was not sent: Pairing was removed</string>
     <string name="home_details_drag_handle">Drag handle</string>
     <string name="home_count">%1$d devices</string>
     <string name="home_capacity">Full · 5 devices</string>
