@@ -11,6 +11,7 @@ import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
+import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
 import com.buddylabs.pinglide.domain.pairing.PairingService
@@ -30,9 +31,15 @@ internal fun renderReadyHome(
     nightMode: Int? = null,
     onList: suspend (List<RemotePairing>) -> List<RemotePairing> = { it },
     onRename: suspend (String, String) -> Unit = { _, _ -> error("Unexpected rename") },
+    sendTest: suspend (String) -> TestMessageOutcome? = { null },
+    missingKeyId: String? = null,
     onRemove: suspend (String) -> Unit
 ): HomeViewModel {
-    val store = HomePairingStore(targets, Instant.now().plusSeconds(3600).toString())
+    val store = HomePairingStore(
+        targets,
+        Instant.now().plusSeconds(3600).toString(),
+        missingKeyId = missingKeyId
+    )
     val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)
     val service = object : PairingService {
         private val remote = targets.associateBy { it.pairingId }.toMutableMap()
@@ -65,7 +72,7 @@ internal fun renderReadyHome(
     runBlocking(Dispatchers.Main) { pairings.refresh() }
     compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
     val app = compose.activity.application as PinGlideApplication
-    val home = HomeViewModel(pairings, app.senderRestoration()) { null }
+    val home = HomeViewModel(pairings, app.senderRestoration(), sendTest)
     compose.setContent {
         val state by home.state.collectAsState()
         val systemConfiguration = LocalConfiguration.current
