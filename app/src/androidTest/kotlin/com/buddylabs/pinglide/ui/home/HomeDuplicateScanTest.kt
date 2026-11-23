@@ -30,6 +30,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -80,6 +81,41 @@ class HomeDuplicateScanTest {
 
     @After
     fun stopFixture() = scope.cancel()
+
+    @Test
+    fun scannerCentersItsHeadingAndKeepsCancelAtTheBottom() {
+        renderHome(usableHeight = 700.dp)
+        val add = compose.onNodeWithText("Add device")
+        val title = compose.onNodeWithText("Scan QR code")
+        val cancel = compose.onNodeWithText("Cancel")
+        val close = compose.onNodeWithContentDescription("Cancel")
+        add.performClick()
+
+        val screenBounds = compose.onNode(hasScrollAction()).getUnclippedBoundsInRoot()
+        val titleBounds = title.assertIsDisplayed().getUnclippedBoundsInRoot()
+        val cancelBounds = cancel.assertIsDisplayed().getUnclippedBoundsInRoot()
+        assertEquals(
+            (screenBounds.left + screenBounds.right).value / 2,
+            (titleBounds.left + titleBounds.right).value / 2,
+            1f
+        )
+        assertEquals(28f, (screenBounds.bottom - cancelBounds.bottom).value, 1f)
+        assertTrue(cancelBounds.bottom - cancelBounds.top >= 48.dp)
+
+        cancel.performClick()
+        add.assertIsDisplayed().performClick()
+        close.performClick()
+        add.assertIsDisplayed()
+    }
+
+    @Test
+    fun scannerCancelRemainsReachableWithLargeTextInAShortWindow() {
+        renderHome(usableHeight = 260.dp, fontScale = 1.5f)
+        val add = compose.onNodeWithText("Add device")
+        add.performClick()
+        compose.onNodeWithText("Cancel").performScrollTo().assertIsDisplayed().performClick()
+        add.assertIsDisplayed()
+    }
 
     @Test
     fun duplicateScanRevealsLastTargetAndFadesBeforeAccessibleNoticeExpires() {

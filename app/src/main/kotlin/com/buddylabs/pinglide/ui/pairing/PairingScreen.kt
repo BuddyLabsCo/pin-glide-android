@@ -2,23 +2,18 @@ package com.buddylabs.pinglide.ui.pairing
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,7 +25,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -49,7 +43,6 @@ import com.buddylabs.pinglide.domain.pairing.PairingEntryPage
 import com.buddylabs.pinglide.domain.pairing.PairingEntryProblem
 import com.buddylabs.pinglide.domain.pairing.PairingEntryState
 import com.buddylabs.pinglide.domain.pairing.PairingHost
-import com.buddylabs.pinglide.platform.scanner.PairingCamera
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
@@ -69,10 +62,11 @@ fun PairingScreen(state: PairingEntryState, model: PairingEntryViewModel, onLeav
     val lifecycleState by lifecycle.currentStateAsState()
     val resumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
     BackHandler(onBack = model::close)
-    val scanning = state.page == PairingEntryPage.Scanner
-    val title = stringResource(
-        if (scanning) R.string.pairing_scan_title else R.string.pairing_consent_title
-    )
+    if (state.page == PairingEntryPage.Scanner) {
+        PairingScannerScreen(state, model, resumed)
+        return
+    }
+    val title = stringResource(R.string.pairing_consent_title)
     ScreenLayout {
         Column(
             Modifier.weight(1f).imePadding().verticalScroll(rememberScrollState())
@@ -81,16 +75,12 @@ fun PairingScreen(state: PairingEntryState, model: PairingEntryViewModel, onLeav
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
-                    onClick = if (scanning) model::close else model::back,
+                    onClick = model::back,
                     modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
-                        painterResource(
-                            if (scanning) R.drawable.ic_close else R.drawable.ic_back
-                        ),
-                        contentDescription = stringResource(
-                            if (scanning) R.string.pairing_cancel else R.string.setup_back
-                        )
+                        painterResource(R.drawable.ic_back),
+                        contentDescription = stringResource(R.string.setup_back)
                     )
                 }
                 Text(
@@ -99,14 +89,8 @@ fun PairingScreen(state: PairingEntryState, model: PairingEntryViewModel, onLeav
                     modifier = Modifier.semantics { heading() }
                 )
             }
-            if (scanning) {
-                ScannerContent(state, model, resumed)
-            } else {
-                ConsentContent(state, model)
-            }
-            if (state.problem != null &&
-                (state.problem != PairingEntryProblem.InvalidQr || !scanning)
-            ) {
+            ConsentContent(state, model)
+            if (state.problem != null) {
                 PairingProblem(state.problem, model::freshScan)
             }
             TextButton(
@@ -117,44 +101,6 @@ fun PairingScreen(state: PairingEntryState, model: PairingEntryViewModel, onLeav
             }
         }
     }
-}
-
-@Composable
-private fun ScannerContent(
-    state: PairingEntryState,
-    model: PairingEntryViewModel,
-    resumed: Boolean
-) {
-    Text(
-        stringResource(R.string.pairing_scan_instruction),
-        style = MaterialTheme.typography.headlineMedium
-    )
-    Text(stringResource(R.string.pairing_scan_description))
-    val defaultAlias = stringResource(R.string.pairing_default_alias)
-    Box(
-        Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(24.dp))
-            .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)),
-        contentAlignment = Alignment.Center
-    ) {
-        if (resumed && !state.pending &&
-            (state.problem == null || state.problem == PairingEntryProblem.InvalidQr)
-        ) {
-            PairingCamera(
-                Modifier.matchParentSize(),
-                onCode = { model.scan(it, defaultAlias) },
-                onFailure = model::cameraFailed
-            )
-        }
-        if (state.pending) CircularProgressIndicator()
-    }
-    if (state.problem == PairingEntryProblem.InvalidQr) {
-        Text(
-            stringResource(R.string.pairing_invalid_qr),
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-        )
-    }
-    if (state.pending) Text(stringResource(R.string.pairing_validating))
 }
 
 @Composable
@@ -214,7 +160,7 @@ private fun ConsentContent(state: PairingEntryState, model: PairingEntryViewMode
 }
 
 @Composable
-private fun PairingProblem(problem: PairingEntryProblem, onRescan: () -> Unit) {
+internal fun PairingProblem(problem: PairingEntryProblem, onRescan: () -> Unit) {
     Text(
         stringResource(pairingProblemText(problem)),
         color = MaterialTheme.colorScheme.error,
