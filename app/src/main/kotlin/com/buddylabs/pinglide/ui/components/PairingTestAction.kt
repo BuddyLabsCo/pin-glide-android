@@ -102,7 +102,7 @@ internal fun AnchoredPairingTestAction(
     action: TestMessageAction,
     accessibility: AccessibilityManager?,
     active: Boolean,
-    titleVisible: Boolean,
+    headerBottom: Float,
     content: @Composable (
         state: TestMessageState,
         send: () -> Unit,
@@ -128,7 +128,7 @@ internal fun AnchoredPairingTestAction(
     var viewportTop by remember { mutableFloatStateOf(0f) }
     Box(Modifier.onGloballyPositioned { viewportTop = it.positionInRoot().y }) {
         content(
-            if (notice != null) state.copy(outcome = null) else state,
+            state,
             {
                 action.send(
                     accessibility?.calculateRecommendedTimeoutMillis(
@@ -146,10 +146,11 @@ internal fun AnchoredPairingTestAction(
             message = status,
             modifier = Modifier.align(Alignment.Center)
         )
-        if (notice != null && dividerVisible) {
+        if (notice != null && (dividerVisible || removed)) {
             PairingTestNotice(
-                if (titleVisible) message else status,
-                dividerTop - viewportTop,
+                message,
+                (dividerTop - viewportTop).takeIf { dividerVisible },
+                if (removed) headerBottom - viewportTop else 0f,
                 Modifier.matchParentSize()
             )
         }
@@ -173,7 +174,12 @@ private fun PairingTestStatus(message: String, modifier: Modifier) {
 }
 
 @Composable
-private fun PairingTestNotice(message: String, anchor: Float, modifier: Modifier) {
+private fun PairingTestNotice(
+    message: String,
+    anchor: Float?,
+    headerBottom: Float,
+    modifier: Modifier
+) {
     val colors = MaterialTheme.colorScheme
     val shadowColor = if (isSystemInDarkTheme()) Color(0x61000000) else Color(0x260A1210)
     Layout(
@@ -201,9 +207,13 @@ private fun PairingTestNotice(message: String, anchor: Float, modifier: Modifier
     ) { measurables, constraints ->
         val notice = measurables.single().measure(constraints.copy(minWidth = 0, minHeight = 0))
         layout(constraints.maxWidth, constraints.maxHeight) {
-            val center = anchor + 8.dp.toPx()
-            val top = (center - notice.height / 2f).roundToInt()
-                .coerceIn(0, constraints.maxHeight - notice.height)
+            val maxTop = constraints.maxHeight - notice.height
+            val minTop = headerBottom.roundToInt().coerceIn(0, maxTop)
+            val top = if (anchor == null) {
+                (minTop + maxTop) / 2
+            } else {
+                (anchor + 8.dp.toPx() - notice.height / 2f).roundToInt().coerceIn(minTop, maxTop)
+            }
             notice.placeRelative((constraints.maxWidth - notice.width) / 2, top)
         }
     }

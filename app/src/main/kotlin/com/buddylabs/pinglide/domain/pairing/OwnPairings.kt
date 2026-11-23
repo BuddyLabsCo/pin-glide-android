@@ -381,22 +381,6 @@ class OwnPairings(
             }
         }
 
-    suspend fun isRemovalConfirmed(expected: HomeState, pairingId: String): Boolean = try {
-        renewal.withAccess(CredentialAccess.Management) { identity ->
-            expected.owner == (identity.accountId to identity.senderId) &&
-                store.readPairings().authority.generation == expected.generation &&
-                service.list(identity.management.token).none { it.pairingId == pairingId }
-        }
-    } catch (_: PairingServiceException) {
-        false
-    } catch (_: AccessExpiredException) {
-        false
-    } catch (_: AuthorizationException) {
-        false
-    } catch (_: IdentityStorageException) {
-        false
-    }
-
     private suspend fun readCurrent(): PairingSnapshot {
         val current = store.readPairings()
         publish(

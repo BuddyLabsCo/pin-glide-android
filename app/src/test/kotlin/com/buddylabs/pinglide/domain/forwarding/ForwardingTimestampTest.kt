@@ -13,6 +13,7 @@ import com.buddylabs.pinglide.domain.identity.UploadCredential
 import com.buddylabs.pinglide.domain.pairing.OwnPairing
 import com.buddylabs.pinglide.domain.pairing.PairingSnapshot
 import com.buddylabs.pinglide.domain.pairing.PairingStore
+import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import com.buddylabs.pinglide.platform.crypto.encryptMessage
 import com.buddylabs.pinglide.platform.crypto.encryptTestMessage
@@ -25,8 +26,13 @@ import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -42,6 +48,7 @@ import okio.Buffer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -227,14 +234,174 @@ class ForwardingTimestampTest {
         }
     }
 
-    private fun identity(token: String = "initial", expiry: Instant = now.plusSeconds(3_600)) =
-        SenderIdentity(
-            "account",
-            "sender",
-            ManagementCredential("management-$token", expiry.toString()),
-            UploadCredential("upload-$token", expiry.toString()),
-            RefreshCredential("refresh-$token", now.plusSeconds(86_400).toString())
+    @Test
+    fun homeConfirmsRemovalWithTheManagementCredentialRenewedAfterUpload() = runTest {
+        val clock = MessageClock(now)
+        val store = MessageStore(identity(managementExpiry = now.plusSeconds(301)))
+        val renewal = CredentialRenewal(
+            store,
+            RenewalService { _, operation ->
+                RenewalReply(operation.operationId, operation.attempt.toLong(), identity("renewed"))
+            },
+            this,
+            clock
         )
+        var uploads = 0
+        val message = PairingTestMessage(
+            store,
+            renewal,
+            ::encryptTestMessage,
+            TestDeliveryService { token, _, select ->
+                assertEquals("upload-initial", token)
+                assertEquals("pairing-0", select().single().target.pairingId)
+                uploads++
+                clock.current = now.plusSeconds(2)
+                listOf(TestMessageResult.InvalidPairing)
+            },
+            clock
+        )
+        val outcome = message.sendFromHome("pairing-0") { token ->
+            assertEquals("management-renewed", token)
+            emptyList()
+        }
+
+        assertEquals(
+            TestMessageOutcome("Target 0", TestMessageResult.InvalidPairing, true),
+            outcome
+        )
+        assertEquals(1, uploads)
+    }
+
+    @Test
+    fun switchingAuthorityDuringInventoryDiscardsTheRejectedOutcome() = runTest {
+        val store = MessageStore(identity())
+        val renewal = CredentialRenewal(
+            store,
+            { _, _ -> error("Unexpected renewal") },
+            this,
+            MessageClock(now)
+        )
+        val message = PairingTestMessage(store, renewal, ::encryptTestMessage, rejectedDelivery())
+        var inventoryReads = 0
+
+        val outcome = message.sendFromHome("pairing-0") {
+            inventoryReads++
+            val generation = store.read().generation
+            assertTrue(store.accept(generation, identity(senderId = "replacement"), LoginAttempt()))
+            assertTrue(renewal.resumeSession(renewal.sessionGeneration))
+            emptyList()
+        }
+
+        assertNull(outcome)
+        assertEquals(1, inventoryReads)
+    }
+
+    @Test
+    fun aPresentPairingRetainsTheAuthorizationError() = runTest {
+        val store = MessageStore(identity())
+        val clock = MessageClock(now)
+        val renewal = CredentialRenewal(
+            store,
+            { _, _ -> error("Unexpected renewal") },
+            this,
+            clock
+        )
+        val message = PairingTestMessage(store, renewal, ::encryptTestMessage, rejectedDelivery())
+        val outcome = message.sendFromHome("pairing-0") {
+            listOf(
+                RemotePairing(
+                    "pairing-0",
+                    "receiver-0",
+                    "Target 0",
+                    Presence.Online,
+                    now.toString()
+                )
+            )
+        }
+
+        assertEquals(TestMessageOutcome("Target 0", TestMessageResult.InvalidPairing), outcome)
+    }
+
+    @Test
+    fun removalCannotBeConfirmedByAnInventoryResponseFromASupersededGeneration() = runTest {
+        val store = MessageStore(identity())
+        val renewal = CredentialRenewal(
+            store,
+            { _, _ -> error("Unexpected renewal") },
+            this,
+            MessageClock(now)
+        )
+        val message = PairingTestMessage(store, renewal, ::encryptTestMessage, rejectedDelivery())
+
+        val outcome = message.sendFromHome("pairing-0") {
+            val authorized = store.read()
+            assertTrue(
+                store.updateRenewal(
+                    authorized,
+                    authorized.copy(
+                        generation = authorized.generation + 1,
+                        identity = identity("new")
+                    )
+                )
+            )
+            emptyList()
+        }
+
+        assertEquals(TestMessageOutcome("Target 0", TestMessageResult.InvalidPairing), outcome)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun stalledInventoryReturnsTheSpecificErrorAtTheLookupDeadline() = runTest {
+        val store = MessageStore(identity())
+        val clock = MessageClock(now)
+        val renewal = CredentialRenewal(
+            store,
+            { _, _ -> error("Unexpected renewal") },
+            this,
+            clock
+        )
+        var uploads = 0
+        val message = PairingTestMessage(
+            store,
+            renewal,
+            ::encryptTestMessage,
+            rejectedDelivery { uploads++ }
+        )
+        val feedback = async {
+            message.sendFromHome("pairing-0") { awaitCancellation() }
+        }
+
+        advanceTimeBy(1_999L)
+        assertFalse(feedback.isCompleted)
+        advanceTimeBy(1L)
+        runCurrent()
+        assertTrue(feedback.isCompleted)
+        assertEquals(
+            TestMessageOutcome("Target 0", TestMessageResult.InvalidPairing),
+            feedback.await()
+        )
+        assertEquals(1, uploads)
+    }
+
+    private fun rejectedDelivery(onUpload: () -> Unit = {}) = TestDeliveryService { _, _, select ->
+        assertEquals("pairing-0", select().single().target.pairingId)
+        onUpload()
+        listOf(TestMessageResult.InvalidPairing)
+    }
+
+    private fun identity(
+        token: String = "initial",
+        expiry: Instant = now.plusSeconds(3_600),
+        managementExpiry: Instant = expiry,
+        senderId: String = "sender"
+    ) = SenderIdentity(
+        "account",
+        senderId,
+        ManagementCredential("management-$token", managementExpiry.toString()),
+        UploadCredential("upload-$token", expiry.toString()),
+        RefreshCredential("refresh-$token", now.plusSeconds(86_400).toString())
+    )
 
     private fun decrypt(encrypted: TestCiphertext, key: ByteArray): JsonObject {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -310,7 +477,8 @@ class ForwardingTimestampTest {
             expectedGeneration: Long,
             identity: SenderIdentity,
             attempt: LoginAttempt
-        ): Boolean = error("Unexpected login")
+        ): Boolean = authority.generation == expectedGeneration &&
+            attempt.commit { authority = IdentitySnapshot(expectedGeneration + 1, identity) }
 
         override suspend fun reconcile(
             expected: PairingSnapshot,

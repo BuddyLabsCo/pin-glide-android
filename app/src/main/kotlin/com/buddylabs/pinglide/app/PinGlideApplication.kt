@@ -76,10 +76,14 @@ class PinGlideApplication : Application() {
         )
     }
 
+    private val pairingService by lazy {
+        OwnPairingService(BuildConfig.SERVICE_URL, identityClient)
+    }
+
     val ownPairings by lazy {
         OwnPairings(
             identityStore,
-            OwnPairingService(BuildConfig.SERVICE_URL, identityClient),
+            pairingService,
             credentialRenewal,
             processScope
         )
@@ -124,6 +128,9 @@ class PinGlideApplication : Application() {
             deliveryService
         )
     }
+
+    internal suspend fun sendHomeTestMessage(pairingId: String) =
+        pairingTestMessage.sendFromHome(pairingId, pairingService)
 
     val accountSession by lazy {
         AccountSession(

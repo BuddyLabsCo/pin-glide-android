@@ -147,8 +147,10 @@ class PendingTargetTestMessageTest {
     }
 
     @Suppress("DEPRECATION")
-    internal class TestMessageFeedbackEvents(private val message: String) :
-        UiAutomation.OnAccessibilityEventListener {
+    internal class TestMessageFeedbackEvents(
+        private val message: String,
+        private val duplicatePhrase: String = message
+    ) : UiAutomation.OnAccessibilityEventListener {
         val status = ConcurrentLinkedQueue<AccessibilityNodeInfo>()
         val talkBackSpeech = ConcurrentLinkedQueue<String>()
         val announcementsOrToasts = ConcurrentLinkedQueue<Int>()
@@ -159,7 +161,7 @@ class PendingTargetTestMessageTest {
 
                 AccessibilityEvent.TYPE_ANNOUNCEMENT,
                 AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
-                    if (event.text.any { message in it.toString() }) {
+                    if (event.text.any { duplicatePhrase in it.toString() }) {
                         announcementsOrToasts.add(event.eventType)
                     }
                 }

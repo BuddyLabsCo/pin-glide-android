@@ -3,7 +3,6 @@ package com.buddylabs.pinglide.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
-import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 import com.buddylabs.pinglide.domain.identity.AuthorizationState
 import com.buddylabs.pinglide.domain.identity.RestorationState
 import com.buddylabs.pinglide.domain.identity.SenderRestoration
@@ -33,17 +32,7 @@ class HomeViewModel(
     private val mutableSmsRecovery = MutableStateFlow(SmsRecovery.Idle)
     val smsRecovery = mutableSmsRecovery.asStateFlow()
     private var recoveryGeneration = 0L
-    val testMessage = TestMessageAction(viewModelScope) { pairingId ->
-        val origin = state.value
-        val outcome = sendTest(pairingId)
-        if (outcome?.result == TestMessageResult.InvalidPairing &&
-            pairings.isRemovalConfirmed(origin, pairingId)
-        ) {
-            outcome.copy(pairingRemoved = true)
-        } else {
-            outcome
-        }
-    }
+    val testMessage = TestMessageAction(viewModelScope, sendTest)
     private var testOrigin: HomeState? = null
     private val mutableSettingsOpen = MutableStateFlow(false)
     val settingsOpen = mutableSettingsOpen.asStateFlow()

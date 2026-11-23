@@ -16,7 +16,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
 import com.buddylabs.pinglide.domain.forwarding.PairingTestMessage
-import com.buddylabs.pinglide.domain.forwarding.TestCiphertext
 import com.buddylabs.pinglide.domain.forwarding.TestDeliveryService
 import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
@@ -24,6 +23,7 @@ import com.buddylabs.pinglide.domain.pairing.OwnPairings
 import com.buddylabs.pinglide.domain.pairing.PairingService
 import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import com.buddylabs.pinglide.domain.settings.AppLanguage
+import com.buddylabs.pinglide.platform.crypto.encryptTestMessage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
@@ -86,12 +86,12 @@ internal fun renderReadyHome(
     compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
     val app = compose.activity.application as PinGlideApplication
     val message = testDelivery?.let {
-        PairingTestMessage(store, renewal, { _, _ -> TestCiphertext("nonce", "ciphertext") }, it)
+        PairingTestMessage(store, renewal, ::encryptTestMessage, it)
     }
     val home = HomeViewModel(
         pairings,
         app.senderRestoration(),
-        if (message == null) sendTest else message::send
+        if (message == null) sendTest else { pairingId -> message.sendFromHome(pairingId, service) }
     )
     compose.setContent {
         val state by home.state.collectAsState()

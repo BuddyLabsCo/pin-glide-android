@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -34,6 +35,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -66,8 +68,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.domain.pairing.Presence
@@ -76,6 +80,7 @@ import com.buddylabs.pinglide.ui.components.AnchoredPairingTestAction
 import com.buddylabs.pinglide.ui.components.PairingTestFeedback
 import com.buddylabs.pinglide.ui.components.TestMessageAction
 import com.buddylabs.pinglide.ui.components.TestMessageState
+import com.buddylabs.pinglide.ui.components.hasAnchoredNotice
 import com.buddylabs.pinglide.ui.components.testMessageButtonLabel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -132,7 +137,7 @@ internal fun TargetDetailsSheet(
     val subtitle = if (showingDetails) presenceLabel else stringResource(R.string.home_alias_scope)
     val colors = MaterialTheme.colorScheme
     val accessibility = LocalAccessibilityManager.current
-    var titleVisible by remember(target.pairingId) { mutableStateOf(false) }
+    var headerBottom by remember(target.pairingId) { mutableFloatStateOf(0f) }
     val confirmation = stringResource(R.string.home_renamed)
         .takeIf { action.result == PairingChange.Renamed }
     val sheetShadow = if (showingDetails) {
@@ -171,20 +176,24 @@ internal fun TargetDetailsSheet(
     ) {
         val contentModifier = Modifier.fillMaxWidth().verticalScroll(scroll)
             .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
-        AnchoredPairingTestAction(testMessage, accessibility, showingDetails, titleVisible) {
+        AnchoredPairingTestAction(testMessage, accessibility, showingDetails, headerBottom) {
                 testState,
                 sendTest,
                 anchor
             ->
             Column(contentModifier) {
+                val header = if (testState.outcome?.pairingRemoved == true) {
+                    Modifier.zIndex(1f).offset { IntOffset(0, scroll.value) }
+                        .background(colors.surface)
+                } else {
+                    Modifier
+                }
                 TargetDetailsHeader(
                     title,
                     subtitle,
-                    Modifier.padding(bottom = if (showingDetails) 14.dp else 18.dp),
-                    confirmation.takeIf { showingDetails },
-                    Modifier.onGloballyPositioned {
-                        titleVisible = it.boundsInRoot().height >= it.size.height
-                    }
+                    header.onGloballyPositioned { headerBottom = it.boundsInRoot().bottom }
+                        .padding(bottom = if (showingDetails) 14.dp else 18.dp),
+                    confirmation.takeIf { showingDetails }
                 )
                 if (showingDetails) {
                     if (!target.keyUsable) KeyFailureNotice()
@@ -253,8 +262,7 @@ private fun TargetDetailsHeader(
     title: String,
     subtitle: String,
     modifier: Modifier,
-    confirmation: String?,
-    titleModifier: Modifier
+    confirmation: String?
 ) {
     Row(
         modifier.fillMaxWidth(),
@@ -266,7 +274,7 @@ private fun TargetDetailsHeader(
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight(750),
                 letterSpacing = (-0.96).sp,
-                modifier = titleModifier.semantics {
+                modifier = Modifier.semantics {
                     heading()
                     liveRegion = LiveRegionMode.Polite
                     if (confirmation != null) stateDescription = confirmation
@@ -337,7 +345,7 @@ private fun TargetDetailsActions(
             }
         }
         PairingTestFeedback(
-            testState.outcome,
+            testState.outcome?.takeUnless { it.hasAnchoredNotice },
             Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
         )
         val testDividerOpacity = if (testState.pending) disabledAlpha else 1f
