@@ -2,6 +2,7 @@ package com.buddylabs.pinglide.ui.pairing
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -76,6 +78,7 @@ internal fun PairingScannerScreen(
             Modifier.fillMaxSize().scannerBackdrop(colors, insets).windowInsetsPadding(insets),
             contentAlignment = Alignment.TopCenter
         ) {
+            val viewfinderMaxSize = minOf(264.dp, maxHeight)
             Column(
                 Modifier.widthIn(max = 560.dp).fillMaxWidth()
                     .verticalScroll(rememberScrollState()).heightIn(min = maxHeight)
@@ -85,7 +88,11 @@ internal fun PairingScannerScreen(
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(model::close, Modifier.size(48.dp)) {
-                        Icon(painterResource(R.drawable.ic_close), contentDescription = cancel)
+                        Icon(
+                            painterResource(R.drawable.ic_close),
+                            contentDescription = cancel,
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
                     Text(
                         title,
@@ -119,7 +126,12 @@ internal fun PairingScannerScreen(
                     textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(40.dp))
-                ScannerViewfinder(state, model, resumed)
+                ScannerViewfinder(
+                    state,
+                    model,
+                    resumed,
+                    Modifier.widthIn(max = viewfinderMaxSize)
+                )
                 Spacer(Modifier.height(30.dp))
                 when (state.problem) {
                     null -> Unit
@@ -152,15 +164,17 @@ internal fun PairingScannerScreen(
 private fun ScannerViewfinder(
     state: PairingEntryState,
     model: PairingEntryViewModel,
-    resumed: Boolean
+    resumed: Boolean,
+    modifier: Modifier
 ) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(28.dp)
+    val outline = colors.onSurface.copy(alpha = if (isSystemInDarkTheme()) 0.16f else 0.17f)
     val showPreview = !state.pending &&
         (state.problem == null || state.problem == PairingEntryProblem.InvalidQr)
     val defaultAlias = stringResource(R.string.pairing_default_alias)
     Box(
-        Modifier.widthIn(max = 264.dp).fillMaxWidth().aspectRatio(1f),
+        modifier.fillMaxWidth().aspectRatio(1f).testTag("pairing-viewfinder"),
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -168,7 +182,7 @@ private fun ScannerViewfinder(
                 colors.surfaceContainerLow.copy(alpha = 0.72f),
                 shape
             )
-                .border(1.dp, colors.onSurface.copy(alpha = 0.17f), shape)
+                .border(1.dp, outline, shape)
                 .clip(shape)
         ) {
             if (resumed && showPreview) {

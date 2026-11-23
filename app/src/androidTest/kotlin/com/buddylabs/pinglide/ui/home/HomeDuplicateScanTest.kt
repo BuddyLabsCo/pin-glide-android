@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.AccessibilityManager
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
@@ -27,10 +28,13 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -94,11 +98,18 @@ class HomeDuplicateScanTest {
         val screenBounds = compose.onNode(hasScrollAction()).getUnclippedBoundsInRoot()
         val titleBounds = title.assertIsDisplayed().getUnclippedBoundsInRoot()
         val cancelBounds = cancel.assertIsDisplayed().getUnclippedBoundsInRoot()
+        val titleLayouts = mutableListOf<TextLayoutResult>()
+        title.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(titleLayouts) }
+        val titleLayout = titleLayouts.single()
+        val lineCenter = (titleLayout.getLineLeft(0) + titleLayout.getLineRight(0)) / 2
         assertEquals(
             (screenBounds.left + screenBounds.right).value / 2,
-            (titleBounds.left + titleBounds.right).value / 2,
+            titleBounds.left.value + with(compose.density) { lineCenter.toDp().value },
             1f
         )
+        val frame = compose.onNodeWithTag("pairing-viewfinder").assertIsDisplayed()
+            .getUnclippedBoundsInRoot()
+        assertEquals(264f, (frame.bottom - frame.top).value, 1f)
         assertEquals(28f, (screenBounds.bottom - cancelBounds.bottom).value, 1f)
         assertTrue(cancelBounds.bottom - cancelBounds.top >= 48.dp)
 
@@ -109,10 +120,14 @@ class HomeDuplicateScanTest {
     }
 
     @Test
-    fun scannerCancelRemainsReachableWithLargeTextInAShortWindow() {
+    fun scannerFrameAndCancelRemainReachableWithLargeTextInAShortWindow() {
         renderHome(usableHeight = 260.dp, fontScale = 1.5f)
         val add = compose.onNodeWithText("Add device")
         add.performClick()
+        val viewport = compose.onNode(hasScrollAction()).getUnclippedBoundsInRoot()
+        val frame = compose.onNodeWithTag("pairing-viewfinder")
+            .performScrollTo().assertIsDisplayed().getUnclippedBoundsInRoot()
+        assertTrue(frame.top >= viewport.top && frame.bottom <= viewport.bottom)
         compose.onNodeWithText("Cancel").performScrollTo().assertIsDisplayed().performClick()
         add.assertIsDisplayed()
     }
