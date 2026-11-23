@@ -112,8 +112,8 @@
     <string name="home_receiving_copy">Turning this off keeps this target paired.</string>
     <string name="home_key_recovery">The local key is missing or damaged. Forwarding to this target is off. Remove its Pairing, then add the target again. Other targets are unaffected.</string>
     <string name="home_rename">Rename target</string>
-    <string name="home_alias_help">Enter a unique target name of 1–40 characters.</string>
-    <string name="home_alias_scope">This name is visible only to this Sender.</string>
+    <string name="home_alias_help">Enter a name that’s unique among this Sender’s paired targets.</string>
+    <string name="home_alias_scope">This alias is visible only to this Sender</string>
     <string name="home_alias_label">Target name</string>
     <string name="home_alias_blank">Enter a target name.</string>
     <string name="home_alias_too_long">Use no more than 40 characters.</string>
@@ -130,6 +130,7 @@
     <string name="home_target_pending">Submitting, please wait</string>
     <string name="home_target_busy">The operation did not complete and receiving is unchanged. Wait for the current operation to finish and retry.</string>
     <string name="home_rename_error">The saved name is unconfirmed. Your input is kept. Check your connection and retry; the next refresh will reconcile the result.</string>
+    <string name="home_rename_retry">Retry save</string>
     <string name="home_remove_error">Removal is unconfirmed. Check your connection and retry. Forwarding to this target is off and its key is kept; the next refresh will reconcile the result.</string>
     <string name="home_renamed">Target name updated</string>
     <string name="home_removed">Pairing removed</string>

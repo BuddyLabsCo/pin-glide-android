@@ -7,7 +7,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,7 +20,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -29,7 +27,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,9 +44,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
@@ -57,19 +56,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
-import com.buddylabs.pinglide.domain.pairing.PairingAliasError
 import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.domain.pairing.TargetDevice
-import com.buddylabs.pinglide.domain.pairing.pairingAliasError
 import com.buddylabs.pinglide.ui.components.PairingTestAction
 import com.buddylabs.pinglide.ui.components.TestMessageAction
 import kotlinx.coroutines.flow.first
@@ -123,6 +120,14 @@ internal fun TargetDetailsSheet(
     val title = if (page == DetailsPage.Rename) stringResource(R.string.home_rename) else name
     val showingDetails = page == DetailsPage.Details
     val colors = MaterialTheme.colorScheme
+    val sheetShadow = if (showingDetails) {
+        Modifier
+    } else {
+        Modifier.dropShadow(
+            BottomSheetDefaults.ExpandedShape,
+            Shadow(42.dp, Color.Black, offset = DpOffset(0.dp, (-14).dp), alpha = 0.18f)
+        )
+    }
     ModalBottomSheet(
         onDismissRequest = {
             if (!pending) {
@@ -136,84 +141,89 @@ internal fun TargetDetailsSheet(
         },
         sheetState = sheet,
         sheetGesturesEnabled = !pending,
-        containerColor = if (showingDetails) colors.surface else BottomSheetDefaults.ContainerColor,
-        scrimColor = if (showingDetails) detailsScrim() else BottomSheetDefaults.ScrimColor,
+        containerColor = colors.surface,
+        scrimColor = detailsScrim(),
         dragHandle = {
-            if (showingDetails) {
-                val label = stringResource(R.string.home_details_drag_handle)
-                Box(
-                    Modifier.padding(top = 11.dp, bottom = 18.dp).size(36.dp, 4.dp)
-                        .background(colors.outlineVariant, CircleShape)
-                        .semantics { contentDescription = label }
-                )
-            } else {
-                BottomSheetDefaults.DragHandle()
-            }
+            val label = stringResource(R.string.home_details_drag_handle)
+            Box(
+                Modifier.padding(top = 11.dp, bottom = 18.dp).size(36.dp, 4.dp)
+                    .background(colors.outlineVariant, CircleShape)
+                    .semantics { contentDescription = label }
+            )
         },
         contentWindowInsets = { WindowInsets.safeDrawing },
-        modifier = Modifier.imePadding().semantics { paneTitle = title }
+        modifier = Modifier.imePadding().then(sheetShadow).semantics { paneTitle = title }
     ) {
         if (showingDetails) {
-            Column(
-                Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                    .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
-            ) {
-                TargetDetailsHeader(name, presenceLabel)
-                if (!target.keyUsable) KeyFailureNotice()
-                TargetDetailsActions(
-                    target,
-                    name,
-                    testMessage,
-                    onSelect,
-                    removalFocus,
-                    onRename = {
-                        draft = target.alias
-                        testMessage.leave()
-                        onClearAction()
-                        page = DetailsPage.Rename
-                    },
-                    onRemove = {
-                        testMessage.leave()
-                        onClearAction()
-                        page = DetailsPage.Remove
+            Box {
+                Column(
+                    Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                        .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
+                ) {
+                    TargetDetailsHeader(name, presenceLabel)
+                    if (!target.keyUsable) KeyFailureNotice()
+                    TargetDetailsActions(
+                        target,
+                        name,
+                        testMessage,
+                        onSelect,
+                        removalFocus,
+                        onRename = {
+                            draft = target.alias
+                            testMessage.leave()
+                            onClearAction()
+                            page = DetailsPage.Rename
+                        },
+                        onRemove = {
+                            testMessage.leave()
+                            onClearAction()
+                            page = DetailsPage.Remove
+                        }
+                    )
+                    val window = LocalWindowInfo.current
+                    LaunchedEffect(window, restoreRemovalFocus) {
+                        if (restoreRemovalFocus) {
+                            snapshotFlow { window.isWindowFocused }.first { it }
+                            removalFocus.requestFocus()
+                            restoreRemovalFocus = false
+                        }
                     }
-                )
-                val window = LocalWindowInfo.current
-                LaunchedEffect(window, restoreRemovalFocus) {
-                    if (restoreRemovalFocus) {
-                        snapshotFlow { window.isWindowFocused }.first { it }
-                        removalFocus.requestFocus()
-                        restoreRemovalFocus = false
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        enabled = !pending,
+                        border = BorderStroke(1.dp, colors.onSurface.copy(alpha = 0.34f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    ) {
+                        Text(stringResource(R.string.close), fontWeight = FontWeight.Bold)
                     }
                 }
-                ActionNotice(action)
-                OutlinedButton(
-                    onClick = onDismiss,
-                    enabled = !pending,
-                    border = BorderStroke(1.dp, colors.onSurface.copy(alpha = 0.34f)),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                ) {
-                    Text(stringResource(R.string.close), fontWeight = FontWeight.Bold)
+                if (action.result == PairingChange.Renamed) {
+                    Text(
+                        stringResource(R.string.home_renamed),
+                        color = colors.surface,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight(650),
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 164.dp)
+                            .background(colors.onSurface.copy(alpha = 0.88f), CircleShape)
+                            .padding(horizontal = 18.dp, vertical = 12.dp)
+                            .semantics { liveRegion = LiveRegionMode.Polite }
+                    )
                 }
             }
             return@ModalBottomSheet
         }
-        Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                title,
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.semantics { heading() }
-            )
-            RenameTarget(draft, otherAliases, pending, {
+        TargetRenameContent(
+            draft,
+            otherAliases,
+            action,
+            {
                 draft = it
                 onClearAction()
-            }, onRename, returnToDetails)
-            ActionNotice(action)
-        }
+            },
+            onRename,
+            returnToDetails
+        )
     }
 }
 
@@ -222,21 +232,25 @@ private fun detailsScrim(): Color =
     if (isSystemInDarkTheme()) Color.Black.copy(alpha = 0.64f) else Color(0x73081815)
 
 @Composable
-private fun TargetDetailsHeader(name: String, presenceLabel: String) {
+internal fun TargetDetailsHeader(
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier.padding(bottom = 14.dp)
+) {
     Row(
-        Modifier.fillMaxWidth().padding(bottom = 14.dp),
+        modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(
-                name,
+                title,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight(750),
                 letterSpacing = (-0.96).sp,
                 modifier = Modifier.semantics { heading() }
             )
             Text(
-                presenceLabel,
+                subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -350,60 +364,6 @@ private fun TargetDetailsRow(
 }
 
 @Composable
-private fun RenameTarget(
-    draft: String,
-    otherAliases: List<String>,
-    pending: Boolean,
-    onDraft: (String) -> Unit,
-    onRename: (String) -> Unit,
-    onCancel: () -> Unit
-) {
-    val focus = remember { FocusRequester() }
-    val validation = pairingAliasError(draft, otherAliases)
-    val message = stringResource(
-        when (validation) {
-            PairingAliasError.Blank -> R.string.home_alias_blank
-            PairingAliasError.TooLong -> R.string.home_alias_too_long
-            PairingAliasError.InvalidCharacters -> R.string.home_alias_invalid_characters
-            PairingAliasError.Duplicate -> R.string.home_alias_duplicate
-            null -> R.string.home_alias_help
-        }
-    )
-    LaunchedEffect(Unit) { focus.requestFocus() }
-    Text(stringResource(R.string.home_alias_scope), style = MaterialTheme.typography.bodySmall)
-    OutlinedTextField(
-        value = draft,
-        onValueChange = onDraft,
-        enabled = !pending,
-        isError = validation != null,
-        label = { Text(stringResource(R.string.home_alias_label)) },
-        supportingText = {
-            Text(message, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-        },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth().focusRequester(focus).semantics {
-            if (validation != null) error(message)
-        }
-    )
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        OutlinedButton(
-            onClick = onCancel,
-            enabled = !pending,
-            modifier = Modifier.weight(1f).heightIn(min = 48.dp)
-        ) { Text(stringResource(R.string.setup_cancel)) }
-        Button(
-            onClick = { onRename(draft) },
-            enabled = validation == null && !pending,
-            modifier = Modifier.weight(1f).heightIn(min = 48.dp)
-        ) { Text(stringResource(if (pending) R.string.home_saving else R.string.home_save)) }
-    }
-}
-
-@Composable
 private fun KeyFailureNotice() {
     Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.medium) {
         Text(
@@ -411,19 +371,4 @@ private fun KeyFailureNotice() {
             modifier = Modifier.padding(16.dp).semantics { liveRegion = LiveRegionMode.Polite }
         )
     }
-}
-
-@Composable
-private fun ActionNotice(action: TargetAction) {
-    val message = when {
-        action.pending -> R.string.home_target_pending
-        action.result == PairingChange.InvalidAlias -> R.string.home_alias_help
-        action.result == PairingChange.Unavailable -> R.string.home_rename_error
-        action.result == PairingChange.Renamed -> R.string.home_renamed
-        else -> return
-    }
-    Text(
-        stringResource(message),
-        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-    )
 }

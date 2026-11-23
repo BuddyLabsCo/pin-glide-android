@@ -28,6 +28,7 @@ internal fun renderReadyHome(
     scope: CoroutineScope,
     language: AppLanguage = AppLanguage.SimplifiedChinese,
     nightMode: Int? = null,
+    onRename: suspend (String, String) -> Unit = { _, _ -> error("Unexpected rename") },
     onRemove: suspend (String) -> Unit
 ) {
     val store = HomePairingStore(targets, Instant.now().plusSeconds(3600).toString())
@@ -36,6 +37,23 @@ internal fun renderReadyHome(
         private val remote = targets.associateBy { it.pairingId }.toMutableMap()
 
         override suspend fun list(managementToken: String) = remote.values.toList()
+
+        override suspend fun rename(
+            managementToken: String,
+            pairingId: String,
+            alias: String
+        ): RemotePairing {
+            onRename(pairingId, alias)
+            val target = remote.getValue(pairingId)
+            return RemotePairing(
+                pairingId,
+                target.receiverId,
+                alias,
+                target.presence,
+                target.stateChangedAt
+            )
+                .also { remote[pairingId] = it }
+        }
 
         override suspend fun remove(managementToken: String, pairingId: String) {
             onRemove(pairingId)

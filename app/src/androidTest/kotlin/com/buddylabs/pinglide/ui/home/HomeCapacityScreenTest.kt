@@ -176,7 +176,11 @@ internal class HomePairingStore(
         PairingSnapshot(authority, revision, listed, pairings.values.toList())
 
     override suspend fun reconcile(expected: PairingSnapshot, items: List<RemotePairing>): Boolean {
-        pairings.keys.retainAll(items.map { it.pairingId }.toSet())
+        val aliases = items.associate { it.pairingId to it.alias }
+        pairings.keys.retainAll(aliases.keys)
+        pairings.replaceAll { pairingId, pairing ->
+            pairing.copy(alias = aliases.getValue(pairingId))
+        }
         listed = true
         revision++
         return true
