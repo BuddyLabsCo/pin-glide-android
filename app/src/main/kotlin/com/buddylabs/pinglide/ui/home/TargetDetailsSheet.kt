@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.PairingAliasError
 import com.buddylabs.pinglide.domain.pairing.PairingChange
+import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.TargetDevice
 import com.buddylabs.pinglide.domain.pairing.pairingAliasError
 import com.buddylabs.pinglide.ui.components.PairingTestAction
@@ -166,6 +167,7 @@ internal fun TargetDetailsSheet(
                     testMessage,
                     onSelect,
                     removalFocus,
+                    renameSaved = action.result == PairingChange.Renamed,
                     onRename = {
                         draft = target.alias
                         testMessage.leave()
@@ -252,11 +254,15 @@ private fun TargetDetailsActions(
     testMessage: TestMessageAction,
     onSelect: (Boolean) -> Unit,
     removalFocus: FocusRequester,
+    renameSaved: Boolean,
     onRename: () -> Unit,
     onRemove: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    val offline = target.presence == Presence.Offline
+    val showTestChevron = offline || !target.enabled || !target.keyUsable || renameSaved
     val divider = colors.onSurface.copy(alpha = 0.17f)
+    val dividerThickness = if (offline) 1.dp else 0.5.dp
     val danger = colorResource(R.color.error_emblem)
     Column(Modifier.clip(RoundedCornerShape(16.dp)).background(colors.surfaceContainer)) {
         TargetDetailsRow(
@@ -271,22 +277,33 @@ private fun TargetDetailsActions(
                 onSelect = onSelect
             )
         }
-        HorizontalDivider(thickness = 0.5.dp, color = divider)
+        HorizontalDivider(thickness = dividerThickness, color = divider)
         PairingTestAction(
             testMessage,
             enabled = target.keyUsable,
             feedbackModifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-        ) { label, enabled, onClick ->
+        ) { label, enabled, sending, onClick ->
+            val alpha = if (enabled) 1f else 0.38f
+            val iconTint = colors.onSurfaceVariant.copy(alpha = alpha)
             TargetDetailsRow(
                 R.drawable.ic_send,
                 label,
                 Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick)
                     .semantics { liveRegion = LiveRegionMode.Polite },
-                color = colors.onSurface.copy(alpha = if (enabled) 1f else 0.38f),
-                iconTint = colors.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.38f)
-            )
+                color = colors.onSurface.copy(alpha = alpha),
+                iconTint = iconTint
+            ) {
+                if (showTestChevron && !sending) {
+                    Icon(
+                        painterResource(R.drawable.ic_chevron),
+                        null,
+                        Modifier.size(20.dp),
+                        iconTint
+                    )
+                }
+            }
         }
-        HorizontalDivider(thickness = 0.5.dp, color = divider)
+        HorizontalDivider(thickness = dividerThickness, color = divider)
         TargetDetailsRow(
             R.drawable.ic_edit,
             stringResource(R.string.home_rename),
@@ -299,7 +316,7 @@ private fun TargetDetailsActions(
                 colors.onSurfaceVariant
             )
         }
-        HorizontalDivider(thickness = 0.5.dp, color = divider)
+        HorizontalDivider(thickness = dividerThickness, color = divider)
         TargetDetailsRow(
             R.drawable.ic_delete,
             stringResource(R.string.home_remove),

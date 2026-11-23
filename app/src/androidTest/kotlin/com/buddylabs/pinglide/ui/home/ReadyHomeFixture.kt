@@ -11,6 +11,7 @@ import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
+import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
 import com.buddylabs.pinglide.domain.pairing.PairingService
@@ -28,14 +29,37 @@ internal fun renderReadyHome(
     scope: CoroutineScope,
     language: AppLanguage = AppLanguage.SimplifiedChinese,
     nightMode: Int? = null,
+    sendTest: suspend (String) -> TestMessageOutcome? = { null },
+    missingKeyId: String? = null,
     onRemove: suspend (String) -> Unit
 ) {
-    val store = HomePairingStore(targets, Instant.now().plusSeconds(3600).toString())
+    val store = HomePairingStore(
+        targets,
+        Instant.now().plusSeconds(3600).toString(),
+        missingKeyId = missingKeyId
+    )
     val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)
     val service = object : PairingService {
         private val remote = targets.associateBy { it.pairingId }.toMutableMap()
 
         override suspend fun list(managementToken: String) = remote.values.toList()
+
+        override suspend fun rename(
+            managementToken: String,
+            pairingId: String,
+            alias: String
+        ): RemotePairing {
+            val target = remote.getValue(pairingId)
+            val updated = RemotePairing(
+                pairingId,
+                target.receiverId,
+                alias,
+                target.presence,
+                target.stateChangedAt
+            )
+            remote[pairingId] = updated
+            return updated
+        }
 
         override suspend fun remove(managementToken: String, pairingId: String) {
             onRemove(pairingId)
@@ -46,7 +70,7 @@ internal fun renderReadyHome(
     runBlocking(Dispatchers.Main) { pairings.refresh() }
     compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
     val app = compose.activity.application as PinGlideApplication
-    val home = HomeViewModel(pairings, app.senderRestoration()) { null }
+    val home = HomeViewModel(pairings, app.senderRestoration(), sendTest)
     compose.setContent {
         val state by home.state.collectAsState()
         val systemConfiguration = LocalConfiguration.current
