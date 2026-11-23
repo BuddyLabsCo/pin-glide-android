@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -274,8 +275,10 @@ private fun TargetDetailsActions(
     onRemove: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    val testState by testMessage.state.collectAsState()
     val offline = target.presence == Presence.Offline
     val showTestChevron = offline || !target.enabled || !target.keyUsable || renameSaved
+    val disabledAlpha = 0.38f
     val divider = colors.onSurface.copy(alpha = 0.17f)
     val dividerThickness = if (offline) 1.dp else 0.5.dp
     val danger = colorResource(R.color.error_emblem)
@@ -298,7 +301,7 @@ private fun TargetDetailsActions(
             enabled = target.keyUsable,
             feedbackModifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
         ) { label, enabled, sending, onClick ->
-            val alpha = if (enabled) 1f else 0.38f
+            val alpha = if (enabled) 1f else disabledAlpha
             val iconTint = colors.onSurfaceVariant.copy(alpha = alpha)
             TargetDetailsRow(
                 R.drawable.ic_send,
@@ -318,7 +321,11 @@ private fun TargetDetailsActions(
                 }
             }
         }
-        HorizontalDivider(thickness = dividerThickness, color = divider)
+        val testDividerOpacity = if (testState.pending) disabledAlpha else 1f
+        HorizontalDivider(
+            thickness = dividerThickness,
+            color = divider.copy(alpha = divider.alpha * testDividerOpacity)
+        )
         TargetDetailsRow(
             R.drawable.ic_edit,
             stringResource(R.string.home_rename),
