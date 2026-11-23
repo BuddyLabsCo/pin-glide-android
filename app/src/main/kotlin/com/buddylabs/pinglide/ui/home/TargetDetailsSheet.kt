@@ -90,6 +90,8 @@ internal fun TargetDetailsSheet(
     onDismiss: () -> Unit
 ) {
     var page by rememberSaveable(target.pairingId) { mutableStateOf(DetailsPage.Details) }
+    val scroll = rememberScrollState()
+    LaunchedEffect(page) { scroll.scrollTo(0) }
     var restoreRemovalFocus by rememberSaveable(target.pairingId) { mutableStateOf(false) }
     val removalFocus = remember { FocusRequester() }
     LaunchedEffect(page, target.pairingId) {
@@ -121,6 +123,8 @@ internal fun TargetDetailsSheet(
     val title = if (page == DetailsPage.Rename) stringResource(R.string.home_rename) else name
     val showingDetails = page == DetailsPage.Details
     val colors = MaterialTheme.colorScheme
+    val confirmation = stringResource(R.string.home_renamed)
+        .takeIf { action.result == PairingChange.Renamed }
     val sheetShadow = if (showingDetails) {
         Modifier
     } else {
@@ -155,17 +159,17 @@ internal fun TargetDetailsSheet(
         contentWindowInsets = { WindowInsets.safeDrawing },
         modifier = Modifier.imePadding().then(sheetShadow).semantics { paneTitle = title }
     ) {
-        if (showingDetails) {
-            Column(
-                Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                    .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
-            ) {
-                val confirmation = if (action.result == PairingChange.Renamed) {
-                    stringResource(R.string.home_renamed)
-                } else {
-                    null
-                }
-                TargetDetailsHeader(name, presenceLabel, confirmation = confirmation)
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(scroll)
+                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
+        ) {
+            TargetDetailsHeader(
+                title,
+                if (showingDetails) presenceLabel else stringResource(R.string.home_alias_scope),
+                Modifier.padding(bottom = if (showingDetails) 14.dp else 18.dp),
+                confirmation.takeIf { showingDetails }
+            )
+            if (showingDetails) {
                 if (!target.keyUsable) KeyFailureNotice()
                 TargetDetailsActions(
                     target,
@@ -202,20 +206,20 @@ internal fun TargetDetailsSheet(
                 ) {
                     Text(stringResource(R.string.close), fontWeight = FontWeight.Bold)
                 }
+            } else {
+                TargetRenameContent(
+                    draft,
+                    otherAliases,
+                    action,
+                    {
+                        draft = it
+                        onClearAction()
+                    },
+                    onRename,
+                    returnToDetails
+                )
             }
-            return@ModalBottomSheet
         }
-        TargetRenameContent(
-            draft,
-            otherAliases,
-            action,
-            {
-                draft = it
-                onClearAction()
-            },
-            onRename,
-            returnToDetails
-        )
     }
 }
 
@@ -224,11 +228,11 @@ private fun detailsScrim(): Color =
     if (isSystemInDarkTheme()) Color.Black.copy(alpha = 0.64f) else Color(0x73081815)
 
 @Composable
-internal fun TargetDetailsHeader(
+private fun TargetDetailsHeader(
     title: String,
     subtitle: String,
-    modifier: Modifier = Modifier.padding(bottom = 14.dp),
-    confirmation: String? = null
+    modifier: Modifier,
+    confirmation: String?
 ) {
     Row(
         modifier.fillMaxWidth(),
@@ -242,10 +246,8 @@ internal fun TargetDetailsHeader(
                 letterSpacing = (-0.96).sp,
                 modifier = Modifier.semantics {
                     heading()
-                    if (confirmation != null) {
-                        stateDescription = confirmation
-                        liveRegion = LiveRegionMode.Polite
-                    }
+                    liveRegion = LiveRegionMode.Polite
+                    if (confirmation != null) stateDescription = confirmation
                 }
             )
             Text(

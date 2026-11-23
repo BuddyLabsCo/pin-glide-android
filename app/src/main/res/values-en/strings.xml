@@ -123,8 +123,7 @@
     <string name="home_rename_blank">Enter a target name.</string>
     <string name="home_rename_too_long">Use no more than 40 characters.</string>
     <string name="home_rename_duplicate">Another paired target already has this name. Choose a different name.</string>
-    <string name="home_rename_choose_another">Choose a different target name.</string>
-    <string name="home_rename_rejected">This name could not be saved. %1$s</string>
+    <string name="home_rename_rejected">This name could not be saved. Choose a different target name.</string>
     <string name="home_saving">Saving</string>
     <string name="home_save">Save</string>
     <string name="home_remove">Remove this target’s Pairing</string>

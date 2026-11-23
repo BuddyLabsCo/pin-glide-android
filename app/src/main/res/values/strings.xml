@@ -124,8 +124,7 @@
     <string name="home_rename_blank">请输入设备名称</string>
     <string name="home_rename_too_long">设备名称不能超过 40 字</string>
     <string name="home_rename_duplicate">已有一台同名设备，请换一个名称</string>
-    <string name="home_rename_choose_another">请输入其他设备名称。</string>
-    <string name="home_rename_rejected">无法保存此名称。%1$s</string>
+    <string name="home_rename_rejected">无法保存此名称。请输入其他设备名称。</string>
     <string name="home_saving">正在保存</string>
     <string name="home_save">保存</string>
     <string name="home_remove">移除这台设备的配对</string>

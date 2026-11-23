@@ -91,7 +91,11 @@ class HomeRenameSheetTest {
             } else {
                 reconciliationReads++
                 items.map { item ->
-                    if (item.pairingId == "office") target("office", "已同步的办公设备") else item
+                    if (item.pairingId == "office") {
+                        target("office", if (requests.size == 1) "已同步的办公设备" else "重试后的办公设备")
+                    } else {
+                        item
+                    }
                 }
             }
         }) { id, alias ->
@@ -119,7 +123,7 @@ class HomeRenameSheetTest {
         assertEquals(2, compose.onAllNodesWithText("家用设备").fetchSemanticsNodes().size)
         text("关闭").performClick()
         text("家用设备").assertIsDisplayed()
-        text("已同步的办公设备").assertIsDisplayed()
+        text("重试后的办公设备").assertIsDisplayed()
         compose.runOnIdle {
             assertEquals(2, reconciliationReads)
             assertEquals(List(2) { "home" to "家用设备" }, requests)
@@ -140,19 +144,21 @@ class HomeRenameSheetTest {
             }
         })
         val field = compose.onNode(hasSetTextAction())
-        field.performTextReplacement("家用设备")
+        val alias = "家用设备"
+        field.performTextReplacement(alias)
         compose.runOnIdle { home.refresh() }
         compose.waitUntil(5_000) { started.isCompleted }
         text("保存").assertIsEnabled().performClick()
         text("正在保存").assertIsNotEnabled()
-        refreshed.complete(listOf(target("home", "我的电脑"), target("office", "家用设备")))
+        refreshed.complete(listOf(target("home", "我的电脑"), target("office", alias)))
 
-        val rejection = text("无法保存此名称。已有一台同名设备，请换一个名称")
+        val rejection = text("已有一台同名设备，请换一个名称")
         compose.waitUntil(5_000) { rejection.isDisplayed() }
+        text("正在保存").assertDoesNotExist()
         rejection.assert(
             SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
         )
-        compose.onNode(hasSetTextAction() and hasText("家用设备")).assertIsDisplayed()
+        compose.onNode(hasSetTextAction() and hasText(alias)).assertIsDisplayed()
         text("保存").assertIsNotEnabled()
         field.performTextReplacement("其他设备")
         rejection.assertDoesNotExist()
@@ -165,10 +171,9 @@ class HomeRenameSheetTest {
         val field = compose.onNode(hasSetTextAction()).assertIsFocused()
         withImeVisibility { imeVisible ->
             compose.waitUntil(5_000, imeVisible)
-            pressKey(KeyEvent.KEYCODE_X)
-            compose.onNode(
-                hasSetTextAction() and hasText("x", substring = true)
-            ).assertIsDisplayed()
+            field.performTextReplacement("家用设备")
+            compose.onNode(hasSetTextAction() and hasText("家用设备")).assertIsDisplayed()
+            compose.waitUntil(5_000, imeVisible)
             pressKey(KeyEvent.KEYCODE_BACK)
             compose.waitUntil(5_000) { !imeVisible() }
             field.assertIsDisplayed()
@@ -199,7 +204,7 @@ class HomeRenameSheetTest {
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(keyCode)
 
     @Test
-    fun confirmedRenameKeepsLargeTextActionsVisibleAndAnnouncesOnTheHeading() {
+    fun confirmedRenameKeepsLargeTextActionsVisibleAndUpdatesAccessibilityHeading() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val resolver = context.contentResolver
@@ -225,9 +230,17 @@ class HomeRenameSheetTest {
 
     private fun verifyConfirmedRename() {
         openRename { _, _ -> }
+        val initialHeading = compose.onNode(headingInSheet("重命名设备")).fetchSemanticsNode().id
         compose.onNode(hasSetTextAction()).performTextReplacement("家用设备")
-        text("保存").performScrollTo().performClick()
+        withImeVisibility { imeVisible ->
+            compose.waitUntil(5_000, imeVisible)
+            pressKey(KeyEvent.KEYCODE_BACK)
+            compose.waitUntil(5_000) { !imeVisible() }
+            text("保存").performScrollTo()
+        }
+        text("保存").performClick()
         awaitConfirmation()
+        assertEquals(initialHeading, compose.onNode(headingInSheet("家用设备")).fetchSemanticsNode().id)
         text("家用设备", inSheet = true).assertIsDisplayed()
         text("设备名称已更新").assertDoesNotExist()
         val labels = listOf("接收短信", "发送测试消息", "重命名设备", "移除这台设备的配对", "关闭")
@@ -238,13 +251,18 @@ class HomeRenameSheetTest {
     }
 
     private fun awaitConfirmation() {
-        val confirmation = compose.onNode(hasStateDescription("设备名称已更新"))
+        val confirmation = compose.onNode(
+            headingInSheet("家用设备") and hasStateDescription("设备名称已更新")
+        )
         compose.waitUntil(5_000) { confirmation.isDisplayed() }
         confirmation.assert(
             SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
         )
         compose.onAllNodesWithText("家用设备").assertCountEquals(2)
     }
+
+    private fun headingInSheet(title: String) = hasText(title) and hasAnyAncestor(isDialog()) and
+        SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)
 
     private fun assertRenameLayout(hint: String) {
         val groupTag = "renameAliasGroup"
@@ -266,8 +284,9 @@ class HomeRenameSheetTest {
         val save = text("保存").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertEquals(cancel.top, save.top)
         assertTrue(cancel.right < save.left)
-        assertTrue(cancel.height >= 48 * compose.density.density)
-        assertTrue(save.height >= 48 * compose.density.density)
+        val minimum = 48 * compose.density.density
+        assertTrue(cancel.width >= minimum && cancel.height >= minimum)
+        assertTrue(save.width >= minimum && save.height >= minimum)
     }
 
     private fun openRename(

@@ -21,10 +21,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -80,26 +78,16 @@ internal fun TargetRenameContent(
 ) {
     val validation = pairingAliasError(draft, otherAliases)
     val failed = action.result == PairingChange.Unavailable
-    Column(
-        Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-            .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
-    ) {
-        TargetDetailsHeader(
-            stringResource(R.string.home_rename),
-            stringResource(R.string.home_alias_scope),
-            Modifier.padding(bottom = 18.dp)
-        )
-        RenameAliasField(
-            draft,
-            validation,
-            action.result == PairingChange.InvalidAlias,
-            action.pending,
-            onDraft
-        )
-        if (failed) RenameFailureNotice()
-        Spacer(Modifier.height(18.dp))
-        RenameActions(action.pending, validation == null, failed, { onRename(draft) }, onCancel)
-    }
+    RenameAliasField(
+        draft,
+        validation,
+        action.result == PairingChange.InvalidAlias,
+        action.pending,
+        onDraft
+    )
+    if (failed) RenameFailureNotice()
+    Spacer(Modifier.height(18.dp))
+    RenameActions(action.pending, validation == null, failed, { onRename(draft) }, onCancel)
 }
 
 @Composable
@@ -118,10 +106,9 @@ private fun RenameAliasField(
             PairingAliasError.TooLong -> R.string.home_rename_too_long
             PairingAliasError.InvalidCharacters -> R.string.home_alias_invalid_characters
             PairingAliasError.Duplicate -> R.string.home_rename_duplicate
-            null -> if (rejected) R.string.home_rename_choose_another else R.string.home_rename_help
+            null -> if (rejected) R.string.home_rename_rejected else R.string.home_rename_help
         }
     )
-    val hint = if (rejected) stringResource(R.string.home_rename_rejected, guidance) else guidance
     val invalid = validation != null || rejected
     val danger = colorResource(R.color.error_emblem)
     val smallText = MaterialTheme.typography.bodySmall.copy(
@@ -141,10 +128,10 @@ private fun RenameAliasField(
             fontWeight = FontWeight(650)
         )
         Spacer(Modifier.height(7.dp))
-        RenameAliasInput(draft, label, hint.takeIf { invalid }, pending, onDraft)
+        RenameAliasInput(draft, label, guidance.takeIf { invalid }, pending, onDraft)
         Spacer(Modifier.height(8.dp))
         Text(
-            hint,
+            guidance,
             color = if (invalid) danger else colors.onSurfaceVariant,
             style = smallText,
             fontWeight = if (invalid) FontWeight(650) else FontWeight.Normal,
