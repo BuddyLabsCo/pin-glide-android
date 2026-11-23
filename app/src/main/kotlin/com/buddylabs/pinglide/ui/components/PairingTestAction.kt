@@ -20,7 +20,20 @@ import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 
 @Composable
-internal fun PairingTestAction(action: TestMessageAction, enabled: Boolean = true) {
+internal fun PairingTestAction(
+    action: TestMessageAction,
+    enabled: Boolean = true,
+    feedbackModifier: Modifier = Modifier,
+    button: @Composable (String, Boolean, () -> Unit) -> Unit = { label, available, onClick ->
+        Button(
+            onClick = onClick,
+            enabled = available,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics {
+                liveRegion = LiveRegionMode.Polite
+            }
+        ) { Text(label) }
+    }
+) {
     val state by action.state.collectAsState()
     val context = LocalContext.current
     LaunchedEffect(state.announceReceived) {
@@ -28,19 +41,13 @@ internal fun PairingTestAction(action: TestMessageAction, enabled: Boolean = tru
             Toast.makeText(context, R.string.pairing_test_received, Toast.LENGTH_SHORT).show()
         }
     }
-    Button(
-        onClick = action::send,
-        enabled = enabled && !state.pending,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics {
-            liveRegion = LiveRegionMode.Polite
-        }
-    ) {
-        Text(
-            stringResource(
-                if (state.pending) R.string.pairing_test_sending else R.string.pairing_test_send
-            )
-        )
-    }
+    button(
+        stringResource(
+            if (state.pending) R.string.pairing_test_sending else R.string.pairing_test_send
+        ),
+        enabled && !state.pending,
+        action::send
+    )
     state.outcome?.let { delivery ->
         val label = testMessageLabels.getValue(delivery.result)
         Text(
@@ -53,10 +60,7 @@ internal fun PairingTestAction(action: TestMessageAction, enabled: Boolean = tru
                     stringResource(label)
                 )
             },
-            modifier = Modifier.semantics {
-                liveRegion =
-                    LiveRegionMode.Polite
-            }
+            modifier = feedbackModifier.semantics { liveRegion = LiveRegionMode.Polite }
         )
     }
 }

@@ -1,25 +1,37 @@
 package com.buddylabs.pinglide.ui.home
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -32,19 +44,27 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.PairingAliasError
 import com.buddylabs.pinglide.domain.pairing.PairingChange
@@ -101,6 +121,8 @@ internal fun TargetDetailsSheet(
         if (action.result == PairingChange.Renamed) page = DetailsPage.Details
     }
     val title = if (page == DetailsPage.Rename) stringResource(R.string.home_rename) else name
+    val showingDetails = page == DetailsPage.Details
+    val colors = MaterialTheme.colorScheme
     ModalBottomSheet(
         onDismissRequest = {
             if (!pending) {
@@ -114,9 +136,69 @@ internal fun TargetDetailsSheet(
         },
         sheetState = sheet,
         sheetGesturesEnabled = !pending,
+        containerColor = if (showingDetails) colors.surface else BottomSheetDefaults.ContainerColor,
+        scrimColor = if (showingDetails) detailsScrim() else BottomSheetDefaults.ScrimColor,
+        dragHandle = {
+            if (showingDetails) {
+                val label = stringResource(R.string.home_details_drag_handle)
+                Box(
+                    Modifier.padding(top = 11.dp, bottom = 18.dp).size(36.dp, 4.dp)
+                        .background(colors.outlineVariant, CircleShape)
+                        .semantics { contentDescription = label }
+                )
+            } else {
+                BottomSheetDefaults.DragHandle()
+            }
+        },
         contentWindowInsets = { WindowInsets.safeDrawing },
         modifier = Modifier.imePadding().semantics { paneTitle = title }
     ) {
+        if (showingDetails) {
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
+            ) {
+                TargetDetailsHeader(name, presenceLabel)
+                if (!target.keyUsable) KeyFailureNotice()
+                TargetDetailsActions(
+                    target,
+                    name,
+                    testMessage,
+                    onSelect,
+                    removalFocus,
+                    onRename = {
+                        draft = target.alias
+                        testMessage.leave()
+                        onClearAction()
+                        page = DetailsPage.Rename
+                    },
+                    onRemove = {
+                        testMessage.leave()
+                        onClearAction()
+                        page = DetailsPage.Remove
+                    }
+                )
+                val window = LocalWindowInfo.current
+                LaunchedEffect(window, restoreRemovalFocus) {
+                    if (restoreRemovalFocus) {
+                        snapshotFlow { window.isWindowFocused }.first { it }
+                        removalFocus.requestFocus()
+                        restoreRemovalFocus = false
+                    }
+                }
+                ActionNotice(action)
+                OutlinedButton(
+                    onClick = onDismiss,
+                    enabled = !pending,
+                    border = BorderStroke(1.dp, colors.onSurface.copy(alpha = 0.34f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                ) {
+                    Text(stringResource(R.string.close), fontWeight = FontWeight.Bold)
+                }
+            }
+            return@ModalBottomSheet
+        }
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -126,77 +208,144 @@ internal fun TargetDetailsSheet(
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.semantics { heading() }
             )
-            if (page != DetailsPage.Rename) {
-                Text(presenceLabel, style = MaterialTheme.typography.bodySmall)
-                if (!target.keyUsable) KeyFailureNotice()
-            }
-            when (page) {
-                DetailsPage.Details -> {
-                    Text(
-                        stringResource(R.string.home_receiving),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(stringResource(R.string.home_receiving_copy))
-                    val label = stringResource(R.string.home_receive, name)
-                    Switch(
-                        checked = target.enabled,
-                        enabled = target.keyUsable,
-                        onCheckedChange = onSelect,
-                        modifier = Modifier.heightIn(min = 48.dp).semantics {
-                            contentDescription =
-                                label
-                        }
-                    )
-                    OutlinedButton(
-                        onClick = {
-                            draft = target.alias
-                            testMessage.leave()
-                            onClearAction()
-                            page = DetailsPage.Rename
-                        },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    ) { Text(stringResource(R.string.home_rename)) }
-                    OutlinedButton(
-                        onClick = {
-                            testMessage.leave()
-                            onClearAction()
-                            page = DetailsPage.Remove
-                        },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                            .focusRequester(removalFocus)
-                    ) {
-                        Text(
-                            stringResource(R.string.home_remove),
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                    val window = LocalWindowInfo.current
-                    LaunchedEffect(window, restoreRemovalFocus) {
-                        if (restoreRemovalFocus) {
-                            snapshotFlow { window.isWindowFocused }.first { it }
-                            removalFocus.requestFocus()
-                            restoreRemovalFocus = false
-                        }
-                    }
-                    PairingTestAction(testMessage, enabled = target.keyUsable)
-                }
-
-                DetailsPage.Rename -> RenameTarget(draft, otherAliases, pending, {
-                    draft = it
-                    onClearAction()
-                }, onRename, returnToDetails)
-
-                DetailsPage.Remove -> Unit
-            }
+            RenameTarget(draft, otherAliases, pending, {
+                draft = it
+                onClearAction()
+            }, onRename, returnToDetails)
             ActionNotice(action)
-            if (page != DetailsPage.Rename) {
-                OutlinedButton(
-                    onClick = onDismiss,
-                    enabled = !pending,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                ) { Text(stringResource(R.string.close)) }
+        }
+    }
+}
+
+@Composable
+private fun detailsScrim(): Color =
+    if (isSystemInDarkTheme()) Color.Black.copy(alpha = 0.64f) else Color(0x73081815)
+
+@Composable
+private fun TargetDetailsHeader(name: String, presenceLabel: String) {
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(
+                name,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight(750),
+                letterSpacing = (-0.96).sp,
+                modifier = Modifier.semantics { heading() }
+            )
+            Text(
+                presenceLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        TargetDeviceBadge()
+    }
+}
+
+@Composable
+private fun TargetDetailsActions(
+    target: TargetDevice,
+    name: String,
+    testMessage: TestMessageAction,
+    onSelect: (Boolean) -> Unit,
+    removalFocus: FocusRequester,
+    onRename: () -> Unit,
+    onRemove: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    val divider = colors.onSurface.copy(alpha = 0.17f)
+    val danger = colorResource(R.color.error_emblem)
+    Column(Modifier.clip(RoundedCornerShape(16.dp)).background(colors.surfaceContainer)) {
+        TargetDetailsRow(
+            R.drawable.ic_sms,
+            stringResource(R.string.home_receiving),
+            subtitle = stringResource(R.string.home_receiving_copy)
+        ) {
+            TargetReceiveSwitch(
+                checked = target.enabled,
+                enabled = target.keyUsable,
+                label = stringResource(R.string.home_receive, name),
+                onSelect = onSelect
+            )
+        }
+        HorizontalDivider(thickness = 0.5.dp, color = divider)
+        PairingTestAction(
+            testMessage,
+            enabled = target.keyUsable,
+            feedbackModifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+        ) { label, enabled, onClick ->
+            TargetDetailsRow(
+                R.drawable.ic_send,
+                label,
+                Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+                    .semantics { liveRegion = LiveRegionMode.Polite },
+                color = colors.onSurface.copy(alpha = if (enabled) 1f else 0.38f),
+                iconTint = colors.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.38f)
+            )
+        }
+        HorizontalDivider(thickness = 0.5.dp, color = divider)
+        TargetDetailsRow(
+            R.drawable.ic_edit,
+            stringResource(R.string.home_rename),
+            Modifier.clickable(role = Role.Button, onClick = onRename)
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_chevron),
+                null,
+                Modifier.size(20.dp),
+                colors.onSurfaceVariant
+            )
+        }
+        HorizontalDivider(thickness = 0.5.dp, color = divider)
+        TargetDetailsRow(
+            R.drawable.ic_delete,
+            stringResource(R.string.home_remove),
+            Modifier.focusRequester(removalFocus).clickable(role = Role.Button, onClick = onRemove),
+            color = danger,
+            iconTint = danger
+        ) {
+            Icon(painterResource(R.drawable.ic_chevron), null, Modifier.size(20.dp), danger)
+        }
+    }
+}
+
+@Composable
+private fun TargetDetailsRow(
+    icon: Int,
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    trailing: @Composable () -> Unit = {}
+) {
+    Row(
+        modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 14.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(painterResource(icon), null, Modifier.size(20.dp), iconTint)
+        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+            Text(
+                title,
+                color = color,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp
+                )
             }
         }
+        trailing()
     }
 }
 
