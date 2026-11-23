@@ -7,8 +7,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -19,6 +22,7 @@ import androidx.compose.ui.platform.AccessibilityManager
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
@@ -37,6 +41,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.app.LocalizedContent
@@ -70,6 +75,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
+private val ScannerViewportWidth = 366.dp
+
 @OptIn(ExperimentalTestApi::class)
 class HomeDuplicateScanTest {
     private val motionDuration = object : MotionDurationScale {
@@ -88,14 +95,15 @@ class HomeDuplicateScanTest {
 
     @Test
     fun scannerCentersItsHeadingAndKeepsCancelAtTheBottom() {
-        renderHome(usableHeight = 700.dp)
+        val viewportHeight = 700.dp
+        renderHome(usableHeight = viewportHeight, usableWidth = ScannerViewportWidth)
         val add = compose.onNodeWithText("Add device")
         val title = compose.onNodeWithText("Scan QR code")
         val cancel = compose.onNodeWithText("Cancel")
         val close = compose.onNodeWithContentDescription("Cancel")
         add.performClick()
 
-        val screenBounds = compose.onNode(hasScrollAction()).getUnclippedBoundsInRoot()
+        val screenBounds = scannerViewport(viewportHeight)
         val titleBounds = title.assertIsDisplayed().getUnclippedBoundsInRoot()
         val cancelBounds = cancel.assertIsDisplayed().getUnclippedBoundsInRoot()
         val titleLayouts = mutableListOf<TextLayoutResult>()
@@ -121,15 +129,30 @@ class HomeDuplicateScanTest {
 
     @Test
     fun scannerFrameAndCancelRemainReachableWithLargeTextInAShortWindow() {
-        renderHome(usableHeight = 260.dp, fontScale = 1.5f)
+        val viewportHeight = 260.dp
+        renderHome(
+            usableHeight = viewportHeight,
+            fontScale = 1.5f,
+            usableWidth = ScannerViewportWidth
+        )
         val add = compose.onNodeWithText("Add device")
         add.performClick()
-        val viewport = compose.onNode(hasScrollAction()).getUnclippedBoundsInRoot()
+        val viewport = scannerViewport(viewportHeight)
         val frame = compose.onNodeWithTag("pairing-viewfinder")
             .performScrollTo().assertIsDisplayed().getUnclippedBoundsInRoot()
+        assertEquals(viewportHeight.value, (frame.bottom - frame.top).value, 1f)
         assertTrue(frame.top >= viewport.top && frame.bottom <= viewport.bottom)
         compose.onNodeWithText("Cancel").performScrollTo().assertIsDisplayed().performClick()
         add.assertIsDisplayed()
+    }
+
+    private fun scannerViewport(height: Dp): DpRect {
+        val bounds = compose.onNode(hasScrollAction()).getUnclippedBoundsInRoot()
+        val size = "${ScannerViewportWidth.value} × ${height.value} dp"
+        val required = "Scanner test requires a $size usable viewport"
+        assertEquals(required, ScannerViewportWidth.value, (bounds.right - bounds.left).value, 1f)
+        assertEquals(required, height.value, (bounds.bottom - bounds.top).value, 1f)
+        return bounds
     }
 
     @Test
@@ -224,7 +247,8 @@ class HomeDuplicateScanTest {
     private fun renderHome(
         usableHeight: Dp = 520.dp,
         fontScale: Float = 1f,
-        textTimeout: Long = 6_000L
+        textTimeout: Long = 6_000L,
+        usableWidth: Dp? = null
     ): DuplicateScanFixture {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val app = instrumentation.targetContext.applicationContext as PinGlideApplication
@@ -265,7 +289,17 @@ class HomeDuplicateScanTest {
                         val insets = WindowInsets.safeDrawing.asPaddingValues()
                         val windowHeight = usableHeight + insets.calculateTopPadding() +
                             insets.calculateBottomPadding()
-                        Box(Modifier.height(windowHeight)) {
+                        val window = Modifier.height(windowHeight)
+                        val viewport = if (usableWidth == null) {
+                            window
+                        } else {
+                            val direction = LocalLayoutDirection.current
+                            window.width(
+                                usableWidth + insets.calculateStartPadding(direction) +
+                                    insets.calculateEndPadding(direction)
+                            )
+                        }
+                        Box(viewport) {
                             AcceptedNavigation(
                                 progress = CompletedSetup,
                                 smsGranted = true,
