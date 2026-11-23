@@ -57,15 +57,15 @@ class PendingTargetTestMessageTest {
 
     @Test
     fun lightDetailsDimsThePendingTestRowAndIgnoresDuplicateTaps() {
-        assertPendingTestRow(Configuration.UI_MODE_NIGHT_NO)
+        assertPendingTestRow(Configuration.UI_MODE_NIGHT_NO, prototypeStrokeContrast = 40)
     }
 
     @Test
     fun darkDetailsDimsThePendingTestRowAndIgnoresDuplicateTaps() {
-        assertPendingTestRow(Configuration.UI_MODE_NIGHT_YES)
+        assertPendingTestRow(Configuration.UI_MODE_NIGHT_YES, prototypeStrokeContrast = 39)
     }
 
-    private fun assertPendingTestRow(nightMode: Int) {
+    private fun assertPendingTestRow(nightMode: Int, prototypeStrokeContrast: Int) {
         val sentTo = mutableListOf<String>()
         val delivery = CompletableDeferred<TestMessageOutcome>()
         val now = Instant.now().toString()
@@ -112,16 +112,18 @@ class PendingTargetTestMessageTest {
                 sendingBounds.bottom <= renameBounds.top
         )
         val pendingDivider = dividerStroke(sendingBounds, renameBounds)
+        val pendingThickness = with(compose.density) { 1.dp.toPx() }
         assertEquals(
             "The pending divider is 1 dp thick",
-            with(compose.density) { 1.dp.roundToPx() },
+            pendingThickness.roundToInt(),
             pendingDivider.size
         )
-        val idleInk = idleDivider.max()
-        val pendingInk = pendingDivider.max()
-        assertTrue(
-            "The pending divider has about 38% of its idle contrast ($pendingInk / $idleInk)",
-            pendingInk.toDouble() in idleInk * 0.30..idleInk * 0.46
+        val expectedContrast = prototypeStrokeContrast * pendingThickness.coerceAtMost(1f)
+        assertEquals(
+            "The pending divider matches the prototype stroke contrast",
+            expectedContrast,
+            pendingDivider.max().toFloat(),
+            4f
         )
         compose.runOnIdle {
             delivery.complete(TestMessageOutcome("我的电脑", TestMessageResult.Received))
