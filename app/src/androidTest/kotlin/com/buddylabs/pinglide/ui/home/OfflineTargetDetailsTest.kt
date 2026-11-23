@@ -22,6 +22,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasStateDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -130,7 +131,8 @@ class OfflineTargetDetailsTest {
         sheetText("重命名设备").performClick()
         compose.onNode(inSheet and hasSetTextAction()).performTextReplacement("家用设备")
         sheetText("保存").assertIsEnabled().performClick()
-        sheetText("设备名称已更新").assertIsDisplayed()
+        compose.onNode(inSheet and hasText("家用设备") and hasStateDescription("设备名称已更新"))
+            .assertIsDisplayed()
         sheetText("家用设备").assertIsDisplayed()
         receiveSwitch("家用设备").assertIsOn()
         assertChevron(availableSendAction(), lightTint, lightSurface)
@@ -176,6 +178,7 @@ class OfflineTargetDetailsTest {
             targets,
             scope,
             nightMode = nightMode,
+            onRename = { _, _ -> },
             sendTest = sendTest,
             missingKeyId = missingKeyId
         ) {
