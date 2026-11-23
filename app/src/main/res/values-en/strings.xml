@@ -168,7 +168,8 @@
     <string name="pairing_confirmed">Device name confirmed. This device is not connected yet.</string>
     <string name="pairing_remaining">Session time remaining: %1$02d:%2$02d</string>
     <string name="pairing_validating">Validating Pairing session…</string>
-    <string name="pairing_invalid_qr">Not a Pin Glide Pairing code. Keep aiming at the QR code.</string>
+    <string name="pairing_invalid_qr">This is not a valid Pin Glide Pairing QR code.</string>
+    <string name="pairing_scanner_invalid_qr">Not a Pin Glide Pairing code. Keep aiming at the QR code.</string>
     <string name="pairing_session_closed">This QR code expired or was already used. Generate a new one on the target device.</string>
     <string name="pairing_unsupported">This Pairing mode is not supported. Use an add-device QR code.</string>
     <string name="pairing_capacity">You can pair up to five target devices. Remove one first.</string>

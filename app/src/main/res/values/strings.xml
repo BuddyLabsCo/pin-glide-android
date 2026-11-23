@@ -169,7 +169,8 @@
     <string name="pairing_confirmed">设备名称已确认，设备尚未连接。</string>
     <string name="pairing_remaining">配对会话剩余时间：%1$02d:%2$02d</string>
     <string name="pairing_validating">正在验证配对会话…</string>
-    <string name="pairing_invalid_qr">不是鹊信配对码，请继续对准二维码</string>
+    <string name="pairing_invalid_qr">这不是有效的鹊信配对二维码。</string>
+    <string name="pairing_scanner_invalid_qr">不是鹊信配对码，请继续对准二维码</string>
     <string name="pairing_session_closed">二维码已失效或被使用。请在目标设备上生成新二维码。</string>
     <string name="pairing_unsupported">此二维码的配对方式不受支持，请使用添加设备二维码。</string>
     <string name="pairing_capacity">最多可配对五台目标设备，请先移除一台。</string>

@@ -36,6 +36,7 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -61,6 +62,7 @@ import com.buddylabs.pinglide.domain.pairing.PairingActivation
 import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.domain.pairing.PairingEntry
 import com.buddylabs.pinglide.domain.pairing.PairingQr
+import com.buddylabs.pinglide.domain.pairing.PairingQrDecoder
 import com.buddylabs.pinglide.domain.pairing.PairingService
 import com.buddylabs.pinglide.domain.pairing.PairingSessionService
 import com.buddylabs.pinglide.domain.pairing.Presence
@@ -68,6 +70,7 @@ import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.domain.settings.SetupProgress
 import com.buddylabs.pinglide.domain.settings.SetupState
+import com.buddylabs.pinglide.platform.crypto.PairingQrReader
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import com.buddylabs.pinglide.ui.navigation.AcceptedNavigation
 import com.buddylabs.pinglide.ui.pairing.PairingEntryViewModel
@@ -79,7 +82,9 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -138,7 +143,7 @@ class HomeDuplicateScanTest {
     @Test
     fun scannerFrameAndCancelRemainReachableWithLargeTextInAShortWindow() {
         val viewportHeight = 260.dp
-        renderHome(
+        val fixture = renderHome(
             usableHeight = viewportHeight,
             fontScale = 1.5f,
             usableWidth = ScannerViewportWidth
@@ -150,6 +155,12 @@ class HomeDuplicateScanTest {
             .performScrollTo().assertIsDisplayed().getUnclippedBoundsInRoot()
         assertEquals(viewportHeight.value, (frame.bottom - frame.top).value, 1f)
         assertTrue(frame.top >= viewport.top && frame.bottom <= viewport.bottom)
+        compose.runOnIdle { fixture.pairing.scan("invalid-qr", "Unused") }
+        val notice = compose.onNodeWithText(
+            "Not a Pin Glide Pairing code. Keep aiming at the QR code."
+        )
+            .assertIsDisplayed().getUnclippedBoundsInRoot()
+        assertTrue(notice.top >= viewport.top && notice.bottom <= viewport.bottom)
         compose.onNodeWithText("Cancel").performScrollTo().assertIsDisplayed().performClick()
         add.assertIsDisplayed()
     }
@@ -164,6 +175,7 @@ class HomeDuplicateScanTest {
         )
         compose.onNodeWithText("添加设备").performClick()
         val viewport = scannerViewport(viewportHeight)
+        val preview = awaitStreamingPreview()
         compose.runOnIdle { fixture.pairing.scan("invalid-qr", "未使用") }
 
         val notice = compose.onNodeWithText("不是鹊信配对码，请继续对准二维码")
@@ -179,17 +191,40 @@ class HomeDuplicateScanTest {
         assertEquals(52f, (notice.bottom - notice.top).value, 1f)
         assertEquals(52f, (cancel.top - notice.bottom).value, 1f)
         assertTrue(frame.bottom < notice.top)
-        compose.waitUntil(10_000) {
-            compose.runOnUiThread {
-                val content = compose.activity.findViewById<ViewGroup>(android.R.id.content)
-                content.descendants.filterIsInstance<PreviewView>().singleOrNull()
-                    ?.previewStreamState?.value == PreviewView.StreamState.STREAMING
-            }
-        }
+        assertSame(preview, streamingPreview())
+    }
 
-        compose.runOnIdle { fixture.pairing.scan("receiver-office", "未使用") }
+    @Test
+    fun cameraRecognizesAnotherQrAfterRejection() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("cameraQrSequence") == "true")
+        renderHome(
+            usableHeight = 820.dp,
+            language = AppLanguage.SimplifiedChinese,
+            decoder = PairingQrReader()
+        )
+        compose.onNodeWithText("添加设备").performClick()
+        val preview = awaitStreamingPreview()
+        compose.waitUntil(30_000) {
+            compose.onAllNodes(hasText("不是鹊信配对码，请继续对准二维码"))
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("不是鹊信配对码，请继续对准二维码").assertIsDisplayed()
+        assertSame(preview, streamingPreview())
+        compose.waitUntil(30_000) {
+            compose.onAllNodes(hasText("这台设备已添加")).fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText("这台设备已添加").assertIsDisplayed()
-        compose.onNodeWithText("不是鹊信配对码，请继续对准二维码").assertDoesNotExist()
+    }
+
+    private fun awaitStreamingPreview(): PreviewView {
+        compose.waitUntil(10_000) { streamingPreview() != null }
+        return checkNotNull(streamingPreview())
+    }
+
+    private fun streamingPreview(): PreviewView? = compose.runOnUiThread {
+        val content = compose.activity.findViewById<ViewGroup>(android.R.id.content)
+        content.descendants.filterIsInstance<PreviewView>().singleOrNull()
+            ?.takeIf { it.previewStreamState.value == PreviewView.StreamState.STREAMING }
     }
 
     private fun scannerViewport(height: Dp): DpRect {
@@ -295,7 +330,11 @@ class HomeDuplicateScanTest {
         fontScale: Float = 1f,
         textTimeout: Long = 6_000L,
         usableWidth: Dp? = null,
-        language: AppLanguage = AppLanguage.English
+        language: AppLanguage = AppLanguage.English,
+        decoder: PairingQrDecoder = PairingQrDecoder {
+            if (it == "invalid-qr") throw InvalidPairingQrException()
+            PairingQr("session", it, ByteArray(0), ByteArray(0))
+        }
     ): DuplicateScanFixture {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val app = instrumentation.targetContext.applicationContext as PinGlideApplication
@@ -303,7 +342,7 @@ class HomeDuplicateScanTest {
             app.packageName,
             Manifest.permission.CAMERA
         )
-        val fixture = DuplicateScanFixture(app, scope)
+        val fixture = DuplicateScanFixture(app, scope, decoder)
         val accessibility = object : AccessibilityManager {
             override fun calculateRecommendedTimeoutMillis(
                 originalTimeoutMillis: Long,
@@ -369,7 +408,11 @@ class HomeDuplicateScanTest {
     }
 }
 
-private class DuplicateScanFixture(app: PinGlideApplication, scope: CoroutineScope) {
+private class DuplicateScanFixture(
+    app: PinGlideApplication,
+    scope: CoroutineScope,
+    decoder: PairingQrDecoder
+) {
     private val now = Instant.now()
     private val targets = listOf(
         "remove" to "Remove me",
@@ -408,10 +451,7 @@ private class DuplicateScanFixture(app: PinGlideApplication, scope: CoroutineSco
                 store,
                 pairings,
                 sessions,
-                {
-                    if (it == "invalid-qr") throw InvalidPairingQrException()
-                    PairingQr("session", it, ByteArray(0), ByteArray(0))
-                },
+                decoder,
                 renewal,
                 entryScope,
                 activation = PairingActivation(

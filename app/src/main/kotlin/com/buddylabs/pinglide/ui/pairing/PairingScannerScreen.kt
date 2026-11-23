@@ -36,7 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -55,6 +56,7 @@ import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
@@ -74,13 +76,14 @@ internal fun PairingScannerScreen(
     val cancel = stringResource(R.string.pairing_cancel)
     val insets = WindowInsets.safeDrawing
     val colors = MaterialTheme.colorScheme
+    val showInvalidQrNotice = state.problem == PairingEntryProblem.InvalidQr
     Surface(Modifier.fillMaxSize()) {
         BoxWithConstraints(
             Modifier.fillMaxSize().scannerBackdrop(colors, insets).windowInsetsPadding(insets),
             contentAlignment = Alignment.TopCenter
         ) {
             val viewfinderMaxSize = minOf(264.dp, maxHeight)
-            val noticeGap = minOf(48.dp, maxHeight / 8)
+            val noticeGap = (maxHeight - 300.dp).coerceIn(0.dp, 52.dp)
             Column(
                 Modifier.widthIn(max = 560.dp).fillMaxWidth()
                     .verticalScroll(rememberScrollState()).heightIn(min = maxHeight)
@@ -138,16 +141,11 @@ internal fun PairingScannerScreen(
                     Modifier.padding(horizontal = 4.dp).widthIn(max = viewfinderMaxSize)
                 )
                 Spacer(Modifier.height(30.dp))
-                when (state.problem) {
-                    null, PairingEntryProblem.InvalidQr -> Unit
-                    else -> PairingProblem(state.problem, model::freshScan)
+                if (state.problem != null && !showInvalidQrNotice) {
+                    PairingProblem(state.problem, model::freshScan)
                 }
                 if (state.pending) Text(stringResource(R.string.pairing_validating))
                 Spacer(Modifier.weight(1f))
-                if (state.problem == PairingEntryProblem.InvalidQr) {
-                    InvalidQrNotice()
-                    Spacer(Modifier.height(noticeGap))
-                }
                 Spacer(Modifier.height(4.dp))
                 TextButton(
                     model::close,
@@ -161,17 +159,34 @@ internal fun PairingScannerScreen(
                     )
                 }
             }
+            if (showInvalidQrNotice) {
+                InvalidQrNotice(
+                    Modifier.align(Alignment.BottomCenter).widthIn(max = 560.dp)
+                        .padding(start = 20.dp, end = 20.dp, bottom = 76.dp + noticeGap)
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun InvalidQrNotice() {
+private fun InvalidQrNotice(modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(8.dp)
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 52.dp)
-            .shadow(12.dp, shape)
+        modifier.fillMaxWidth().heightIn(min = 52.dp)
+            .dropShadow(
+                shape,
+                Shadow(
+                    radius = 24.dp,
+                    color = if (isSystemInDarkTheme()) {
+                        Color.Black.copy(alpha = 0.38f)
+                    } else {
+                        Color(0xFF0A1210).copy(alpha = 0.15f)
+                    },
+                    offset = DpOffset(0.dp, 8.dp)
+                )
+            )
             .background(colors.onSurface, shape)
             .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }
             .padding(horizontal = 16.dp, vertical = 10.dp),
@@ -185,7 +200,7 @@ private fun InvalidQrNotice() {
         )
         Spacer(Modifier.width(10.dp))
         Text(
-            stringResource(R.string.pairing_invalid_qr),
+            stringResource(R.string.pairing_scanner_invalid_qr),
             color = colors.surface,
             fontSize = 12.sp,
             lineHeight = 18.sp,
