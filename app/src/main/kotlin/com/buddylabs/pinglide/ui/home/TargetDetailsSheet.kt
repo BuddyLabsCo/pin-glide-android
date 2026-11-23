@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.PairingAliasError
 import com.buddylabs.pinglide.domain.pairing.PairingChange
+import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.TargetDevice
 import com.buddylabs.pinglide.domain.pairing.pairingAliasError
 import com.buddylabs.pinglide.ui.components.PairingTestAction
@@ -256,7 +257,9 @@ private fun TargetDetailsActions(
     onRemove: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    val offline = target.presence == Presence.Offline
     val divider = colors.onSurface.copy(alpha = 0.17f)
+    val dividerThickness = if (offline) 1.dp else 0.5.dp
     val danger = colorResource(R.color.error_emblem)
     Column(Modifier.clip(RoundedCornerShape(16.dp)).background(colors.surfaceContainer)) {
         TargetDetailsRow(
@@ -271,7 +274,7 @@ private fun TargetDetailsActions(
                 onSelect = onSelect
             )
         }
-        HorizontalDivider(thickness = 0.5.dp, color = divider)
+        HorizontalDivider(thickness = dividerThickness, color = divider)
         PairingTestAction(
             testMessage,
             enabled = target.keyUsable,
@@ -287,10 +290,17 @@ private fun TargetDetailsActions(
                 color = colors.onSurface.copy(alpha = alpha),
                 iconTint = iconTint
             ) {
-                Icon(painterResource(R.drawable.ic_chevron), null, Modifier.size(20.dp), iconTint)
+                if (offline && enabled) {
+                    Icon(
+                        painterResource(R.drawable.ic_chevron),
+                        null,
+                        Modifier.size(20.dp),
+                        iconTint
+                    )
+                }
             }
         }
-        HorizontalDivider(thickness = 0.5.dp, color = divider)
+        HorizontalDivider(thickness = dividerThickness, color = divider)
         TargetDetailsRow(
             R.drawable.ic_edit,
             stringResource(R.string.home_rename),
@@ -303,7 +313,7 @@ private fun TargetDetailsActions(
                 colors.onSurfaceVariant
             )
         }
-        HorizontalDivider(thickness = 0.5.dp, color = divider)
+        HorizontalDivider(thickness = dividerThickness, color = divider)
         TargetDetailsRow(
             R.drawable.ic_delete,
             stringResource(R.string.home_remove),

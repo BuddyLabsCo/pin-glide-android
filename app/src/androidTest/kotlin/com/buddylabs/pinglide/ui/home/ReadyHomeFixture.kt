@@ -11,6 +11,7 @@ import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
+import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
 import com.buddylabs.pinglide.domain.pairing.PairingService
@@ -28,6 +29,7 @@ internal fun renderReadyHome(
     scope: CoroutineScope,
     language: AppLanguage = AppLanguage.SimplifiedChinese,
     nightMode: Int? = null,
+    sendTest: suspend (String) -> TestMessageOutcome? = { null },
     onRemove: suspend (String) -> Unit
 ) {
     val store = HomePairingStore(targets, Instant.now().plusSeconds(3600).toString())
@@ -46,7 +48,7 @@ internal fun renderReadyHome(
     runBlocking(Dispatchers.Main) { pairings.refresh() }
     compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
     val app = compose.activity.application as PinGlideApplication
-    val home = HomeViewModel(pairings, app.senderRestoration()) { null }
+    val home = HomeViewModel(pairings, app.senderRestoration(), sendTest)
     compose.setContent {
         val state by home.state.collectAsState()
         val systemConfiguration = LocalConfiguration.current
