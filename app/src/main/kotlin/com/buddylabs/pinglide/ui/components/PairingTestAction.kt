@@ -102,6 +102,7 @@ internal fun AnchoredPairingTestAction(
     action: TestMessageAction,
     accessibility: AccessibilityManager?,
     active: Boolean,
+    modifier: Modifier,
     content: @Composable (
         state: TestMessageState,
         send: () -> Unit,
@@ -116,7 +117,7 @@ internal fun AnchoredPairingTestAction(
     var dividerTop by remember { mutableFloatStateOf(0f) }
     var dividerVisible by remember { mutableStateOf(false) }
     var viewportTop by remember { mutableFloatStateOf(0f) }
-    Box(Modifier.onGloballyPositioned { viewportTop = it.positionInRoot().y }) {
+    Box(modifier.onGloballyPositioned { viewportTop = it.positionInRoot().y }) {
         content(
             if (label != null) state.copy(outcome = null) else state,
             {

@@ -102,10 +102,18 @@ class OfflineTargetDetailsTest {
     }
 
     @Test
-    fun lightDetailsShowsOfflineStatusAndTestAction() {
-        openHome(Configuration.UI_MODE_NIGHT_NO)
-        assertChevron(openOfflineDetails(), lightTint, lightSurface)
+    fun lightDetailsSendsOnlyToTheSelectedOfflinePairing() {
+        val sentTo = mutableListOf<String>()
+        openHome(Configuration.UI_MODE_NIGHT_NO) { pairingId ->
+            sentTo += pairingId
+            TestMessageOutcome("办公室电脑", TestMessageResult.Offline)
+        }
+        val send = openOfflineDetails()
+        assertChevron(send, lightTint, lightSurface)
         assertOfflineDividers(lightSurface)
+        send.performClick()
+        sheetText("测试消息未发送：目标设备离线").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(listOf("office"), sentTo) }
     }
 
     @Test

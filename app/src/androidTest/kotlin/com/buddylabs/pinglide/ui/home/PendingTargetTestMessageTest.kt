@@ -134,13 +134,16 @@ class PendingTargetTestMessageTest {
             assertTrue(feedback.status.first().isVisibleToUser)
             if (verifyTalkBackSpeech) {
                 assertEquals(send, automation.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY))
-                compose.waitUntil(12_000L) { feedback.talkBackSpeech.any { message in it } }
-                assertEquals(send, automation.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY))
             }
-            compose.waitUntil(RECOMMENDED_TIMEOUT + 1_500) {
-                notice.fetchSemanticsNodes().isEmpty()
+            var dismissedAt: Long? = null
+            compose.waitUntil(if (verifyTalkBackSpeech) 12_000L else RECOMMENDED_TIMEOUT + 1_500) {
+                if (dismissedAt == null && notice.fetchSemanticsNodes().isEmpty()) {
+                    dismissedAt = SystemClock.elapsedRealtime()
+                }
+                dismissedAt != null &&
+                    (!verifyTalkBackSpeech || feedback.talkBackSpeech.any { message in it })
             }
-            val duration = SystemClock.elapsedRealtime() - deliveredAt
+            val duration = checkNotNull(dismissedAt) - deliveredAt
             assertTrue(
                 "Notice dismissed after ${duration}ms",
                 duration in (RECOMMENDED_TIMEOUT - 500)..(RECOMMENDED_TIMEOUT + 1_500)
@@ -151,6 +154,7 @@ class PendingTargetTestMessageTest {
             )
             assertEquals("One native live-region update", 1, feedback.status.size)
             if (verifyTalkBackSpeech) {
+                assertEquals(send, automation.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY))
                 assertEquals(
                     "TalkBack speech: ${feedback.talkBackSpeech}",
                     1,
@@ -284,9 +288,13 @@ class PendingTargetTestMessageTest {
             }
             send.assertIsEnabled()
             if (result == TestMessageResult.Offline) {
-                val noticeBounds = sheetBounds(sheetText(message).assertIsDisplayed())
-                val viewportHeight = sheetContent.fetchSemanticsNode().boundsInWindow.height
-                assertTrue(noticeBounds.top >= 0 && noticeBounds.bottom <= viewportHeight)
+                val noticeBounds = sheetText(message).assertIsDisplayed().getUnclippedBoundsInRoot()
+                val viewport = sheetContent.getUnclippedBoundsInRoot()
+                assertTrue(
+                    "Unclipped notice $noticeBounds fits inside $viewport",
+                    noticeBounds.left >= viewport.left && noticeBounds.right <= viewport.right &&
+                        noticeBounds.top >= viewport.top && noticeBounds.bottom <= viewport.bottom
+                )
                 sheetText("关闭").assertIsDisplayed()
             } else {
                 sheetText(message).assertDoesNotExist()
