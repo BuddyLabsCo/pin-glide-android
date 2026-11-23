@@ -3,7 +3,6 @@ package com.buddylabs.pinglide.ui.home
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,12 +43,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -71,6 +72,7 @@ import com.buddylabs.pinglide.domain.pairing.TargetDevice
 import com.buddylabs.pinglide.domain.pairing.pairingAliasError
 import com.buddylabs.pinglide.ui.components.PairingTestAction
 import com.buddylabs.pinglide.ui.components.TestMessageAction
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private enum class DetailsPage { Details, Rename, Remove }
@@ -90,6 +92,8 @@ internal fun TargetDetailsSheet(
     onDismiss: () -> Unit
 ) {
     var page by rememberSaveable(target.pairingId) { mutableStateOf(DetailsPage.Details) }
+    var restoreRemovalFocus by rememberSaveable(target.pairingId) { mutableStateOf(false) }
+    val removalFocus = remember { FocusRequester() }
     LaunchedEffect(page, target.pairingId) {
         testMessage.enter(target.pairingId.takeIf { page == DetailsPage.Details })
     }
@@ -101,6 +105,14 @@ internal fun TargetDetailsSheet(
         onClearAction()
         page = DetailsPage.Details
     }
+    val name = target.alias.ifBlank { stringResource(R.string.home_target_device) }
+    if (page == DetailsPage.Remove) {
+        PairingRemovalDialog(name, action, target.enabled, onRemove) {
+            restoreRemovalFocus = true
+            returnToDetails()
+        }
+        return
+    }
     val sheet = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
         confirmValueChange = { it != SheetValue.Hidden || !pending }
@@ -108,7 +120,6 @@ internal fun TargetDetailsSheet(
     LaunchedEffect(action.result) {
         if (action.result == PairingChange.Renamed) page = DetailsPage.Details
     }
-    val name = target.alias.ifBlank { stringResource(R.string.home_target_device) }
     val title = if (page == DetailsPage.Rename) stringResource(R.string.home_rename) else name
     val showingDetails = page == DetailsPage.Details
     val colors = MaterialTheme.colorScheme
@@ -154,6 +165,7 @@ internal fun TargetDetailsSheet(
                     name,
                     testMessage,
                     onSelect,
+                    removalFocus,
                     onRename = {
                         draft = target.alias
                         testMessage.leave()
@@ -166,7 +178,15 @@ internal fun TargetDetailsSheet(
                         page = DetailsPage.Remove
                     }
                 )
-                ActionNotice(action, page, target.enabled)
+                val window = LocalWindowInfo.current
+                LaunchedEffect(window, restoreRemovalFocus) {
+                    if (restoreRemovalFocus) {
+                        snapshotFlow { window.isWindowFocused }.first { it }
+                        removalFocus.requestFocus()
+                        restoreRemovalFocus = false
+                    }
+                }
+                ActionNotice(action)
                 OutlinedButton(
                     onClick = onDismiss,
                     enabled = !pending,
@@ -179,83 +199,20 @@ internal fun TargetDetailsSheet(
             }
             return@ModalBottomSheet
         }
-        TargetEditPage(
-            page,
-            title,
-            presenceLabel,
-            target,
-            action,
-            onRemove,
-            returnToDetails,
-            onDismiss
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.semantics { heading() }
+            )
             RenameTarget(draft, otherAliases, pending, {
                 draft = it
                 onClearAction()
             }, onRename, returnToDetails)
-        }
-    }
-}
-
-@Composable
-private fun TargetEditPage(
-    page: DetailsPage,
-    title: String,
-    presenceLabel: String,
-    target: TargetDevice,
-    action: TargetAction,
-    onRemove: () -> Unit,
-    onCancel: () -> Unit,
-    onDismiss: () -> Unit,
-    rename: @Composable () -> Unit
-) {
-    Column(
-        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text(
-            title,
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.semantics { heading() }
-        )
-        if (page == DetailsPage.Rename) {
-            rename()
-            ActionNotice(action, page, target.enabled)
-        } else {
-            Text(presenceLabel, style = MaterialTheme.typography.bodySmall)
-            if (!target.keyUsable) KeyFailureNotice()
-            RemovalTitle(title, action.pending)
-            Text(stringResource(R.string.home_remove_copy))
-            Button(
-                onClick = onRemove,
-                enabled = !action.pending,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error,
-                    contentColor = MaterialTheme.colorScheme.onError
-                ),
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            ) {
-                Text(
-                    stringResource(
-                        if (action.result == PairingChange.Unavailable) {
-                            R.string.home_remove_retry
-                        } else {
-                            R.string.home_remove_confirm
-                        }
-                    )
-                )
-            }
-            ActionNotice(action, page, target.enabled)
-            OutlinedButton(
-                onClick = onCancel,
-                enabled = !action.pending,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            ) { Text(stringResource(R.string.setup_cancel)) }
-            OutlinedButton(
-                onClick = onDismiss,
-                enabled = !action.pending,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            ) { Text(stringResource(R.string.close)) }
+            ActionNotice(action)
         }
     }
 }
@@ -294,6 +251,7 @@ private fun TargetDetailsActions(
     name: String,
     testMessage: TestMessageAction,
     onSelect: (Boolean) -> Unit,
+    removalFocus: FocusRequester,
     onRename: () -> Unit,
     onRemove: () -> Unit
 ) {
@@ -345,7 +303,7 @@ private fun TargetDetailsActions(
         TargetDetailsRow(
             R.drawable.ic_delete,
             stringResource(R.string.home_remove),
-            Modifier.clickable(role = Role.Button, onClick = onRemove),
+            Modifier.focusRequester(removalFocus).clickable(role = Role.Button, onClick = onRemove),
             color = danger,
             iconTint = danger
         ) {
@@ -389,24 +347,6 @@ private fun TargetDetailsRow(
         }
         trailing()
     }
-}
-
-@Composable
-private fun RemovalTitle(name: String, pending: Boolean) {
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
-    Text(
-        if (pending) {
-            stringResource(R.string.home_removing)
-        } else {
-            stringResource(R.string.home_remove_title, name)
-        },
-        style = MaterialTheme.typography.titleLarge,
-        modifier = Modifier.focusRequester(focus).focusable().semantics {
-            heading()
-            liveRegion = LiveRegionMode.Polite
-        }
-    )
 }
 
 @Composable
@@ -474,23 +414,12 @@ private fun KeyFailureNotice() {
 }
 
 @Composable
-private fun ActionNotice(action: TargetAction, page: DetailsPage, enabled: Boolean) {
+private fun ActionNotice(action: TargetAction) {
     val message = when {
         action.pending -> R.string.home_target_pending
-
         action.result == PairingChange.InvalidAlias -> R.string.home_alias_help
-
-        action.result == PairingChange.Unavailable && page == DetailsPage.Remove && enabled ->
-            R.string.home_target_busy
-
-        action.result == PairingChange.Unavailable -> if (page == DetailsPage.Remove) {
-            R.string.home_remove_error
-        } else {
-            R.string.home_rename_error
-        }
-
+        action.result == PairingChange.Unavailable -> R.string.home_rename_error
         action.result == PairingChange.Renamed -> R.string.home_renamed
-
         else -> return
     }
     Text(

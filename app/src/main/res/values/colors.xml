@@ -3,6 +3,7 @@
     <color name="surface">#F8FBF9</color>
     <color name="surface_container">#EEF6F2</color>
     <color name="surface_container_high">#E3EFEA</color>
+    <color name="surface_container_highest">#D7E7E1</color>
     <color name="on_surface">#152421</color>
     <color name="on_surface_variant">#52635E</color>
     <color name="primary">#006B63</color>
@@ -31,4 +32,5 @@
     <color name="home_online">#087F5B</color>
     <color name="error_emblem">#A33B34</color>
     <color name="error_emblem_container">#FFDAD6</color>
+    <color name="on_error_emblem_container">#410002</color>
 </resources>
