@@ -123,6 +123,7 @@ dependencies {
     implementation(libs.camera.mlkit)
     implementation(libs.barcode.scanning)
     testImplementation(libs.junit)
+    testImplementation(libs.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.espresso)

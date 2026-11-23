@@ -1,6 +1,7 @@
 package com.buddylabs.pinglide.ui.components
 
 import android.view.View
+import android.widget.TextView
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
@@ -18,18 +20,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.AccessibilityManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.hideFromAccessibility
@@ -41,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
@@ -105,14 +110,9 @@ internal fun AnchoredPairingTestAction(
 ) {
     val state by action.state.collectAsState()
     val received = active && state.outcome?.result == TestMessageResult.Received
-    val view = LocalView.current
     val message = stringResource(R.string.pairing_test_received)
-    LaunchedEffect(active, state.announceReceived) {
-        if (active && action.consumeSuccess()) {
-            announceTestMessageReceived(view, message)
-        }
-    }
     var dividerTop by remember { mutableFloatStateOf(0f) }
+    var dividerVisible by remember { mutableStateOf(false) }
     var viewportTop by remember { mutableFloatStateOf(0f) }
     Box(Modifier.onGloballyPositioned { viewportTop = it.positionInRoot().y }) {
         content(
@@ -125,9 +125,16 @@ internal fun AnchoredPairingTestAction(
                     ) ?: RECEIVED_NOTICE_MILLIS
                 )
             },
-            Modifier.onGloballyPositioned { dividerTop = it.positionInRoot().y }
+            Modifier.onGloballyPositioned {
+                dividerTop = it.positionInRoot().y
+                dividerVisible = it.boundsInRoot().height > 0f
+            }
         )
-        if (received) {
+        PairingTestStatus(
+            message = if (received) message else "",
+            modifier = Modifier.align(Alignment.Center)
+        )
+        if (received && dividerVisible) {
             Layout(
                 modifier = Modifier.matchParentSize(),
                 content = { PairingTestReceivedNotice() }
@@ -146,9 +153,20 @@ internal fun AnchoredPairingTestAction(
     }
 }
 
-@Suppress("DEPRECATION")
-private fun announceTestMessageReceived(view: View, message: String) {
-    view.announceForAccessibility(message)
+@Composable
+private fun PairingTestStatus(message: String, modifier: Modifier) {
+    AndroidView(
+        factory = { context ->
+            TextView(context).apply {
+                text = message
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+                setTextColor(android.graphics.Color.TRANSPARENT)
+            }
+        },
+        modifier = modifier.size(width = 120.dp, height = 24.dp),
+        update = { if (it.text.toString() != message) it.text = message }
+    )
 }
 
 @Composable

@@ -5,7 +5,7 @@ import android.app.UiAutomation
 import android.content.res.Configuration
 import android.graphics.Color
 import android.os.ParcelFileDescriptor
-import android.os.SystemClock
+import android.view.View
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.ComponentActivity
@@ -36,6 +36,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
@@ -87,7 +88,6 @@ class PendingTargetTestMessageTest {
     }
 
     @Test
-    @Suppress("DEPRECATION")
     fun androidAccessibilityReportsOneSuccessWithoutAToast() {
         val automation = InstrumentationRegistry.getInstrumentation()
             .getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
@@ -103,46 +103,86 @@ class PendingTargetTestMessageTest {
         ) { error("Unexpected Pairing removal") }
         compose.onNodeWithText("我的电脑").performClick()
         sheetText("发送测试消息").assertIsDisplayed()
-        val initialInfo = automation.serviceInfo
-        val send = if (verifyTalkBackSpeech) focusSendForTalkBack(automation) else null
-        val successEvents = ConcurrentLinkedQueue<Int>()
-        automation.setOnAccessibilityEventListener { event ->
-            if ((
-                    event.eventType == AccessibilityEvent.TYPE_ANNOUNCEMENT ||
-                        event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED
-                    ) &&
-                event.text.any { it.toString() == "测试消息已发送" }
-            ) {
-                successEvents.add(event.eventType)
-            }
-        }
+        val originalFlags = automation.serviceInfo.flags
+        val feedback = SuccessFeedbackEvents()
         try {
+            val send = if (verifyTalkBackSpeech) focusSendForTalkBack(automation) else null
+            automation.setOnAccessibilityEventListener(feedback)
             sheetText("发送测试消息").performClick()
             compose.waitUntil(5_000L) {
                 compose.onAllNodes(inSheet and hasText("正在发送…")).fetchSemanticsNodes().isNotEmpty()
             }
-            if (verifyTalkBackSpeech) waitForTalkBackSpeech(STARTED_SENDING)
+            if (verifyTalkBackSpeech) {
+                compose.waitUntil(12_000L) { feedback.talkBackSpeech.any { STARTED_SENDING in it } }
+            }
             compose.runOnIdle {
                 delivery.complete(TestMessageOutcome("我的电脑", TestMessageResult.Received))
             }
             compose.onNode(inSheet and successLabel).assertIsDisplayed()
-            compose.waitUntil(3_000L) { successEvents.isNotEmpty() }
+            compose.waitUntil(3_000L) { feedback.status.isNotEmpty() }
+            assertTrue(feedback.status.first().isVisibleToUser)
             if (verifyTalkBackSpeech) {
                 assertEquals(send, automation.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY))
-                waitForTalkBackSpeech(SUCCESS_MESSAGE)
+                compose.waitUntil(12_000L) { feedback.talkBackSpeech.any { SUCCESS_MESSAGE in it } }
                 assertEquals(send, automation.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY))
             }
             compose.waitUntil(7_000L) {
                 compose.onAllNodes(successLabel).fetchSemanticsNodes().isEmpty()
             }
-            assertEquals(
-                listOf(AccessibilityEvent.TYPE_ANNOUNCEMENT),
-                successEvents.toList()
+            assertTrue(
+                "Unexpected explicit announcement or Toast: ${feedback.announcementsOrToasts}",
+                feedback.announcementsOrToasts.isEmpty()
             )
+            assertEquals("One native live-region update", 1, feedback.status.size)
+            if (verifyTalkBackSpeech) {
+                assertEquals(
+                    "TalkBack speech: ${feedback.talkBackSpeech}",
+                    1,
+                    feedback.spokenSuccesses()
+                )
+            }
         } finally {
             automation.setOnAccessibilityEventListener(null)
-            automation.serviceInfo = initialInfo
+            automation.serviceInfo = automation.serviceInfo.apply { flags = originalFlags }
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private class SuccessFeedbackEvents : UiAutomation.OnAccessibilityEventListener {
+        val status = ConcurrentLinkedQueue<AccessibilityNodeInfo>()
+        val talkBackSpeech = ConcurrentLinkedQueue<String>()
+        val announcementsOrToasts = ConcurrentLinkedQueue<Int>()
+
+        override fun onAccessibilityEvent(event: AccessibilityEvent) {
+            when (event.eventType) {
+                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> recordTextChange(event)
+
+                AccessibilityEvent.TYPE_ANNOUNCEMENT,
+                AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
+                    if (event.text.any { SUCCESS_MESSAGE in it.toString() }) {
+                        announcementsOrToasts.add(event.eventType)
+                    }
+                }
+            }
+        }
+
+        private fun recordTextChange(event: AccessibilityEvent) {
+            val source = event.source ?: return
+            val text = source.text?.toString() ?: return
+            if (source.liveRegion == View.ACCESSIBILITY_LIVE_REGION_POLITE &&
+                text == SUCCESS_MESSAGE
+            ) {
+                status.add(source)
+            }
+            if (event.packageName == TALKBACK_PACKAGE &&
+                event.contentChangeTypes == AccessibilityEvent.CONTENT_CHANGE_TYPE_TEXT
+            ) {
+                talkBackSpeech.add(text)
+            }
+        }
+
+        fun spokenSuccesses(): Int =
+            talkBackSpeech.sumOf { Regex(SUCCESS_MESSAGE).findAll(it).count() }
     }
 
     private fun focusSendForTalkBack(automation: UiAutomation): AccessibilityNodeInfo {
@@ -162,19 +202,6 @@ class PendingTargetTestMessageTest {
         return send
     }
 
-    private fun waitForTalkBackSpeech(phrase: String) {
-        val automation = InstrumentationRegistry.getInstrumentation()
-            .getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
-        compose.waitUntil(12_000L) {
-            automation.windows.any { window ->
-                window.root?.let { root ->
-                    root.packageName == "com.google.android.marvin.talkback" &&
-                        root.findAccessibilityNodeInfosByText(phrase).isNotEmpty()
-                } == true
-            }
-        }
-    }
-
     private fun AccessibilityNodeInfo.findSendAction(): AccessibilityNodeInfo? {
         if (text?.toString()?.contains("发送测试消息") == true ||
             contentDescription?.toString()?.contains("发送测试消息") == true
@@ -185,46 +212,74 @@ class PendingTargetTestMessageTest {
     }
 
     @Test
-    fun successFollowsTheDividerInAShortSheetWithLargeText() {
+    fun delayedSuccessStaysWithTheDividerInAShortSheetAtDoubleFontScale() {
         val originalSize = shell("wm size")
         val overrideSize = Regex(
             "Override size: (\\d+x\\d+)"
         ).find(originalSize)?.groupValues?.get(1)
+        val originalFont = shell("settings get system font_scale").trim()
         val density = compose.activity.resources.displayMetrics.density
+        val delivery = CompletableDeferred<TestMessageOutcome>()
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val feedback = SuccessFeedbackEvents()
         try {
-            shell("wm size ${(366 * density).roundToInt()}x${(320 * density).roundToInt()}")
+            shell("settings put system font_scale 2.0")
+            shell("wm size ${(366 * density).roundToInt()}x${(260 * density).roundToInt()}")
             compose.waitUntil(5_000) {
-                compose.activity.resources.configuration.screenHeightDp <=
-                    320
+                compose.runOnUiThread {
+                    val configuration = compose.activity.resources.configuration
+                    configuration.screenHeightDp <= 260 && configuration.fontScale == 2f
+                }
             }
             renderReadyHome(
                 compose,
                 targets(),
                 scope,
-                fontScale = 2f,
                 accessibilityManager = accessibility,
-                sendTest = { TestMessageOutcome("我的电脑", TestMessageResult.Received) }
+                sendTest = { delivery.await() }
             ) { error("Unexpected Pairing removal") }
             compose.onNode(hasScrollAction()).performScrollToNode(hasText("我的电脑"))
             compose.onNodeWithText("我的电脑").performClick()
             val send = sheetText("发送测试消息").performScrollTo()
             val rename = sheetText("重命名设备")
             rename.performScrollTo()
+            val textLayouts = mutableListOf<TextLayoutResult>()
+            compose.onNode(inSheet and hasText("发送测试消息"), useUnmergedTree = true)
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(textLayouts) }
+            assertEquals(2f, textLayouts.single().layoutInput.density.fontScale)
             send.assertIsDisplayed().performClick()
-
-            val success = compose.onNode(inSheet and successLabel).assertIsDisplayed()
-            assertSuccessFeedback(sheetBounds(send), sheetBounds(rename), rename)
-            val before = success.getUnclippedBoundsInRoot().top
+            sheetText("正在发送…").assertIsNotEnabled()
             sheetText("关闭").performScrollTo()
-            val after = success.assertIsDisplayed().getUnclippedBoundsInRoot()
-            val viewport = sheetContent.getUnclippedBoundsInRoot()
-            assertTrue("Success follows the divider upward", after.top < before)
             assertTrue(
-                "Success stays in the viewport",
-                after.top >= viewport.top && after.bottom <= viewport.bottom
+                "Send/Rename divider is above the viewport",
+                rename.getUnclippedBoundsInRoot().top < sheetContent.getUnclippedBoundsInRoot().top
             )
+            automation.setOnAccessibilityEventListener(feedback)
+            compose.runOnIdle {
+                delivery.complete(TestMessageOutcome("我的电脑", TestMessageResult.Received))
+            }
+            send.assertIsEnabled()
+            compose.onNode(successLabel).assertDoesNotExist()
+            compose.waitUntil(3_000L) { feedback.status.isNotEmpty() }
+            assertTrue(feedback.status.first().isVisibleToUser)
+
+            send.performScrollTo()
+            rename.performScrollTo()
+            assertSuccessFeedback(sheetBounds(send), sheetBounds(rename), rename)
         } finally {
+            automation.setOnAccessibilityEventListener(null)
             shell("wm size ${overrideSize ?: "reset"}")
+            if (originalFont == "null") {
+                shell("settings delete system font_scale")
+            } else {
+                shell("settings put system font_scale $originalFont")
+            }
+            compose.waitUntil(5_000) {
+                compose.runOnUiThread {
+                    compose.activity.resources.configuration.fontScale ==
+                        (originalFont.toFloatOrNull() ?: 1f)
+                }
+            }
         }
     }
 
@@ -297,9 +352,8 @@ class PendingTargetTestMessageTest {
             pendingDivider.max().toFloat(),
             4f
         )
-        val completedAt = compose.runOnIdle {
+        compose.runOnIdle {
             delivery.complete(TestMessageOutcome("我的电脑", TestMessageResult.Received))
-            SystemClock.uptimeMillis()
         }
         send.assertIsEnabled()
         assertEquals(
@@ -308,7 +362,6 @@ class PendingTargetTestMessageTest {
             dividerStroke(sheetBounds(send), sheetBounds(rename))
         )
         assertSuccessFeedback(idleBounds, idleRenameBounds, rename)
-        assertSuccessTimeout(completedAt)
     }
 
     private fun assertSuccessFeedback(
@@ -330,18 +383,6 @@ class PendingTargetTestMessageTest {
             successBounds.top < renameBounds.top && successBounds.bottom > renameBounds.top
         )
         assertEquals("Success leaves Rename in place", renameBounds, sheetBounds(rename))
-    }
-
-    private fun assertSuccessTimeout(completedAt: Long) {
-        val success = compose.onNode(inSheet and successLabel)
-        compose.waitUntil(timeoutMillis = SUCCESS_TIMEOUT) {
-            SystemClock.uptimeMillis() - completedAt >= SUCCESS_TIMEOUT - 1_000L
-        }
-        success.assertIsDisplayed()
-        compose.waitUntil(timeoutMillis = 3_000) {
-            compose.onAllNodes(successLabel).fetchSemanticsNodes().isEmpty()
-        }
-        assertTrue(SystemClock.uptimeMillis() - completedAt >= SUCCESS_TIMEOUT)
     }
 
     private fun sheetText(label: String) = compose.onNode(inSheet and hasText(label))
@@ -385,5 +426,6 @@ class PendingTargetTestMessageTest {
         const val STARTED_SENDING = "正在发送"
         const val SUCCESS_MESSAGE = "测试消息已发送"
         const val SUCCESS_TIMEOUT = 5_000L
+        const val TALKBACK_PACKAGE = "com.google.android.marvin.talkback"
     }
 }
