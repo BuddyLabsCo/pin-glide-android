@@ -46,7 +46,7 @@ class TestMessageAction(
                 val received = result?.result == TestMessageResult.Received
                 mutableState.value = TestMessageState(
                     outcome = result,
-                    announceReceived = received && receivedNoticeMillis == null
+                    announceReceived = received
                 )
                 if (received && receivedNoticeMillis != null) {
                     delay(receivedNoticeMillis)

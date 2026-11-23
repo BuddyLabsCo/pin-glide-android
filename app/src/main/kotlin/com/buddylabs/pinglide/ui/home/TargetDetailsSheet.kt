@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -34,7 +33,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +49,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
@@ -71,9 +70,11 @@ import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.TargetDevice
-import com.buddylabs.pinglide.ui.components.PairingTestAction
-import com.buddylabs.pinglide.ui.components.PairingTestReceivedNotice
+import com.buddylabs.pinglide.ui.components.AnchoredPairingTestAction
+import com.buddylabs.pinglide.ui.components.PairingTestFeedback
 import com.buddylabs.pinglide.ui.components.TestMessageAction
+import com.buddylabs.pinglide.ui.components.TestMessageState
+import com.buddylabs.pinglide.ui.components.testMessageButtonLabel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -128,6 +129,7 @@ internal fun TargetDetailsSheet(
     val showingDetails = page == DetailsPage.Details
     val subtitle = if (showingDetails) presenceLabel else stringResource(R.string.home_alias_scope)
     val colors = MaterialTheme.colorScheme
+    val accessibility = LocalAccessibilityManager.current
     val confirmation = stringResource(R.string.home_renamed)
         .takeIf { action.result == PairingChange.Renamed }
     val sheetShadow = if (showingDetails) {
@@ -164,11 +166,14 @@ internal fun TargetDetailsSheet(
         contentWindowInsets = { WindowInsets.safeDrawing },
         modifier = Modifier.imePadding().then(sheetShadow).semantics { paneTitle = title }
     ) {
-        Box {
-            Column(
-                Modifier.fillMaxWidth().verticalScroll(scroll)
-                    .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
-            ) {
+        val contentModifier = Modifier.fillMaxWidth().verticalScroll(scroll)
+            .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
+        AnchoredPairingTestAction(testMessage, accessibility, showingDetails) {
+                testState,
+                sendTest,
+                anchor
+            ->
+            Column(contentModifier) {
                 TargetDetailsHeader(
                     title,
                     subtitle,
@@ -180,7 +185,9 @@ internal fun TargetDetailsSheet(
                     TargetDetailsActions(
                         target,
                         name,
-                        testMessage,
+                        testState,
+                        sendTest,
+                        anchor,
                         onSelect,
                         removalFocus,
                         renameSaved = action.result == PairingChange.Renamed,
@@ -227,12 +234,6 @@ internal fun TargetDetailsSheet(
                     )
                 }
             }
-            if (showingDetails) {
-                PairingTestReceivedNotice(
-                    testMessage,
-                    Modifier.align(Alignment.BottomCenter).offset(y = (-164).dp)
-                )
-            }
         }
     }
 }
@@ -278,7 +279,9 @@ private fun TargetDetailsHeader(
 private fun TargetDetailsActions(
     target: TargetDevice,
     name: String,
-    testMessage: TestMessageAction,
+    testState: TestMessageState,
+    sendTest: () -> Unit,
+    feedbackAnchor: Modifier,
     onSelect: (Boolean) -> Unit,
     removalFocus: FocusRequester,
     renameSaved: Boolean,
@@ -286,7 +289,6 @@ private fun TargetDetailsActions(
     onRemove: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
-    val testState by testMessage.state.collectAsState()
     val offline = target.presence == Presence.Offline
     val showTestChevron = offline || !target.enabled || !target.keyUsable || renameSaved
     val disabledAlpha = 0.38f
@@ -307,34 +309,33 @@ private fun TargetDetailsActions(
             )
         }
         HorizontalDivider(thickness = dividerThickness, color = divider)
-        PairingTestAction(
-            testMessage,
-            enabled = target.keyUsable,
-            feedbackModifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            overlayReceived = true
-        ) { label, enabled, sending, onClick ->
-            val alpha = if (enabled) 1f else disabledAlpha
-            val iconTint = colors.onSurfaceVariant.copy(alpha = alpha)
-            TargetDetailsRow(
-                R.drawable.ic_send,
-                label,
-                Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-                    .semantics { liveRegion = LiveRegionMode.Polite },
-                color = colors.onSurface.copy(alpha = alpha),
-                iconTint = iconTint
-            ) {
-                if (showTestChevron && !sending) {
-                    Icon(
-                        painterResource(R.drawable.ic_chevron),
-                        null,
-                        Modifier.size(20.dp),
-                        iconTint
-                    )
-                }
+        val testEnabled = target.keyUsable && !testState.pending
+        val testAlpha = if (testEnabled) 1f else disabledAlpha
+        val testIconTint = colors.onSurfaceVariant.copy(alpha = testAlpha)
+        TargetDetailsRow(
+            R.drawable.ic_send,
+            testMessageButtonLabel(testState.pending),
+            Modifier.clickable(enabled = testEnabled, role = Role.Button, onClick = sendTest)
+                .semantics { liveRegion = LiveRegionMode.Polite },
+            color = colors.onSurface.copy(alpha = testAlpha),
+            iconTint = testIconTint
+        ) {
+            if (showTestChevron && !testState.pending) {
+                Icon(
+                    painterResource(R.drawable.ic_chevron),
+                    null,
+                    Modifier.size(20.dp),
+                    testIconTint
+                )
             }
         }
+        PairingTestFeedback(
+            testState.outcome,
+            Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+        )
         val testDividerOpacity = if (testState.pending) disabledAlpha else 1f
         HorizontalDivider(
+            modifier = feedbackAnchor,
             thickness = if (testState.pending) 1.dp else dividerThickness,
             color = divider.copy(alpha = divider.alpha * testDividerOpacity)
         )

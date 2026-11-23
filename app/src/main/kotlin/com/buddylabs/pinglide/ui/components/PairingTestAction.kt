@@ -1,8 +1,10 @@
 package com.buddylabs.pinglide.ui.components
 
+import android.view.View
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -15,14 +17,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
-import androidx.compose.ui.platform.LocalAccessibilityManager
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.AccessibilityManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -32,61 +42,40 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
+import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
+import kotlin.math.roundToInt
 
 private const val RECEIVED_NOTICE_MILLIS = 4_000L
 
 @Composable
-internal fun PairingTestAction(
-    action: TestMessageAction,
-    enabled: Boolean = true,
-    feedbackModifier: Modifier = Modifier,
-    overlayReceived: Boolean = false,
-    button: @Composable (
-        label: String,
-        available: Boolean,
-        sending: Boolean,
-        onClick: () -> Unit
-    ) -> Unit = { label, available, _, onClick ->
-        Button(
-            onClick = onClick,
-            enabled = available,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics {
-                liveRegion = LiveRegionMode.Polite
-            }
-        ) { Text(label) }
-    }
-) {
+internal fun PairingTestAction(action: TestMessageAction) {
     val state by action.state.collectAsState()
     val context = LocalContext.current
-    val accessibility = LocalAccessibilityManager.current
     LaunchedEffect(state.announceReceived) {
         if (action.consumeSuccess()) {
             Toast.makeText(context, R.string.pairing_test_received, Toast.LENGTH_SHORT).show()
         }
     }
-    button(
-        stringResource(
-            if (state.pending) R.string.pairing_test_sending else R.string.pairing_test_send
-        ),
-        enabled && !state.pending,
-        state.pending,
-        {
-            val noticeMillis = if (overlayReceived) {
-                accessibility?.calculateRecommendedTimeoutMillis(
-                    RECEIVED_NOTICE_MILLIS,
-                    containsText = true
-                ) ?: RECEIVED_NOTICE_MILLIS
-            } else {
-                null
-            }
-            action.send(noticeMillis)
+    Button(
+        onClick = { action.send(null) },
+        enabled = !state.pending,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics {
+            liveRegion = LiveRegionMode.Polite
         }
-    )
-    val inlineOutcome = state.outcome?.takeUnless {
-        overlayReceived && it.result == TestMessageResult.Received
+    ) {
+        Text(testMessageButtonLabel(state.pending))
     }
-    inlineOutcome?.let { delivery ->
+    PairingTestFeedback(state.outcome)
+}
+
+@Composable
+internal fun testMessageButtonLabel(pending: Boolean): String =
+    stringResource(if (pending) R.string.pairing_test_sending else R.string.pairing_test_send)
+
+@Composable
+internal fun PairingTestFeedback(outcome: TestMessageOutcome?, modifier: Modifier = Modifier) {
+    outcome?.let { delivery ->
         val label = testMessageLabels.getValue(delivery.result)
         Text(
             if (delivery.result == TestMessageResult.Received || delivery.targetAlias.isBlank()) {
@@ -98,25 +87,82 @@ internal fun PairingTestAction(
                     stringResource(label)
                 )
             },
-            modifier = feedbackModifier.semantics { liveRegion = LiveRegionMode.Polite }
+            modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite }
         )
     }
 }
 
 @Composable
-internal fun PairingTestReceivedNotice(action: TestMessageAction, modifier: Modifier = Modifier) {
+internal fun AnchoredPairingTestAction(
+    action: TestMessageAction,
+    accessibility: AccessibilityManager?,
+    active: Boolean,
+    content: @Composable (
+        state: TestMessageState,
+        send: () -> Unit,
+        feedbackAnchor: Modifier
+    ) -> Unit
+) {
     val state by action.state.collectAsState()
-    if (state.outcome?.result != TestMessageResult.Received) return
+    val received = active && state.outcome?.result == TestMessageResult.Received
+    val view = LocalView.current
+    val message = stringResource(R.string.pairing_test_received)
+    LaunchedEffect(active, state.announceReceived) {
+        if (active && action.consumeSuccess()) {
+            announceTestMessageReceived(view, message)
+        }
+    }
+    var dividerTop by remember { mutableFloatStateOf(0f) }
+    var viewportTop by remember { mutableFloatStateOf(0f) }
+    Box(Modifier.onGloballyPositioned { viewportTop = it.positionInRoot().y }) {
+        content(
+            if (received) state.copy(outcome = null) else state,
+            {
+                action.send(
+                    accessibility?.calculateRecommendedTimeoutMillis(
+                        RECEIVED_NOTICE_MILLIS,
+                        containsText = true
+                    ) ?: RECEIVED_NOTICE_MILLIS
+                )
+            },
+            Modifier.onGloballyPositioned { dividerTop = it.positionInRoot().y }
+        )
+        if (received) {
+            Layout(
+                modifier = Modifier.matchParentSize(),
+                content = { PairingTestReceivedNotice() }
+            ) { measurables, constraints ->
+                val notice = measurables.single().measure(
+                    constraints.copy(minWidth = 0, minHeight = 0)
+                )
+                layout(constraints.maxWidth, constraints.maxHeight) {
+                    val center = dividerTop - viewportTop + 8.dp.toPx()
+                    val top = (center - notice.height / 2f).roundToInt()
+                        .coerceIn(0, constraints.maxHeight - notice.height)
+                    notice.placeRelative((constraints.maxWidth - notice.width) / 2, top)
+                }
+            }
+        }
+    }
+}
+
+@Suppress("DEPRECATION")
+private fun announceTestMessageReceived(view: View, message: String) {
+    view.announceForAccessibility(message)
+}
+
+@Composable
+private fun PairingTestReceivedNotice() {
     val colors = MaterialTheme.colorScheme
     val shadowColor = if (isSystemInDarkTheme()) Color(0x61000000) else Color(0x260A1210)
     Text(
         stringResource(R.string.pairing_test_received),
-        modifier
+        Modifier
             .padding(horizontal = 24.dp)
             .widthIn(max = 280.dp)
             .dropShadow(CircleShape, Shadow(24.dp, shadowColor, offset = DpOffset(0.dp, 8.dp)))
             .background(colors.onSurface.copy(alpha = 0.88f), CircleShape)
-            .semantics { liveRegion = LiveRegionMode.Polite }
+            .semantics { hideFromAccessibility() }
             .padding(horizontal = 18.dp, vertical = 12.dp),
         color = colors.surface,
         style = TextStyle(

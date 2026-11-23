@@ -6,8 +6,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.AccessibilityManager
+import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
+import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
@@ -33,6 +37,8 @@ internal fun renderReadyHome(
     onRename: suspend (String, String) -> Unit = { _, _ -> error("Unexpected rename") },
     sendTest: suspend (String) -> TestMessageOutcome? = { null },
     missingKeyId: String? = null,
+    fontScale: Float? = null,
+    accessibilityManager: AccessibilityManager? = null,
     onRemove: suspend (String) -> Unit
 ): HomeViewModel {
     val store = HomePairingStore(
@@ -77,11 +83,18 @@ internal fun renderReadyHome(
         val state by home.state.collectAsState()
         val systemConfiguration = LocalConfiguration.current
         val configuration = Configuration(systemConfiguration).apply {
+            if (fontScale != null) this.fontScale = fontScale
             if (nightMode != null) {
                 uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or nightMode
             }
         }
-        CompositionLocalProvider(LocalConfiguration provides configuration) {
+        val density = LocalDensity.current
+        val accessibility = LocalAccessibilityManager.current
+        CompositionLocalProvider(
+            LocalConfiguration provides configuration,
+            LocalDensity provides (fontScale?.let { Density(density.density, it) } ?: density),
+            LocalAccessibilityManager provides (accessibilityManager ?: accessibility)
+        ) {
             LocalizedContent(language) {
                 PinGlideTheme {
                     HomeScreen(
