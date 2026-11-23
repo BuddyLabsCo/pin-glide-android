@@ -54,6 +54,7 @@
     <string name="setup_later">稍后配对</string>
     <string name="home_devices">我的设备</string>
     <string name="home_target_device">目标设备</string>
+    <string name="home_details_drag_handle">拖动手柄</string>
     <string name="home_count">%1$d 台</string>
     <string name="home_capacity">已满5台</string>
     <string name="home_add">添加设备</string>
@@ -109,7 +110,7 @@
     <string name="home_revoked_copy">当前发送端注册已永久关闭，转发已停止。</string>
     <string name="home_details">打开设备详情</string>
     <string name="home_receiving">接收短信</string>
-    <string name="home_receiving_copy">关闭后仍保留这台设备的配对。</string>
+    <string name="home_receiving_copy">关闭后仍保留这台设备的配对</string>
     <string name="home_key_recovery">密钥丢失或损坏，已关闭此设备转发。请移除此设备的配对，然后重新添加设备。其他设备不受影响。</string>
     <string name="home_rename">重命名设备</string>
     <string name="home_alias_help">请输入 1–40 个字符的设备名称，不能与其他已配对设备重名。</string>

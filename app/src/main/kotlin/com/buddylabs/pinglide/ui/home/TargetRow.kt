@@ -116,7 +116,7 @@ internal fun TargetRow(
 }
 
 @Composable
-private fun TargetReceiveSwitch(
+internal fun TargetReceiveSwitch(
     checked: Boolean,
     enabled: Boolean,
     label: String,
@@ -189,26 +189,14 @@ private fun TargetCardDetails(
     now: Instant,
     highlightAlpha: Float
 ) {
-    val colors = MaterialTheme.colorScheme
-    Box(
-        Modifier.size(42.dp)
-            .background(colors.surfaceContainerHigh, RoundedCornerShape(13.dp)),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            painterResource(R.drawable.ic_computer),
-            contentDescription = null,
-            modifier = Modifier.size(22.dp),
-            tint = colors.primary
-        )
-    }
+    TargetDeviceBadge()
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Text(name, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight(720))
         TargetRowPresence(target, now)
         if (highlightAlpha > 0f) {
             Text(
                 stringResource(R.string.home_just_scanned),
-                color = colors.primary,
+                color = MaterialTheme.colorScheme.primary,
                 fontSize = 11.sp,
                 lineHeight = 16.sp,
                 modifier = Modifier.alpha(highlightAlpha)
@@ -224,6 +212,22 @@ private fun TargetCardDetails(
                 letterSpacing = 0.sp
             )
         }
+    }
+}
+
+@Composable
+internal fun TargetDeviceBadge() {
+    val colors = MaterialTheme.colorScheme
+    Box(
+        Modifier.size(42.dp).background(colors.surfaceContainerHigh, RoundedCornerShape(13.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painterResource(R.drawable.ic_computer),
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = colors.primary
+        )
     }
 }
 
