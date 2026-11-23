@@ -31,7 +31,12 @@ fun PairingCamera(modifier: Modifier, onCode: (String) -> Unit, onFailure: () ->
     val controller = remember(context) { LifecycleCameraController(context) }
     AndroidView(
         modifier = modifier,
-        factory = { PreviewView(it).apply { this.controller = controller } }
+        factory = {
+            PreviewView(it).apply {
+                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                this.controller = controller
+            }
+        }
     )
     DisposableEffect(controller, lifecycle) {
         val executor = ContextCompat.getMainExecutor(context)

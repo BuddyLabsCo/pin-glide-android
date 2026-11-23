@@ -158,7 +158,7 @@
     <string name="home_login_restored">登录已恢复，原有配对已保留</string>
     <string name="pairing_scan_title">扫描二维码</string>
     <string name="pairing_scan_instruction">对准目标设备上的二维码</string>
-    <string name="pairing_scan_description">二维码五分钟内有效。请保持目标设备上的鹊信窗口打开。</string>
+    <string name="pairing_scan_description">二维码 5 分钟内有效。请确认目标设备屏幕上的鹊信窗口处于打开状态。</string>
     <string name="pairing_consent_title">确认配对</string>
     <string name="pairing_connect_title">连接新设备</string>
     <string name="pairing_add_title">添加新设备</string>
