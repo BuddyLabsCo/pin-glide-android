@@ -29,7 +29,7 @@ fun PinGlideTheme(content: @Composable () -> Unit) {
             surfaceContainerLowest = colorResource(R.color.surface),
             surfaceContainerLow = colorResource(R.color.surface_container),
             surfaceContainerHigh = colorResource(R.color.surface_container_high),
-            surfaceContainerHighest = colorResource(R.color.surface_container_high),
+            surfaceContainerHighest = colorResource(R.color.surface_container_highest),
             surfaceTint = colorResource(R.color.primary),
             outline = colorResource(R.color.outline),
             outlineVariant = colorResource(R.color.outline_variant)

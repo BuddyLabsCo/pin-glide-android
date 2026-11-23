@@ -12,6 +12,7 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isDisplayed
+import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -81,7 +82,7 @@ class HomeRemovalDialogTest {
     }
 
     @Test
-    fun keyboardStartsAtNamedHeadingAndTabsToCancel() {
+    fun keyboardStartsAtNamedHeadingAndCancelReturnsFocusToRemovalAction() {
         renderHome(AppLanguage.English)
         pressKey(KeyEvent.KEYCODE_TAB)
         openConfirmation("My computer", "Remove this target’s Pairing")
@@ -90,14 +91,17 @@ class HomeRemovalDialogTest {
         dialogText("Cancel").assertIsFocused()
         pressKey(KeyEvent.KEYCODE_ENTER)
         assertTargetDetails()
+        assertRemovalActionFocused()
     }
 
     @Test
     fun backAndScrimReturnToDetailsBeforeSubmission() {
         renderHome(AppLanguage.English)
+        pressKey(KeyEvent.KEYCODE_TAB)
         openConfirmation("My computer", "Remove this target’s Pairing")
         pressDialogBack()
         assertTargetDetails()
+        assertRemovalActionFocused()
         openRemovalFromDetails()
         tapScrim()
         assertTargetDetails()
@@ -165,6 +169,13 @@ class HomeRemovalDialogTest {
         dialogText("Remove “My computer”?").assertDoesNotExist()
         val remove = compose.onNodeWithText("Remove this target’s Pairing")
         compose.waitUntil(5_000) { remove.isDisplayed() }
+    }
+
+    private fun assertRemovalActionFocused() {
+        val focusedAction = hasText("Remove this target’s Pairing") and isFocused()
+        compose.waitUntil(5_000) {
+            compose.onAllNodes(focusedAction).fetchSemanticsNodes().size == 1
+        }
     }
 
     private fun openRemovalFromDetails() {

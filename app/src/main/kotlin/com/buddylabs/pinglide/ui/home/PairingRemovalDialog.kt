@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.InputMode
@@ -238,6 +239,8 @@ private fun RemovalActions(
     onCancel: () -> Unit,
     onRemove: () -> Unit
 ) {
+    val colors = MaterialTheme.colorScheme
+    val actionModifier = Modifier.heightIn(min = 48.dp).alpha(if (pending) 0.38f else 1f)
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
@@ -246,16 +249,19 @@ private fun RemovalActions(
         TextButton(
             onClick = onCancel,
             enabled = !pending,
-            modifier = Modifier.heightIn(min = 48.dp),
-            contentPadding = ButtonDefaults.ContentPadding
+            modifier = actionModifier,
+            contentPadding = ButtonDefaults.ContentPadding,
+            colors = ButtonDefaults.textButtonColors(disabledContentColor = colors.primary)
         ) { Text(stringResource(R.string.setup_cancel), fontWeight = FontWeight.Bold) }
         Button(
             onClick = onRemove,
             enabled = !pending,
-            modifier = Modifier.heightIn(min = 48.dp),
+            modifier = actionModifier,
             colors = ButtonDefaults.buttonColors(
                 containerColor = colorResource(R.color.error_emblem_container),
-                contentColor = colorResource(R.color.on_error_emblem_container)
+                contentColor = colorResource(R.color.on_error_emblem_container),
+                disabledContainerColor = colors.surfaceContainerHighest,
+                disabledContentColor = colors.onSurfaceVariant
             )
         ) {
             Text(

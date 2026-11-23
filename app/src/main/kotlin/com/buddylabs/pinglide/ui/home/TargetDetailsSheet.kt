@@ -31,9 +31,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -50,6 +52,7 @@ import com.buddylabs.pinglide.domain.pairing.TargetDevice
 import com.buddylabs.pinglide.domain.pairing.pairingAliasError
 import com.buddylabs.pinglide.ui.components.PairingTestAction
 import com.buddylabs.pinglide.ui.components.TestMessageAction
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private enum class DetailsPage { Details, Rename, Remove }
@@ -69,6 +72,8 @@ internal fun TargetDetailsSheet(
     onDismiss: () -> Unit
 ) {
     var page by rememberSaveable(target.pairingId) { mutableStateOf(DetailsPage.Details) }
+    var restoreRemovalFocus by rememberSaveable(target.pairingId) { mutableStateOf(false) }
+    val removalFocus = remember { FocusRequester() }
     LaunchedEffect(page, target.pairingId) {
         testMessage.enter(target.pairingId.takeIf { page == DetailsPage.Details })
     }
@@ -82,7 +87,10 @@ internal fun TargetDetailsSheet(
     }
     val name = target.alias.ifBlank { stringResource(R.string.home_target_device) }
     if (page == DetailsPage.Remove) {
-        PairingRemovalDialog(name, action, target.enabled, onRemove, returnToDetails)
+        PairingRemovalDialog(name, action, target.enabled, onRemove) {
+            restoreRemovalFocus = true
+            returnToDetails()
+        }
         return
     }
     val sheet = rememberModalBottomSheetState(
@@ -155,11 +163,20 @@ internal fun TargetDetailsSheet(
                             page = DetailsPage.Remove
                         },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                            .focusRequester(removalFocus)
                     ) {
                         Text(
                             stringResource(R.string.home_remove),
                             color = MaterialTheme.colorScheme.error
                         )
+                    }
+                    val window = LocalWindowInfo.current
+                    LaunchedEffect(window, restoreRemovalFocus) {
+                        if (restoreRemovalFocus) {
+                            snapshotFlow { window.isWindowFocused }.first { it }
+                            removalFocus.requestFocus()
+                            restoreRemovalFocus = false
+                        }
                     }
                     PairingTestAction(testMessage, enabled = target.keyUsable)
                 }
