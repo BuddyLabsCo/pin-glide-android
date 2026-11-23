@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -32,6 +34,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +50,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -77,104 +82,138 @@ internal fun PairingScannerScreen(
     val insets = WindowInsets.safeDrawing
     val colors = MaterialTheme.colorScheme
     val showInvalidQrNotice = state.problem == PairingEntryProblem.InvalidQr
+    val density = LocalDensity.current
+    val cancelBottomInset = with(density) { insets.getBottom(this).toDp() }
+    val viewfinderRequester = remember { BringIntoViewRequester() }
     Surface(Modifier.fillMaxSize()) {
         BoxWithConstraints(
             Modifier.fillMaxSize().scannerBackdrop(colors, insets).windowInsetsPadding(insets),
             contentAlignment = Alignment.TopCenter
         ) {
-            val viewfinderMaxSize = minOf(264.dp, maxHeight)
             val noticeGap = (maxHeight - 300.dp).coerceIn(0.dp, 52.dp)
+            val cancelBottom = (maxHeight - 200.dp).coerceIn(0.dp, 28.dp)
+            val cancelOffset = minOf(cancelBottom, cancelBottomInset)
             Column(
-                Modifier.widthIn(max = 560.dp).fillMaxWidth()
-                    .verticalScroll(rememberScrollState()).heightIn(min = maxHeight)
-                    .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 28.dp)
-                    .semantics { paneTitle = title },
-                horizontalAlignment = Alignment.CenterHorizontally
+                Modifier.widthIn(max = 560.dp).fillMaxSize()
+                    .testTag("pairing-scanner").padding(horizontal = 20.dp)
+                    .semantics { paneTitle = title }
             ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(model::close, Modifier.size(48.dp)) {
-                        Icon(
-                            painterResource(R.drawable.ic_close),
-                            contentDescription = cancel,
-                            modifier = Modifier.size(22.dp)
-                        )
+                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                    val viewportHeight = maxHeight
+                    LaunchedEffect(showInvalidQrNotice, viewportHeight) {
+                        if (showInvalidQrNotice) viewfinderRequester.bringIntoView()
                     }
-                    Text(
+                    ScannerContent(
                         title,
-                        Modifier.weight(1f).semantics { heading() },
-                        fontSize = 18.sp,
-                        lineHeight = 20.sp,
-                        fontWeight = FontWeight(740),
-                        letterSpacing = (-0.63).sp,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(Modifier.width(48.dp))
-                }
-                Spacer(Modifier.height(38.dp))
-                Text(
-                    stringResource(R.string.pairing_scan_instruction),
-                    Modifier.semantics { heading() },
-                    fontSize = 26.sp,
-                    lineHeight = 32.sp,
-                    fontWeight = FontWeight(750),
-                    letterSpacing = (-1.04).sp,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(9.dp))
-                Text(
-                    stringResource(R.string.pairing_scan_description),
-                    Modifier.widthIn(max = 286.dp),
-                    color = colors.onSurfaceVariant,
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp,
-                    letterSpacing = 0.sp,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(40.dp))
-                ScannerViewfinder(
-                    state,
-                    model,
-                    resumed,
-                    Modifier.padding(horizontal = 4.dp).widthIn(max = viewfinderMaxSize)
-                )
-                Spacer(Modifier.height(30.dp))
-                if (state.problem != null && !showInvalidQrNotice) {
-                    PairingProblem(state.problem, model::freshScan)
-                }
-                if (state.pending) Text(stringResource(R.string.pairing_validating))
-                Spacer(Modifier.weight(1f))
-                Spacer(Modifier.height(4.dp))
-                TextButton(
-                    model::close,
-                    Modifier.fillMaxWidth().padding(horizontal = 4.dp).heightIn(min = 48.dp)
-                ) {
-                    Text(
                         cancel,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.14.sp
+                        state,
+                        model,
+                        resumed,
+                        showInvalidQrNotice,
+                        Modifier.verticalScroll(rememberScrollState())
+                            .heightIn(min = viewportHeight)
+                            .padding(
+                                top = 18.dp,
+                                bottom = if (showInvalidQrNotice) 0.dp else 28.dp
+                            ),
+                        Modifier.padding(horizontal = 4.dp)
+                            .widthIn(max = minOf(264.dp, viewportHeight))
+                            .bringIntoViewRequester(viewfinderRequester)
                     )
                 }
-            }
-            if (showInvalidQrNotice) {
-                InvalidQrNotice(
-                    Modifier.align(Alignment.BottomCenter).widthIn(max = 560.dp)
-                        .padding(start = 20.dp, end = 20.dp, bottom = 76.dp + noticeGap)
-                )
+                if (showInvalidQrNotice) {
+                    InvalidQrNotice()
+                    Spacer(Modifier.height(noticeGap + cancelOffset))
+                    ScannerCancel(cancel, model::close)
+                    Spacer(Modifier.height(cancelBottom - cancelOffset))
+                }
             }
         }
     }
 }
 
 @Composable
-private fun InvalidQrNotice(modifier: Modifier) {
+private fun ScannerContent(
+    title: String,
+    cancel: String,
+    state: PairingEntryState,
+    model: PairingEntryViewModel,
+    resumed: Boolean,
+    showInvalidQrNotice: Boolean,
+    modifier: Modifier,
+    viewfinderModifier: Modifier
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(model::close, Modifier.size(48.dp)) {
+                Icon(
+                    painterResource(R.drawable.ic_close),
+                    contentDescription = cancel,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Text(
+                title,
+                Modifier.weight(1f).semantics { heading() },
+                fontSize = 18.sp,
+                lineHeight = 20.sp,
+                fontWeight = FontWeight(740),
+                letterSpacing = (-0.63).sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.width(48.dp))
+        }
+        Spacer(Modifier.height(38.dp))
+        Text(
+            stringResource(R.string.pairing_scan_instruction),
+            Modifier.semantics { heading() },
+            fontSize = 26.sp,
+            lineHeight = 32.sp,
+            fontWeight = FontWeight(750),
+            letterSpacing = (-1.04).sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(9.dp))
+        Text(
+            stringResource(R.string.pairing_scan_description),
+            Modifier.widthIn(max = 286.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp,
+            lineHeight = 18.sp,
+            letterSpacing = 0.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(40.dp))
+        ScannerViewfinder(state, model, resumed, viewfinderModifier)
+        Spacer(Modifier.height(30.dp))
+        if (state.problem != null && !showInvalidQrNotice) {
+            PairingProblem(state.problem, model::freshScan)
+        }
+        if (state.pending) Text(stringResource(R.string.pairing_validating))
+        if (!showInvalidQrNotice) {
+            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(4.dp))
+            ScannerCancel(cancel, model::close)
+        }
+    }
+}
+
+@Composable
+private fun ScannerCancel(label: String, onCancel: () -> Unit) {
+    TextButton(onCancel, Modifier.fillMaxWidth().padding(horizontal = 4.dp).heightIn(min = 48.dp)) {
+        Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.14.sp)
+    }
+}
+
+@Composable
+private fun InvalidQrNotice() {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(8.dp)
     Row(
-        modifier.fillMaxWidth().heightIn(min = 52.dp)
+        Modifier.fillMaxWidth().heightIn(min = 52.dp)
             .dropShadow(
                 shape,
                 Shadow(

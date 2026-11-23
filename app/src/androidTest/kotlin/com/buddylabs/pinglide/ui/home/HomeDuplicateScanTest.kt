@@ -102,6 +102,7 @@ class HomeDuplicateScanTest {
     private val scope = CoroutineScope(Dispatchers.Main)
     private var primary = 0
     private var density = 1f
+    private var nativeBottomInset = 0.dp
 
     @After
     fun stopFixture() = scope.cancel()
@@ -142,7 +143,7 @@ class HomeDuplicateScanTest {
 
     @Test
     fun scannerFrameAndCancelRemainReachableWithLargeTextInAShortWindow() {
-        val viewportHeight = 260.dp
+        val viewportHeight = 200.dp
         val fixture = renderHome(
             usableHeight = viewportHeight,
             fontScale = 1.5f,
@@ -160,8 +161,11 @@ class HomeDuplicateScanTest {
             "Not a Pin Glide Pairing code. Keep aiming at the QR code."
         )
             .assertIsDisplayed().getUnclippedBoundsInRoot()
+        val liveFrame = compose.onNodeWithTag("pairing-viewfinder").assertIsDisplayed()
+            .getUnclippedBoundsInRoot()
+        assertTrue(liveFrame.top >= viewport.top && liveFrame.bottom <= notice.top)
         assertTrue(notice.top >= viewport.top && notice.bottom <= viewport.bottom)
-        compose.onNodeWithText("Cancel").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithText("Cancel").assertIsDisplayed().performClick()
         add.assertIsDisplayed()
     }
 
@@ -189,7 +193,14 @@ class HomeDuplicateScanTest {
         assertEquals(20f, (notice.left - viewport.left).value, 1f)
         assertEquals(20f, (viewport.right - notice.right).value, 1f)
         assertEquals(52f, (notice.bottom - notice.top).value, 1f)
-        assertEquals(52f, (cancel.top - notice.bottom).value, 1f)
+        val expectedGap = 52.dp + minOf(28.dp, nativeBottomInset)
+        val windowBottom = viewport.bottom + nativeBottomInset
+        assertEquals(expectedGap.value, (cancel.top - notice.bottom).value, 1f)
+        assertEquals(
+            maxOf(28.dp, nativeBottomInset).value,
+            (windowBottom - cancel.bottom).value,
+            1f
+        )
         assertTrue(frame.bottom < notice.top)
         assertSame(preview, streamingPreview())
     }
@@ -214,6 +225,8 @@ class HomeDuplicateScanTest {
             compose.onAllNodes(hasText("这台设备已添加")).fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText("这台设备已添加").assertIsDisplayed()
+        compose.onNode(hasText("Office computer") and hasText("刚刚扫描的设备"))
+            .assertIsDisplayed()
     }
 
     private fun awaitStreamingPreview(): PreviewView {
@@ -228,7 +241,7 @@ class HomeDuplicateScanTest {
     }
 
     private fun scannerViewport(height: Dp): DpRect {
-        val bounds = compose.onNode(hasScrollAction()).getUnclippedBoundsInRoot()
+        val bounds = compose.onNodeWithTag("pairing-scanner").getUnclippedBoundsInRoot()
         val size = "${ScannerViewportWidth.value} × ${height.value} dp"
         val required = "Scanner test requires a $size usable viewport"
         assertEquals(required, ScannerViewportWidth.value, (bounds.right - bounds.left).value, 1f)
@@ -373,8 +386,9 @@ class HomeDuplicateScanTest {
                         primary = MaterialTheme.colorScheme.primary.toArgb()
                         density = LocalDensity.current.density
                         val insets = WindowInsets.safeDrawing.asPaddingValues()
+                        nativeBottomInset = insets.calculateBottomPadding()
                         val windowHeight = usableHeight + insets.calculateTopPadding() +
-                            insets.calculateBottomPadding()
+                            nativeBottomInset
                         val window = Modifier.height(windowHeight)
                         val viewport = if (usableWidth == null) {
                             window
