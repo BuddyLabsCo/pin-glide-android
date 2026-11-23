@@ -60,6 +60,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -155,60 +156,51 @@ internal fun TargetDetailsSheet(
         modifier = Modifier.imePadding().then(sheetShadow).semantics { paneTitle = title }
     ) {
         if (showingDetails) {
-            Box {
-                Column(
-                    Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                        .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
-                ) {
-                    TargetDetailsHeader(name, presenceLabel)
-                    if (!target.keyUsable) KeyFailureNotice()
-                    TargetDetailsActions(
-                        target,
-                        name,
-                        testMessage,
-                        onSelect,
-                        removalFocus,
-                        onRename = {
-                            draft = target.alias
-                            testMessage.leave()
-                            onClearAction()
-                            page = DetailsPage.Rename
-                        },
-                        onRemove = {
-                            testMessage.leave()
-                            onClearAction()
-                            page = DetailsPage.Remove
-                        }
-                    )
-                    val window = LocalWindowInfo.current
-                    LaunchedEffect(window, restoreRemovalFocus) {
-                        if (restoreRemovalFocus) {
-                            snapshotFlow { window.isWindowFocused }.first { it }
-                            removalFocus.requestFocus()
-                            restoreRemovalFocus = false
-                        }
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
+            ) {
+                val confirmation = if (action.result == PairingChange.Renamed) {
+                    stringResource(R.string.home_renamed)
+                } else {
+                    null
+                }
+                TargetDetailsHeader(name, presenceLabel, confirmation = confirmation)
+                if (!target.keyUsable) KeyFailureNotice()
+                TargetDetailsActions(
+                    target,
+                    name,
+                    testMessage,
+                    onSelect,
+                    removalFocus,
+                    onRename = {
+                        draft = target.alias
+                        testMessage.leave()
+                        onClearAction()
+                        page = DetailsPage.Rename
+                    },
+                    onRemove = {
+                        testMessage.leave()
+                        onClearAction()
+                        page = DetailsPage.Remove
                     }
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        enabled = !pending,
-                        border = BorderStroke(1.dp, colors.onSurface.copy(alpha = 0.34f)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    ) {
-                        Text(stringResource(R.string.close), fontWeight = FontWeight.Bold)
+                )
+                val window = LocalWindowInfo.current
+                LaunchedEffect(window, restoreRemovalFocus) {
+                    if (restoreRemovalFocus) {
+                        snapshotFlow { window.isWindowFocused }.first { it }
+                        removalFocus.requestFocus()
+                        restoreRemovalFocus = false
                     }
                 }
-                if (action.result == PairingChange.Renamed) {
-                    Text(
-                        stringResource(R.string.home_renamed),
-                        color = colors.surface,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight(650),
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 164.dp)
-                            .background(colors.onSurface.copy(alpha = 0.88f), CircleShape)
-                            .padding(horizontal = 18.dp, vertical = 12.dp)
-                            .semantics { liveRegion = LiveRegionMode.Polite }
-                    )
+                OutlinedButton(
+                    onClick = onDismiss,
+                    enabled = !pending,
+                    border = BorderStroke(1.dp, colors.onSurface.copy(alpha = 0.34f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                ) {
+                    Text(stringResource(R.string.close), fontWeight = FontWeight.Bold)
                 }
             }
             return@ModalBottomSheet
@@ -235,7 +227,8 @@ private fun detailsScrim(): Color =
 internal fun TargetDetailsHeader(
     title: String,
     subtitle: String,
-    modifier: Modifier = Modifier.padding(bottom = 14.dp)
+    modifier: Modifier = Modifier.padding(bottom = 14.dp),
+    confirmation: String? = null
 ) {
     Row(
         modifier.fillMaxWidth(),
@@ -247,7 +240,13 @@ internal fun TargetDetailsHeader(
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight(750),
                 letterSpacing = (-0.96).sp,
-                modifier = Modifier.semantics { heading() }
+                modifier = Modifier.semantics {
+                    heading()
+                    if (confirmation != null) {
+                        stateDescription = confirmation
+                        liveRegion = LiveRegionMode.Polite
+                    }
+                }
             )
             Text(
                 subtitle,

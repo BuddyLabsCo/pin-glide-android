@@ -32,20 +32,26 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -61,6 +67,7 @@ import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.PairingAliasError
 import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.domain.pairing.pairingAliasError
+import kotlinx.coroutines.flow.first
 
 @Composable
 internal fun TargetRenameContent(
@@ -82,7 +89,13 @@ internal fun TargetRenameContent(
             stringResource(R.string.home_alias_scope),
             Modifier.padding(bottom = 18.dp)
         )
-        RenameAliasField(draft, validation, action.pending, onDraft)
+        RenameAliasField(
+            draft,
+            validation,
+            action.result == PairingChange.InvalidAlias,
+            action.pending,
+            onDraft
+        )
         if (failed) RenameFailureNotice()
         Spacer(Modifier.height(18.dp))
         RenameActions(action.pending, validation == null, failed, { onRename(draft) }, onCancel)
@@ -93,20 +106,23 @@ internal fun TargetRenameContent(
 private fun RenameAliasField(
     draft: String,
     validation: PairingAliasError?,
+    rejected: Boolean,
     pending: Boolean,
     onDraft: (String) -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
     val label = stringResource(R.string.home_alias_label)
-    val hint = stringResource(
+    val guidance = stringResource(
         when (validation) {
-            PairingAliasError.Blank -> R.string.home_alias_blank
-            PairingAliasError.TooLong -> R.string.home_alias_too_long
+            PairingAliasError.Blank -> R.string.home_rename_blank
+            PairingAliasError.TooLong -> R.string.home_rename_too_long
             PairingAliasError.InvalidCharacters -> R.string.home_alias_invalid_characters
-            PairingAliasError.Duplicate -> R.string.home_alias_duplicate
-            null -> R.string.home_alias_help
+            PairingAliasError.Duplicate -> R.string.home_rename_duplicate
+            null -> if (rejected) R.string.home_rename_choose_another else R.string.home_rename_help
         }
     )
+    val hint = if (rejected) stringResource(R.string.home_rename_rejected, guidance) else guidance
+    val invalid = validation != null || rejected
     val danger = colorResource(R.color.error_emblem)
     val smallText = MaterialTheme.typography.bodySmall.copy(
         fontSize = 11.sp,
@@ -114,7 +130,8 @@ private fun RenameAliasField(
         letterSpacing = 0.sp
     )
     Column(
-        Modifier.fillMaxWidth().background(colors.surfaceContainer, RoundedCornerShape(16.dp))
+        Modifier.fillMaxWidth().testTag("renameAliasGroup")
+            .background(colors.surfaceContainer, RoundedCornerShape(16.dp))
             .padding(start = 15.dp, top = 14.dp, end = 15.dp, bottom = 12.dp)
     ) {
         Text(
@@ -124,13 +141,13 @@ private fun RenameAliasField(
             fontWeight = FontWeight(650)
         )
         Spacer(Modifier.height(7.dp))
-        RenameAliasInput(draft, label, hint.takeIf { validation != null }, pending, onDraft)
+        RenameAliasInput(draft, label, hint.takeIf { invalid }, pending, onDraft)
         Spacer(Modifier.height(8.dp))
         Text(
             hint,
-            color = if (validation == null) colors.onSurfaceVariant else danger,
+            color = if (invalid) danger else colors.onSurfaceVariant,
             style = smallText,
-            fontWeight = if (validation == null) FontWeight.Normal else FontWeight(650),
+            fontWeight = if (invalid) FontWeight(650) else FontWeight.Normal,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
         )
     }
@@ -145,6 +162,14 @@ private fun RenameAliasInput(
     onDraft: (String) -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    val focus = remember { FocusRequester() }
+    val window = LocalWindowInfo.current
+    LaunchedEffect(window) {
+        if (!pending) {
+            snapshotFlow { window.isWindowFocused }.first { it }
+            focus.requestFocus()
+        }
+    }
     var focused by remember { mutableStateOf(false) }
     val active = focused && !pending
     val border = when {
@@ -168,7 +193,8 @@ private fun RenameAliasInput(
             letterSpacing = 0.sp
         ),
         cursorBrush = SolidColor(colors.primary),
-        modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }
+        modifier = Modifier.fillMaxWidth().focusRequester(focus)
+            .onFocusChanged { focused = it.isFocused }
             .semantics {
                 contentDescription = label
                 if (validationError != null) error(validationError)

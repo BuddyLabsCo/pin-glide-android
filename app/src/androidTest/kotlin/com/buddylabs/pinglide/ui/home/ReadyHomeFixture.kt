@@ -28,15 +28,16 @@ internal fun renderReadyHome(
     scope: CoroutineScope,
     language: AppLanguage = AppLanguage.SimplifiedChinese,
     nightMode: Int? = null,
+    onList: suspend (List<RemotePairing>) -> List<RemotePairing> = { it },
     onRename: suspend (String, String) -> Unit = { _, _ -> error("Unexpected rename") },
     onRemove: suspend (String) -> Unit
-) {
+): HomeViewModel {
     val store = HomePairingStore(targets, Instant.now().plusSeconds(3600).toString())
     val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)
     val service = object : PairingService {
         private val remote = targets.associateBy { it.pairingId }.toMutableMap()
 
-        override suspend fun list(managementToken: String) = remote.values.toList()
+        override suspend fun list(managementToken: String) = onList(remote.values.toList())
 
         override suspend fun rename(
             managementToken: String,
@@ -89,4 +90,5 @@ internal fun renderReadyHome(
             }
         }
     }
+    return home
 }
