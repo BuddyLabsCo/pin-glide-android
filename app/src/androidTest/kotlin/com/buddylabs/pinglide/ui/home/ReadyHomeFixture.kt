@@ -6,6 +6,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.AccessibilityManager
+import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.test.ext.junit.rules.ActivityScenarioRule
@@ -33,6 +35,7 @@ internal fun renderReadyHome(
     onRename: suspend (String, String) -> Unit = { _, _ -> error("Unexpected rename") },
     sendTest: suspend (String) -> TestMessageOutcome? = { null },
     missingKeyId: String? = null,
+    accessibilityManager: AccessibilityManager? = null,
     onRemove: suspend (String) -> Unit
 ): HomeViewModel {
     val store = HomePairingStore(
@@ -81,7 +84,11 @@ internal fun renderReadyHome(
                 uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or nightMode
             }
         }
-        CompositionLocalProvider(LocalConfiguration provides configuration) {
+        val accessibility = LocalAccessibilityManager.current
+        CompositionLocalProvider(
+            LocalConfiguration provides configuration,
+            LocalAccessibilityManager provides (accessibilityManager ?: accessibility)
+        ) {
             LocalizedContent(language) {
                 PinGlideTheme {
                     HomeScreen(
