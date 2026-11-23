@@ -1,10 +1,10 @@
 package com.buddylabs.pinglide.ui.home
 
 import android.content.res.Configuration
-import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.layout.positionOnScreen
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -14,8 +14,11 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -23,7 +26,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
-import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 import com.buddylabs.pinglide.domain.pairing.Presence
@@ -46,8 +48,9 @@ class PendingTargetTestMessageTest {
     val compose = createAndroidComposeRule<ComponentActivity>()
 
     private val scope = CoroutineScope(Dispatchers.Main)
-    private val inSheet =
-        hasAnyAncestor(SemanticsMatcher.keyIsDefined(SemanticsProperties.PaneTitle))
+    private val targetPane = SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "我的电脑")
+    private val inSheet = hasAnyAncestor(targetPane)
+    private val sheetContent = compose.onNode(inSheet and hasScrollAction())
 
     @After
     fun stopFixture() = scope.cancel()
@@ -82,11 +85,15 @@ class PendingTargetTestMessageTest {
         ) { error("Unexpected Pairing removal") }
 
         compose.onNodeWithText("我的电脑").performClick()
-        sheetText("发送测试消息").assertIsEnabled()
-            .performSemanticsAction(SemanticsActions.OnClick) { click ->
-                click()
-                click()
-            }
+        val receiveSwitch = compose.onNode(inSheet and hasContentDescription("我的电脑接收短信"))
+        val rename = sheetText("重命名设备")
+        val send = sheetText("发送测试消息").assertIsDisplayed().assertIsEnabled()
+        val idleBounds = sheetBounds(send)
+        val idleDivider = dividerStroke(idleBounds, sheetBounds(rename))
+        send.performSemanticsAction(SemanticsActions.OnClick) { click ->
+            click()
+            click()
+        }
 
         val sending = sheetText("正在发送…").assertIsDisplayed().assertIsNotEnabled()
             .assert(
@@ -96,35 +103,70 @@ class PendingTargetTestMessageTest {
         compose.runOnIdle {
             assertEquals(listOf("home"), sentTo)
         }
-        val image = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
-        val normalDivider = dividerInkAbove(image, sending)
-        val pendingDivider = dividerInkAbove(image, sheetText("重命名设备"))
+        val sendingBounds = sheetBounds(sending)
+        val renameBounds = sheetBounds(rename)
+        assertEquals("The pending row keeps its bounds within the sheet", idleBounds, sendingBounds)
         assertTrue(
-            "The pending divider has about 38% of its neighbor's contrast ($pendingDivider / $normalDivider)",
-            pendingDivider > 0 &&
-                pendingDivider.toDouble() in normalDivider * 0.30..normalDivider * 0.46
+            "The pending row stays between Receive SMS and Rename",
+            sheetBounds(receiveSwitch).bottom <= sendingBounds.top &&
+                sendingBounds.bottom <= renameBounds.top
+        )
+        val pendingDivider = dividerStroke(sendingBounds, renameBounds)
+        assertEquals(
+            "The pending divider is 1 dp thick",
+            with(compose.density) { 1.dp.roundToPx() },
+            pendingDivider.size
+        )
+        val idleInk = idleDivider.max()
+        val pendingInk = pendingDivider.max()
+        assertTrue(
+            "The pending divider has about 38% of its idle contrast ($pendingInk / $idleInk)",
+            pendingInk.toDouble() in idleInk * 0.30..idleInk * 0.46
         )
         compose.runOnIdle {
             delivery.complete(TestMessageOutcome("我的电脑", TestMessageResult.Received))
         }
-        sheetText("发送测试消息").assertIsEnabled()
+        send.assertIsEnabled()
+        sheetText("测试消息已发送").assertIsDisplayed()
+        assertEquals(
+            "The same divider recovers its initial thickness and contrast",
+            idleDivider,
+            dividerStroke(sheetBounds(send), sheetBounds(rename))
+        )
     }
 
     private fun sheetText(label: String) = compose.onNode(inSheet and hasText(label))
 
-    private fun dividerInkAbove(image: Bitmap, row: SemanticsNodeInteraction): Int {
-        val node = row.fetchSemanticsNode()
-        val position = node.layoutInfo.coordinates.positionOnScreen()
-        val column =
-            position.x.roundToInt() + node.size.width - with(compose.density) { 28.dp.roundToPx() }
-        val boundary = position.y.roundToInt()
-        val radius = with(compose.density) { 16.dp.roundToPx() }
-        val background = image.getPixel(column, boundary + radius)
-        return (boundary - radius..boundary + radius).maxOf { line ->
-            val pixel = image.getPixel(column, line)
+    private fun sheetBounds(row: SemanticsNodeInteraction): Rect =
+        row.fetchSemanticsNode().boundsInWindow.translate(
+            -sheetContent.fetchSemanticsNode().boundsInWindow.topLeft
+        )
+
+    private fun dividerStroke(upper: Rect, lower: Rect): List<Int> {
+        val image = sheetContent.captureToImage().asAndroidBitmap()
+        val columns = with(compose.density) {
+            val inset = 6.dp.roundToPx()
+            listOf(upper.left.roundToInt() + inset, upper.right.roundToInt() - inset)
+        }
+        val firstLine = upper.bottom.roundToInt()
+        val lastLine = lower.top.roundToInt() - 1
+        val background = image.getPixel(columns.first(), lastLine + 1)
+        val strokes = (firstLine..lastLine).map { line ->
+            val pixel = image.getPixel(columns.first(), line)
+            assertEquals(
+                "The separator agrees across the row at y=$line",
+                pixel,
+                image.getPixel(columns.last(), line)
+            )
             abs(Color.red(pixel) - Color.red(background)) +
                 abs(Color.green(pixel) - Color.green(background)) +
                 abs(Color.blue(pixel) - Color.blue(background))
         }
+        val stroke = strokes.takeLastWhile { it > 0 }
+        assertTrue(
+            "A single separator ends the gap between rows",
+            stroke.isNotEmpty() && strokes.count { it > 0 } == stroke.size
+        )
+        return stroke
     }
 }

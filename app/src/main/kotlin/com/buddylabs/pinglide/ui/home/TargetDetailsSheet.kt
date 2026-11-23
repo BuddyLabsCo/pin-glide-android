@@ -323,7 +323,7 @@ private fun TargetDetailsActions(
         }
         val testDividerOpacity = if (testState.pending) disabledAlpha else 1f
         HorizontalDivider(
-            thickness = dividerThickness,
+            thickness = if (testState.pending) 1.dp else dividerThickness,
             color = divider.copy(alpha = divider.alpha * testDividerOpacity)
         )
         TargetDetailsRow(
