@@ -51,7 +51,7 @@ import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 import kotlin.math.roundToInt
 
-private const val RECEIVED_NOTICE_MILLIS = 4_000L
+private const val DETAILS_NOTICE_MILLIS = 4_000L
 
 @Composable
 internal fun PairingTestAction(action: TestMessageAction) {
@@ -109,20 +109,24 @@ internal fun AnchoredPairingTestAction(
     ) -> Unit
 ) {
     val state by action.state.collectAsState()
-    val received = active && state.outcome?.result == TestMessageResult.Received
-    val message = stringResource(R.string.pairing_test_received)
+    val notice = state.outcome?.result?.takeIf { active && it.usesDetailsNotice }
+    val message = when (notice) {
+        TestMessageResult.Received -> stringResource(R.string.pairing_test_received)
+        TestMessageResult.Offline -> stringResource(R.string.home_test_offline_notice)
+        else -> ""
+    }
     var dividerTop by remember { mutableFloatStateOf(0f) }
     var dividerVisible by remember { mutableStateOf(false) }
     var viewportTop by remember { mutableFloatStateOf(0f) }
     Box(Modifier.onGloballyPositioned { viewportTop = it.positionInRoot().y }) {
         content(
-            if (received) state.copy(outcome = null) else state,
+            if (notice != null) state.copy(outcome = null) else state,
             {
                 action.send(
                     accessibility?.calculateRecommendedTimeoutMillis(
-                        RECEIVED_NOTICE_MILLIS,
+                        DETAILS_NOTICE_MILLIS,
                         containsText = true
-                    ) ?: RECEIVED_NOTICE_MILLIS
+                    ) ?: DETAILS_NOTICE_MILLIS
                 )
             },
             Modifier.onGloballyPositioned {
@@ -131,13 +135,13 @@ internal fun AnchoredPairingTestAction(
             }
         )
         PairingTestStatus(
-            message = if (received) message else "",
+            message = message,
             modifier = Modifier.align(Alignment.Center)
         )
-        if (received && dividerVisible) {
+        if (notice != null && dividerVisible) {
             Layout(
                 modifier = Modifier.matchParentSize(),
-                content = { PairingTestReceivedNotice() }
+                content = { PairingTestNotice(message) }
             ) { measurables, constraints ->
                 val notice = measurables.single().measure(
                     constraints.copy(minWidth = 0, minHeight = 0)
@@ -170,11 +174,11 @@ private fun PairingTestStatus(message: String, modifier: Modifier) {
 }
 
 @Composable
-private fun PairingTestReceivedNotice() {
+private fun PairingTestNotice(message: String) {
     val colors = MaterialTheme.colorScheme
     val shadowColor = if (isSystemInDarkTheme()) Color(0x61000000) else Color(0x260A1210)
     Text(
-        stringResource(R.string.pairing_test_received),
+        message,
         Modifier
             .padding(horizontal = 24.dp)
             .widthIn(max = 280.dp)

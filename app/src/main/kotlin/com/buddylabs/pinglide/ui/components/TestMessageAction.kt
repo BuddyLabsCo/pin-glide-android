@@ -34,7 +34,7 @@ class TestMessageAction(
         mutableState.value = TestMessageState()
     }
 
-    fun send(receivedNoticeMillis: Long?) {
+    fun send(detailsNoticeMillis: Long?) {
         val target = pairingId ?: return
         if (state.value.pending || state.value.announceReceived) return
         operation?.cancel()
@@ -46,10 +46,10 @@ class TestMessageAction(
                 val received = result?.result == TestMessageResult.Received
                 mutableState.value = TestMessageState(
                     outcome = result,
-                    announceReceived = received && receivedNoticeMillis == null
+                    announceReceived = received && detailsNoticeMillis == null
                 )
-                if (received && receivedNoticeMillis != null) {
-                    delay(receivedNoticeMillis)
+                if (detailsNoticeMillis != null && result?.result?.usesDetailsNotice == true) {
+                    delay(detailsNoticeMillis)
                     mutableState.value = TestMessageState()
                 }
             }
@@ -62,6 +62,9 @@ class TestMessageAction(
         return true
     }
 }
+
+internal val TestMessageResult.usesDetailsNotice: Boolean
+    get() = this == TestMessageResult.Received || this == TestMessageResult.Offline
 
 data class TestMessageState(
     val pending: Boolean = false,

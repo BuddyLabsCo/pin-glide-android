@@ -84,6 +84,8 @@ class OfflineTargetDetailsTest {
         val send = openOfflineDetails()
         assertChevron(send, lightTint, lightSurface)
         assertOfflineDividers(lightSurface)
+        val rename = sheetText("重命名设备")
+        val renameBounds = rename.fetchSemanticsNode().boundsInWindow
         send.performClick()
 
         val sending = sheetText("正在发送…").assertIsDisplayed().assertIsNotEnabled()
@@ -93,8 +95,13 @@ class OfflineTargetDetailsTest {
             assertEquals(listOf("office"), sentTo)
             delivery.complete(TestMessageOutcome("办公室电脑", TestMessageResult.Offline))
         }
-        sheetText("办公室电脑：目标设备离线，测试消息未送达").assertIsDisplayed()
-        sheetText("发送测试消息").assertIsEnabled()
+        val notice = sheetText("测试消息未发送：目标设备离线").assertIsDisplayed()
+            .fetchSemanticsNode().boundsInWindow
+        assertEquals(renameBounds.center.x, notice.center.x, 1f)
+        assertTrue(notice.top < renameBounds.top && notice.bottom > renameBounds.top)
+        assertEquals(renameBounds, rename.fetchSemanticsNode().boundsInWindow)
+        send.assertIsEnabled()
+        receiveSwitch("办公室电脑").assertIsOn()
     }
 
     @Test
