@@ -47,6 +47,18 @@ class HomeRemovalDialogTest {
     fun stopFixture() = scope.cancel()
 
     @Test
+    fun removalFailureUsesApprovedSimplifiedChineseCopy() {
+        renderHome { throw PairingServiceException(PairingFailure.Unavailable) }
+        openConfirmation("我的电脑", "移除这台设备的配对")
+        dialogText("移除配对").performClick()
+        val message = dialogText(
+            "移除失败，已关闭此设备转发。请检查网络后重试；设备列表会在下次刷新时核对配对状态。"
+        )
+        compose.waitUntil(5_000) { message.isDisplayed() }
+        dialogText("重试移除").assertIsDisplayed()
+    }
+
+    @Test
     fun confirmationOverHomePlacesBothActionsOnOneRowAndCancelReturnsToDetails() {
         renderHome()
         openConfirmation("我的电脑", "移除这台设备的配对")
