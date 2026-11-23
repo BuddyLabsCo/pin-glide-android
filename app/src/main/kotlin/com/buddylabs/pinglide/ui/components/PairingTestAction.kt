@@ -109,18 +109,16 @@ internal fun AnchoredPairingTestAction(
     ) -> Unit
 ) {
     val state by action.state.collectAsState()
-    val notice = state.outcome?.result?.takeIf { active && it.usesDetailsNotice }
-    val message = when (notice) {
-        TestMessageResult.Received -> stringResource(R.string.pairing_test_received)
-        TestMessageResult.Offline -> stringResource(R.string.home_test_offline_notice)
-        else -> ""
-    }
+    val result = state.outcome?.result?.takeIf { active }
+    val label = result?.detailsNoticeLabel
+    val message = if (label == null) "" else stringResource(label)
+    val offline = result == TestMessageResult.Offline
     var dividerTop by remember { mutableFloatStateOf(0f) }
     var dividerVisible by remember { mutableStateOf(false) }
     var viewportTop by remember { mutableFloatStateOf(0f) }
     Box(Modifier.onGloballyPositioned { viewportTop = it.positionInRoot().y }) {
         content(
-            if (notice != null) state.copy(outcome = null) else state,
+            if (label != null) state.copy(outcome = null) else state,
             {
                 action.send(
                     accessibility?.calculateRecommendedTimeoutMillis(
@@ -134,11 +132,8 @@ internal fun AnchoredPairingTestAction(
                 dividerVisible = it.boundsInRoot().height > 0f
             }
         )
-        PairingTestStatus(
-            message = message,
-            modifier = Modifier.align(Alignment.Center)
-        )
-        if (notice != null && dividerVisible) {
+        PairingTestStatus(message, Modifier.align(Alignment.Center))
+        if (label != null && (dividerVisible || offline)) {
             Layout(
                 modifier = Modifier.matchParentSize(),
                 content = { PairingTestNotice(message) }
@@ -147,10 +142,15 @@ internal fun AnchoredPairingTestAction(
                     constraints.copy(minWidth = 0, minHeight = 0)
                 )
                 layout(constraints.maxWidth, constraints.maxHeight) {
-                    val center = dividerTop - viewportTop + 8.dp.toPx()
-                    val top = (center - notice.height / 2f).roundToInt()
+                    val anchor = dividerTop - viewportTop
+                    val top = if (offline) {
+                        anchor + 29.dp.toPx() - notice.height
+                    } else {
+                        anchor + 8.dp.toPx() - notice.height / 2f
+                    }
+                    val visibleTop = top.roundToInt()
                         .coerceIn(0, constraints.maxHeight - notice.height)
-                    notice.placeRelative((constraints.maxWidth - notice.width) / 2, top)
+                    notice.placeRelative((constraints.maxWidth - notice.width) / 2, visibleTop)
                 }
             }
         }

@@ -47,8 +47,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.colorResource
@@ -63,7 +63,6 @@ import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
@@ -132,14 +131,6 @@ internal fun TargetDetailsSheet(
     val accessibility = LocalAccessibilityManager.current
     val confirmation = stringResource(R.string.home_renamed)
         .takeIf { action.result == PairingChange.Renamed }
-    val sheetShadow = if (showingDetails) {
-        Modifier
-    } else {
-        Modifier.dropShadow(
-            BottomSheetDefaults.ExpandedShape,
-            Shadow(42.dp, Color.Black, offset = DpOffset(0.dp, (-14).dp), alpha = 0.18f)
-        )
-    }
     ModalBottomSheet(
         onDismissRequest = {
             if (!pending) {
@@ -164,7 +155,18 @@ internal fun TargetDetailsSheet(
             )
         },
         contentWindowInsets = { WindowInsets.safeDrawing },
-        modifier = Modifier.imePadding().then(sheetShadow).semantics { paneTitle = title }
+        modifier = Modifier.imePadding()
+            .dropShadow(BottomSheetDefaults.ExpandedShape) {
+                if (sheet.hasExpandedState) {
+                    color = Color.Black
+                    radius = 42.dp.toPx()
+                    offset = Offset(0f, sheet.requireOffset() - 14.dp.toPx())
+                    alpha = 0.18f
+                } else {
+                    alpha = 0f
+                }
+            }
+            .semantics { paneTitle = title }
     ) {
         val contentModifier = Modifier.fillMaxWidth().verticalScroll(scroll)
             .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
