@@ -277,14 +277,18 @@ private fun TargetDetailsActions(
             enabled = target.keyUsable,
             feedbackModifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
         ) { label, enabled, onClick ->
+            val alpha = if (enabled) 1f else 0.38f
+            val iconTint = colors.onSurfaceVariant.copy(alpha = alpha)
             TargetDetailsRow(
                 R.drawable.ic_send,
                 label,
                 Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick)
                     .semantics { liveRegion = LiveRegionMode.Polite },
-                color = colors.onSurface.copy(alpha = if (enabled) 1f else 0.38f),
-                iconTint = colors.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.38f)
-            )
+                color = colors.onSurface.copy(alpha = alpha),
+                iconTint = iconTint
+            ) {
+                Icon(painterResource(R.drawable.ic_chevron), null, Modifier.size(20.dp), iconTint)
+            }
         }
         HorizontalDivider(thickness = 0.5.dp, color = divider)
         TargetDetailsRow(
