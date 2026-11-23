@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -79,14 +80,18 @@ internal fun PairingScannerScreen(
             contentAlignment = Alignment.TopCenter
         ) {
             val viewfinderMaxSize = minOf(264.dp, maxHeight)
+            val noticeGap = minOf(48.dp, maxHeight / 8)
             Column(
                 Modifier.widthIn(max = 560.dp).fillMaxWidth()
                     .verticalScroll(rememberScrollState()).heightIn(min = maxHeight)
-                    .padding(start = 24.dp, end = 24.dp, top = 18.dp, bottom = 28.dp)
+                    .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 28.dp)
                     .semantics { paneTitle = title },
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     IconButton(model::close, Modifier.size(48.dp)) {
                         Icon(
                             painterResource(R.drawable.ic_close),
@@ -130,24 +135,24 @@ internal fun PairingScannerScreen(
                     state,
                     model,
                     resumed,
-                    Modifier.widthIn(max = viewfinderMaxSize)
+                    Modifier.padding(horizontal = 4.dp).widthIn(max = viewfinderMaxSize)
                 )
                 Spacer(Modifier.height(30.dp))
                 when (state.problem) {
-                    null -> Unit
-
-                    PairingEntryProblem.InvalidQr -> Text(
-                        stringResource(R.string.pairing_invalid_qr),
-                        color = colors.error,
-                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-                    )
-
+                    null, PairingEntryProblem.InvalidQr -> Unit
                     else -> PairingProblem(state.problem, model::freshScan)
                 }
                 if (state.pending) Text(stringResource(R.string.pairing_validating))
                 Spacer(Modifier.weight(1f))
+                if (state.problem == PairingEntryProblem.InvalidQr) {
+                    InvalidQrNotice()
+                    Spacer(Modifier.height(noticeGap))
+                }
                 Spacer(Modifier.height(4.dp))
-                TextButton(model::close, Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                TextButton(
+                    model::close,
+                    Modifier.fillMaxWidth().padding(horizontal = 4.dp).heightIn(min = 48.dp)
+                ) {
                     Text(
                         cancel,
                         fontSize = 14.sp,
@@ -157,6 +162,36 @@ internal fun PairingScannerScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun InvalidQrNotice() {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(8.dp)
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 52.dp)
+            .shadow(12.dp, shape)
+            .background(colors.onSurface, shape)
+            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            painterResource(R.drawable.ic_error_filled),
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = colors.surface
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            stringResource(R.string.pairing_invalid_qr),
+            color = colors.surface,
+            fontSize = 12.sp,
+            lineHeight = 18.sp,
+            fontWeight = FontWeight(650),
+            letterSpacing = 0.sp
+        )
     }
 }
 
