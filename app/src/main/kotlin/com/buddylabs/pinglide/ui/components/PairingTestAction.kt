@@ -51,7 +51,7 @@ import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 import kotlin.math.roundToInt
 
-private const val RECEIVED_NOTICE_MILLIS = 4_000L
+private const val DETAILS_NOTICE_MILLIS = 4_000L
 
 @Composable
 internal fun PairingTestAction(action: TestMessageAction) {
@@ -102,6 +102,7 @@ internal fun AnchoredPairingTestAction(
     action: TestMessageAction,
     accessibility: AccessibilityManager?,
     active: Boolean,
+    modifier: Modifier,
     content: @Composable (
         state: TestMessageState,
         send: () -> Unit,
@@ -109,20 +110,22 @@ internal fun AnchoredPairingTestAction(
     ) -> Unit
 ) {
     val state by action.state.collectAsState()
-    val received = active && state.outcome?.result == TestMessageResult.Received
-    val message = stringResource(R.string.pairing_test_received)
+    val result = state.outcome?.result?.takeIf { active }
+    val label = result?.detailsNoticeLabel
+    val message = if (label == null) "" else stringResource(label)
+    val offline = result == TestMessageResult.Offline
     var dividerTop by remember { mutableFloatStateOf(0f) }
     var dividerVisible by remember { mutableStateOf(false) }
     var viewportTop by remember { mutableFloatStateOf(0f) }
-    Box(Modifier.onGloballyPositioned { viewportTop = it.positionInRoot().y }) {
+    Box(modifier.onGloballyPositioned { viewportTop = it.positionInRoot().y }) {
         content(
-            if (received) state.copy(outcome = null) else state,
+            if (label != null) state.copy(outcome = null) else state,
             {
                 action.send(
                     accessibility?.calculateRecommendedTimeoutMillis(
-                        RECEIVED_NOTICE_MILLIS,
+                        DETAILS_NOTICE_MILLIS,
                         containsText = true
-                    ) ?: RECEIVED_NOTICE_MILLIS
+                    ) ?: DETAILS_NOTICE_MILLIS
                 )
             },
             Modifier.onGloballyPositioned {
@@ -130,23 +133,25 @@ internal fun AnchoredPairingTestAction(
                 dividerVisible = it.boundsInRoot().height > 0f
             }
         )
-        PairingTestStatus(
-            message = if (received) message else "",
-            modifier = Modifier.align(Alignment.Center)
-        )
-        if (received && dividerVisible) {
+        PairingTestStatus(message, Modifier.align(Alignment.Center))
+        if (label != null && (dividerVisible || offline)) {
             Layout(
                 modifier = Modifier.matchParentSize(),
-                content = { PairingTestReceivedNotice() }
+                content = { PairingTestNotice(message) }
             ) { measurables, constraints ->
                 val notice = measurables.single().measure(
                     constraints.copy(minWidth = 0, minHeight = 0)
                 )
                 layout(constraints.maxWidth, constraints.maxHeight) {
-                    val center = dividerTop - viewportTop + 8.dp.toPx()
-                    val top = (center - notice.height / 2f).roundToInt()
+                    val anchor = dividerTop - viewportTop
+                    val top = if (offline) {
+                        anchor + 29.dp.toPx() - notice.height
+                    } else {
+                        anchor + 8.dp.toPx() - notice.height / 2f
+                    }
+                    val visibleTop = top.roundToInt()
                         .coerceIn(0, constraints.maxHeight - notice.height)
-                    notice.placeRelative((constraints.maxWidth - notice.width) / 2, top)
+                    notice.placeRelative((constraints.maxWidth - notice.width) / 2, visibleTop)
                 }
             }
         }
@@ -170,11 +175,11 @@ private fun PairingTestStatus(message: String, modifier: Modifier) {
 }
 
 @Composable
-private fun PairingTestReceivedNotice() {
+private fun PairingTestNotice(message: String) {
     val colors = MaterialTheme.colorScheme
     val shadowColor = if (isSystemInDarkTheme()) Color(0x61000000) else Color(0x260A1210)
     Text(
-        stringResource(R.string.pairing_test_received),
+        message,
         Modifier
             .padding(horizontal = 24.dp)
             .widthIn(max = 280.dp)

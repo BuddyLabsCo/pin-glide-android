@@ -1,5 +1,7 @@
 package com.buddylabs.pinglide.ui.components
 
+import androidx.annotation.StringRes
+import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 import kotlinx.coroutines.CoroutineScope
@@ -34,7 +36,7 @@ class TestMessageAction(
         mutableState.value = TestMessageState()
     }
 
-    fun send(receivedNoticeMillis: Long?) {
+    fun send(detailsNoticeMillis: Long?) {
         val target = pairingId ?: return
         if (state.value.pending || state.value.announceReceived) return
         operation?.cancel()
@@ -46,10 +48,10 @@ class TestMessageAction(
                 val received = result?.result == TestMessageResult.Received
                 mutableState.value = TestMessageState(
                     outcome = result,
-                    announceReceived = received && receivedNoticeMillis == null
+                    announceReceived = received && detailsNoticeMillis == null
                 )
-                if (received && receivedNoticeMillis != null) {
-                    delay(receivedNoticeMillis)
+                if (detailsNoticeMillis != null && result?.result?.detailsNoticeLabel != null) {
+                    delay(detailsNoticeMillis)
                     mutableState.value = TestMessageState()
                 }
             }
@@ -62,6 +64,14 @@ class TestMessageAction(
         return true
     }
 }
+
+@get:StringRes
+internal val TestMessageResult.detailsNoticeLabel: Int?
+    get() = when (this) {
+        TestMessageResult.Received -> R.string.pairing_test_received
+        TestMessageResult.Offline -> R.string.home_test_offline_notice
+        else -> null
+    }
 
 data class TestMessageState(
     val pending: Boolean = false,

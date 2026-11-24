@@ -15,20 +15,27 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class TestMessageActionTest {
     @Test
-    fun successExpiresAtTheRecommendedTimeoutAfterDelivery() = runTest {
+    fun successExpiresAtTheRecommendedTimeoutAfterDelivery() =
+        assertNoticeExpiresAfterDelivery(TestMessageResult.Received)
+
+    @Test
+    fun offlineFeedbackExpiresAtTheRecommendedTimeoutAfterDelivery() =
+        assertNoticeExpiresAfterDelivery(TestMessageResult.Offline)
+
+    private fun assertNoticeExpiresAfterDelivery(result: TestMessageResult) = runTest {
         val delivery = CompletableDeferred<TestMessageOutcome>()
-        val received = TestMessageOutcome("Laptop", TestMessageResult.Received)
+        val outcome = TestMessageOutcome("Laptop", result)
         val action = TestMessageAction(this) { delivery.await() }
         action.enter("laptop")
         action.send(5_000L)
         advanceTimeBy(6_000L)
         assertTrue(action.state.value.pending)
 
-        delivery.complete(received)
+        delivery.complete(outcome)
         runCurrent()
         advanceTimeBy(4_999L)
         runCurrent()
-        assertEquals(received, action.state.value.outcome)
+        assertEquals(outcome, action.state.value.outcome)
 
         advanceTimeBy(1L)
         runCurrent()

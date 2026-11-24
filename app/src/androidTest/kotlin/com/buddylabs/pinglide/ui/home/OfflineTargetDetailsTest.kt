@@ -66,7 +66,7 @@ class OfflineTargetDetailsTest {
     fun stopFixture() = scope.cancel()
 
     @Test
-    fun lightDetailsSendsOnlyToTheSelectedOfflinePairing() {
+    fun onlineDetailsShowsOfflineDeliveryWithoutChangingPresence() {
         val sentTo = mutableListOf<String>()
         val delivery = CompletableDeferred<TestMessageOutcome>()
         openHome(Configuration.UI_MODE_NIGHT_NO) { pairingId ->
@@ -76,25 +76,44 @@ class OfflineTargetDetailsTest {
 
         compose.onNode(hasText("我的电脑")).performClick()
         sheetText("我的电脑").assertIsDisplayed()
-        compose.onNode(inSheet and hasText("在线 · 状态变化：", substring = true))
-            .assertIsDisplayed()
-        assertPlainTrailingSlot(availableSendAction())
-        sheetText("关闭").performClick()
-
-        val send = openOfflineDetails()
-        assertChevron(send, lightTint, lightSurface)
-        assertOfflineDividers(lightSurface)
+        val onlinePresence = compose.onNode(inSheet and hasText("在线 · 状态变化：", substring = true))
+        onlinePresence.assertIsDisplayed()
+        val send = availableSendAction()
+        assertPlainTrailingSlot(send)
+        val rename = sheetText("重命名设备")
+        val renameBounds = rename.fetchSemanticsNode().boundsInWindow
         send.performClick()
 
         val sending = sheetText("正在发送…").assertIsDisplayed().assertIsNotEnabled()
         compose.mainClock.advanceTimeBy(500)
         assertPlainTrailingSlot(sending)
         compose.runOnIdle {
-            assertEquals(listOf("office"), sentTo)
-            delivery.complete(TestMessageOutcome("办公室电脑", TestMessageResult.Offline))
+            assertEquals(listOf("home"), sentTo)
+            delivery.complete(TestMessageOutcome("我的电脑", TestMessageResult.Offline))
         }
-        sheetText("办公室电脑：目标设备离线，测试消息未送达").assertIsDisplayed()
-        sheetText("发送测试消息").assertIsEnabled()
+        val notice = sheetText("测试消息未发送：目标设备离线").assertIsDisplayed()
+            .fetchSemanticsNode().boundsInWindow
+        assertEquals(renameBounds.center.x, notice.center.x, 1f)
+        assertTrue(notice.top < renameBounds.top && notice.bottom > renameBounds.top)
+        assertEquals(renameBounds, rename.fetchSemanticsNode().boundsInWindow)
+        send.assertIsEnabled()
+        onlinePresence.assertIsDisplayed()
+        receiveSwitch("我的电脑").assertIsOn()
+    }
+
+    @Test
+    fun lightDetailsSendsOnlyToTheSelectedOfflinePairing() {
+        val sentTo = mutableListOf<String>()
+        openHome(Configuration.UI_MODE_NIGHT_NO) { pairingId ->
+            sentTo += pairingId
+            TestMessageOutcome("办公室电脑", TestMessageResult.Offline)
+        }
+        val send = openOfflineDetails()
+        assertChevron(send, lightTint, lightSurface)
+        assertOfflineDividers(lightSurface)
+        send.performClick()
+        sheetText("测试消息未发送：目标设备离线").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(listOf("office"), sentTo) }
     }
 
     @Test
