@@ -51,6 +51,7 @@ class PairingIdentityProgressTest {
     private val initSent = AtomicBoolean(false)
     private val inputIntact = AtomicBoolean(false)
     private val handshakeClosed = AtomicBoolean(false)
+    private lateinit var renewal: CredentialRenewal
     private val session = PairingSession(
         "session", "receiver", "sender", "pairing", "new_receiver", "awaiting_confirmation",
         Instant.now().plusSeconds(270), false, false
@@ -75,12 +76,14 @@ class PairingIdentityProgressTest {
     }
     private val model = PairingEntryViewModel(
         { entryScope ->
-            val renewal =
-                CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, entryScope)
+            renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, entryScope)
             val pairings = OwnPairings(store, { emptyList() }, renewal, entryScope)
             val activation = PairingActivation(store, pairings, sessions, { input ->
                 generationStarted.countDown()
-                finishGeneration.await(10, TimeUnit.SECONDS)
+                assertTrue(
+                    "Generation was not released",
+                    finishGeneration.await(10, TimeUnit.SECONDS)
+                )
                 inputIntact.set(input.psk.all { it == 1.toByte() })
                 object : PairingHandshake {
                     override val init = byteArrayOf(1)
@@ -123,11 +126,23 @@ class PairingIdentityProgressTest {
     fun abandoningDuringGenerationClosesHandshakeWithoutSending() {
         beginGeneration()
         compose.runOnIdle { model.abandon() }
-        finishGeneration.countDown()
-        compose.waitUntil(5_000) { handshakeClosed.get() }
+        releaseGenerationAndAssertClosedWithoutSending()
         assertTrue(inputIntact.get())
-        assertFalse(initSent.get())
         assertEquals(PairingEntryPage.Idle, model.state.value.page)
+    }
+
+    @Test
+    fun replacingAuthorizationSessionDuringGenerationClosesHandshakeWithoutSending() {
+        beginGeneration()
+        compose.runOnIdle { assertTrue(renewal.resumeSession(renewal.sessionGeneration)) }
+        releaseGenerationAndAssertClosedWithoutSending()
+    }
+
+    private fun releaseGenerationAndAssertClosedWithoutSending() {
+        finishGeneration.countDown()
+        compose.waitUntil(5_000) { initSent.get() || handshakeClosed.get() }
+        assertFalse(initSent.get())
+        assertTrue(handshakeClosed.get())
     }
 
     private fun beginGeneration() {

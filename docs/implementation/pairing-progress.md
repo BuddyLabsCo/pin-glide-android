@@ -27,7 +27,9 @@ The shared presentation already matches the [identity-generation reference](../u
 Identity generation now runs off the presentation thread so the Identity event
 can render the heading during generation. The Key event is emitted only after
 generation completes. Cancellation closes any resulting handshake without
-sending it; no artificial delay or motion change is introduced.
+sending it. The exchange also rejects a replaced authorization session before
+sending, even for the same Account and Sender. No artificial delay or motion
+change is introduced.
 
 | Theme | Comparison |
 | --- | --- |
@@ -45,7 +47,8 @@ the transition from Opening to Identity, the localized accessible heading,
 the instruction, and absence of actions. `PairingIdentityProgressTest` additionally
 exercises the real entry workflow and shared screen with controllable generation:
 Identity stays visible while generation is pending, Key follows completion,
-and abandoning during generation closes the handshake without sending.
+and abandoning or replacing the authorization session during generation closes
+the handshake without sending.
 
 Verification: all six focused Compose tests (including the temporary Identity
 check) passed in light mode, and the Identity check passed in dark mode.
