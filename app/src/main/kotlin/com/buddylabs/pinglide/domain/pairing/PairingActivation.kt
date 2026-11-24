@@ -7,9 +7,11 @@ import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.IdentityStorageException
 import com.buddylabs.pinglide.domain.identity.RefreshState
 import java.time.Clock
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 class PairingActivation(
@@ -194,11 +196,23 @@ class PairingActivation(
             }
         }
 
-        private fun start(connection: PairingConnection) {
+        private suspend fun start(connection: PairingConnection) {
             if (handshake != null) return
             stage(PairingStage.Identity)
-            val exchange = crypto.start(qr)
-            handshake = exchange
+            val input = PairingQr(
+                qr.sessionId,
+                qr.receiverId,
+                qr.publicKey.copyOf(),
+                qr.psk.copyOf()
+            )
+            val exchange = try {
+                withContext(Dispatchers.Default) {
+                    crypto.start(input).also { handshake = it }
+                }
+            } finally {
+                input.clear()
+            }
+            requireOwner(initial)
             stage(PairingStage.Key)
             connection.send(exchange.init)
         }

@@ -24,8 +24,10 @@ the shared ring's motion and reduced-motion behavior.
 ## Identity generation (#112)
 
 The shared presentation already matches the [identity-generation reference](../ui-prototype/shots/03-progress-identity.png).
-No runtime or motion changes are needed. The Identity event still selects the
-heading before the cryptographic exchange starts.
+Identity generation now runs off the presentation thread so the Identity event
+can render the heading during generation. The Key event is emitted only after
+generation completes. Cancellation closes any resulting handshake without
+sending it; no artificial delay or motion change is introduced.
 
 | Theme | Comparison |
 | --- | --- |
@@ -40,11 +42,19 @@ and text-wrapping differences. The progress arc is captured at a different phase
 The Identity stage is simulated at the presentation boundary, without a live
 Receiver. A temporary Compose evidence test passed in both themes, verifying
 the transition from Opening to Identity, the localized accessible heading,
-the instruction, and absence of actions. The existing stage-transition and
-shared progress tests remain the permanent regression coverage.
+the instruction, and absence of actions. `PairingIdentityProgressTest` additionally
+exercises the real entry workflow and shared screen with controllable generation:
+Identity stays visible while generation is pending, Key follows completion,
+and abandoning during generation closes the handshake without sending.
 
 Verification: all six focused Compose tests (including the temporary Identity
 check) passed in light mode, and the Identity check passed in dark mode.
 All 46 JVM tests, `qualityCheck`, release Kotlin compilation and instrumentation
 test compilation passed. The full instrumentation run stopped with a process
 crash in `HomeDuplicateScanTest`; live Pairing was not exercised.
+
+Review fix verification: the workflow test failed before the dispatcher change
+because the Identity heading was not displayed. After the change, all 13
+Pairing and shared progress Compose tests passed, including the abandonment
+regression. All 46 JVM tests, `qualityCheck`, debug and instrumentation assembly,
+and release Kotlin compilation passed.
