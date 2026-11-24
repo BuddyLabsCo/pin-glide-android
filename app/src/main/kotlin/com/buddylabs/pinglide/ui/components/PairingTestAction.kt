@@ -114,7 +114,8 @@ internal fun AnchoredPairingTestAction(
     val notice = state.outcome?.takeIf { active }
     val label = notice?.detailsNoticeLabel
     val removed = notice?.pairingRemoved == true
-    val offline = notice?.result == TestMessageResult.Offline
+    val alignNoticeBottom = notice?.result == TestMessageResult.Offline ||
+        notice?.result == TestMessageResult.AckTimeout
     val message = if (label == null) "" else stringResource(label)
     val status = if (removed) {
         val alias = notice.targetAlias.ifBlank { stringResource(R.string.home_target_device) }
@@ -145,12 +146,12 @@ internal fun AnchoredPairingTestAction(
             message = status,
             modifier = Modifier.align(Alignment.Center)
         )
-        if (label != null && (dividerVisible || removed || offline)) {
+        if (label != null && (dividerVisible || removed || alignNoticeBottom)) {
             PairingTestNotice(
                 message = message,
-                anchor = (dividerTop - viewportTop).takeIf { dividerVisible || offline },
+                anchor = (dividerTop - viewportTop).takeIf { dividerVisible || alignNoticeBottom },
                 headerBottom = if (removed) headerBottom - viewportTop else 0f,
-                offline = offline,
+                alignBottom = alignNoticeBottom,
                 modifier = Modifier.matchParentSize()
             )
         }
@@ -178,7 +179,7 @@ private fun PairingTestNotice(
     message: String,
     anchor: Float?,
     headerBottom: Float,
-    offline: Boolean,
+    alignBottom: Boolean,
     modifier: Modifier
 ) {
     val colors = MaterialTheme.colorScheme
@@ -212,7 +213,7 @@ private fun PairingTestNotice(
             val minTop = headerBottom.roundToInt().coerceIn(0, maxTop)
             val top = when {
                 anchor == null -> (minTop + maxTop) / 2
-                offline -> (anchor + 29.dp.toPx() - notice.height).roundToInt()
+                alignBottom -> (anchor + 29.dp.toPx() - notice.height).roundToInt()
                 else -> (anchor + 8.dp.toPx() - notice.height / 2f).roundToInt()
             }
             val visibleTop = top.coerceIn(minTop, maxTop)
