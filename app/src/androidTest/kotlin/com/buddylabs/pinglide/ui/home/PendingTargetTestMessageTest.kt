@@ -152,6 +152,7 @@ class PendingTargetTestMessageTest {
                 feedback.announcementsOrToasts.isEmpty()
             )
             assertEquals("One native live-region update", 1, feedback.status.size)
+            assertEquals(View.ACCESSIBILITY_LIVE_REGION_POLITE, feedback.status.single().liveRegion)
             if (verifyTalkBackSpeech) {
                 assertEquals(send, automation.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY))
                 assertEquals(
@@ -191,9 +192,7 @@ class PendingTargetTestMessageTest {
         private fun recordTextChange(event: AccessibilityEvent) {
             val source = event.source ?: return
             val text = source.text?.toString() ?: return
-            if (source.liveRegion == View.ACCESSIBILITY_LIVE_REGION_POLITE &&
-                text == message
-            ) {
+            if (source.liveRegion != View.ACCESSIBILITY_LIVE_REGION_NONE && text == message) {
                 status.add(source)
             }
             if (event.packageName == TALKBACK_PACKAGE &&

@@ -1,6 +1,7 @@
 package com.buddylabs.pinglide.ui.home
 
 import android.content.res.Configuration
+import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.AccessibilityManager
 import androidx.compose.ui.semantics.SemanticsActions
@@ -57,6 +58,14 @@ class UncertainTargetTestMessageTest {
         SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, TARGET)
     )
     private val sheetContent = compose.onNode(inSheet and hasScrollAction())
+    private val accessibility = object : AccessibilityManager {
+        override fun calculateRecommendedTimeoutMillis(
+            originalTimeoutMillis: Long,
+            containsIcons: Boolean,
+            containsText: Boolean,
+            containsControls: Boolean
+        ): Long = if (containsText) NOTICE_TIMEOUT else originalTimeoutMillis
+    }
 
     @After
     fun stopFixture() = scope.cancel()
@@ -78,14 +87,7 @@ class UncertainTargetTestMessageTest {
                 targets(),
                 scope,
                 sendTest = { delivery.await() },
-                accessibilityManager = object : AccessibilityManager {
-                    override fun calculateRecommendedTimeoutMillis(
-                        originalTimeoutMillis: Long,
-                        containsIcons: Boolean,
-                        containsText: Boolean,
-                        containsControls: Boolean
-                    ): Long = 8_000L
-                }
+                accessibilityManager = accessibility
             ) { error("Unexpected Pairing removal") }
             compose.onNode(hasScrollAction()).performScrollToNode(hasText(TARGET))
             compose.onNodeWithText(TARGET).performClick()
@@ -118,7 +120,18 @@ class UncertainTargetTestMessageTest {
         }
 
     @Test
-    fun mismatchedDeliveryReceiptShowsTheEnglishUnconfirmedNotice() {
+    fun mismatchedDeliveryReceiptShowsTheEnglishUnconfirmedNotice() =
+        assertEnglishReceiptFeedback(matchesTarget = false, ENGLISH_NOTICE, ENGLISH_SUCCESS)
+
+    @Test
+    fun matchingDeliveryReceiptShowsTheEnglishSuccessNotice() =
+        assertEnglishReceiptFeedback(matchesTarget = true, ENGLISH_SUCCESS, ENGLISH_NOTICE)
+
+    private fun assertEnglishReceiptFeedback(
+        matchesTarget: Boolean,
+        expectedNotice: String,
+        unexpectedNotice: String
+    ) {
         val uploads = ConcurrentLinkedQueue<UploadRequest>()
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val request = chain.request()
@@ -126,9 +139,14 @@ class UncertainTargetTestMessageTest {
             val json = Buffer().also { checkNotNull(request.body).writeTo(it) }.readUtf8()
             val upload = Json.decodeFromString<UploadRequest>(json)
             uploads.add(upload)
+            val receiverId = if (matchesTarget) {
+                upload.items.single().receiverId
+            } else {
+                "receiver-office"
+            }
             val response = """
                 {"requestId":"request","messageId":"${upload.messageId}","results":[
-                  {"index":0,"receiverId":"receiver-office","status":"received"}
+                  {"index":0,"receiverId":"$receiverId","status":"received"}
                 ]}
             """.trimIndent()
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(207)
@@ -141,14 +159,14 @@ class UncertainTargetTestMessageTest {
             targets(),
             scope,
             language = AppLanguage.English,
+            accessibilityManager = accessibility,
             testDelivery = TestDeliveryService("https://delivery.test", client)
         ) { error("Unexpected Pairing removal") }
         compose.onNodeWithText(TARGET).performClick()
-        val notice = "Delivery unconfirmed: unable to retrieve the delivery result"
-        assertUnconfirmedFeedback(notice, "Test message sent") {
+        assertFeedback(expectedNotice, unexpectedNotice) {
             sheetText("Send test message").performClick()
-            awaitNotice(notice)
-            assertSheetAnchor(notice)
+            awaitNotice(expectedNotice)
+            if (!matchesTarget) assertSheetAnchor(expectedNotice)
             sheetText(TARGET).assertIsDisplayed()
         }
         val item = uploads.single().items.single()
@@ -164,6 +182,7 @@ class UncertainTargetTestMessageTest {
             targets(),
             scope,
             nightMode = nightMode,
+            accessibilityManager = accessibility,
             sendTest = {
                 sentTo += it
                 delivery.await()
@@ -174,7 +193,7 @@ class UncertainTargetTestMessageTest {
         val rename = sheetText("重命名设备").assertIsDisplayed()
         val sendBounds = send.fetchSemanticsNode().boundsInWindow
         val renameBounds = rename.fetchSemanticsNode().boundsInWindow
-        assertUnconfirmedFeedback(NOTICE, "测试消息已发送") {
+        assertFeedback(NOTICE, "测试消息已发送") {
             send.performClick()
             sheetText("正在发送…").assertIsNotEnabled()
             compose.runOnIdle {
@@ -192,30 +211,32 @@ class UncertainTargetTestMessageTest {
         }
     }
 
-    private fun assertUnconfirmedFeedback(
+    private fun assertFeedback(
         message: String,
-        success: String,
+        unexpectedMessage: String,
         sendAndCheck: () -> Unit
     ) {
         val feedback = TestMessageFeedbackEvents(message)
-        val successFeedback = TestMessageFeedbackEvents(success)
+        val unexpectedFeedback = TestMessageFeedbackEvents(unexpectedMessage)
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         automation.setOnAccessibilityEventListener {
             feedback.onAccessibilityEvent(it)
-            successFeedback.onAccessibilityEvent(it)
+            unexpectedFeedback.onAccessibilityEvent(it)
         }
         try {
             sendAndCheck()
-            sheetText(success).assertDoesNotExist()
+            sheetText(unexpectedMessage).assertDoesNotExist()
             compose.waitUntil(3_000L) { feedback.status.isNotEmpty() }
-            compose.waitUntil(6_000L) {
+            compose.waitUntil(NOTICE_TIMEOUT + 2_000L) {
                 compose.onAllNodes(inSheet and hasText(message)).fetchSemanticsNodes().isEmpty()
             }
             automation.waitForIdle(200, 3_000)
-            assertTrue(feedback.status.single().isVisibleToUser)
+            val update = feedback.status.single()
+            assertEquals(View.ACCESSIBILITY_LIVE_REGION_POLITE, update.liveRegion)
+            assertTrue(update.isVisibleToUser)
             assertTrue(feedback.announcementsOrToasts.isEmpty())
-            assertTrue(successFeedback.status.isEmpty())
-            assertTrue(successFeedback.announcementsOrToasts.isEmpty())
+            assertTrue(unexpectedFeedback.status.isEmpty())
+            assertTrue(unexpectedFeedback.announcementsOrToasts.isEmpty())
         } finally {
             automation.setOnAccessibilityEventListener(null)
         }
@@ -252,5 +273,8 @@ class UncertainTargetTestMessageTest {
     private companion object {
         const val TARGET = "我的电脑"
         const val NOTICE = "投递未确认：无法获取投递结果"
+        const val ENGLISH_NOTICE = "Delivery unconfirmed: unable to retrieve the delivery result"
+        const val ENGLISH_SUCCESS = "Test message sent"
+        const val NOTICE_TIMEOUT = 8_000L
     }
 }
