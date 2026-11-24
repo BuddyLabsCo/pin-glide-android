@@ -3,11 +3,6 @@ package com.buddylabs.pinglide.ui.home
 import android.content.res.Configuration
 import android.os.SystemClock
 import androidx.activity.ComponentActivity
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Text
-import androidx.compose.ui.platform.AccessibilityManager
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -25,7 +20,6 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.platform.app.InstrumentationRegistry
-import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.data.service.TestDeliveryService
 import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
@@ -33,11 +27,7 @@ import com.buddylabs.pinglide.domain.pairing.PairingFailure
 import com.buddylabs.pinglide.domain.pairing.PairingServiceException
 import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.RemotePairing
-import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.generated.http.model.UploadRequest
-import com.buddylabs.pinglide.ui.components.AnchoredPairingTestAction
-import com.buddylabs.pinglide.ui.components.PinGlideTheme
-import com.buddylabs.pinglide.ui.components.TestMessageAction
 import com.buddylabs.pinglide.ui.home.PendingTargetTestMessageTest.TestMessageFeedbackEvents
 import java.time.Instant
 import java.util.Base64
@@ -45,13 +35,9 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -67,14 +53,7 @@ class RejectedTargetTestMessageTest {
     )
     private val uploads = ConcurrentLinkedQueue<UploadRequest>()
     private var inventoryReads = 0
-    private val accessibility = object : AccessibilityManager {
-        override fun calculateRecommendedTimeoutMillis(
-            originalTimeoutMillis: Long,
-            containsIcons: Boolean,
-            containsText: Boolean,
-            containsControls: Boolean
-        ): Long = if (containsText) RECOMMENDED_TIMEOUT else originalTimeoutMillis
-    }
+    private val accessibility = textTimeoutAccessibility(RECOMMENDED_TIMEOUT)
 
     @After
     fun stopFixture() = scope.cancel()
@@ -157,36 +136,13 @@ class RejectedTargetTestMessageTest {
             assertSingleUpload(expectedReads = 2)
         }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun overlayExpiresAtTheExactRecommendedTimeout() = runTest {
-        val action = TestMessageAction(this) {
-            TestMessageOutcome(TARGET, TestMessageResult.InvalidPairing, pairingRemoved = true)
-        }
-        action.enter("home")
-        compose.setContent {
-            LocalizedContent(AppLanguage.SimplifiedChinese) {
-                PinGlideTheme {
-                    AnchoredPairingTestAction(action, accessibility, true, 0f) { _, send, divider ->
-                        Column {
-                            Button(onClick = send) { Text(SEND) }
-                            HorizontalDivider(divider)
-                        }
-                    }
-                }
-            }
-        }
-        compose.onNodeWithText(SEND).performClick()
-        runCurrent()
-        val notice = compose.onNodeWithText(REMOVED)
-        notice.assertIsDisplayed()
-        advanceTimeBy(RECOMMENDED_TIMEOUT - 1)
-        runCurrent()
-        notice.assertIsDisplayed()
-        advanceTimeBy(1)
-        runCurrent()
-        notice.assertDoesNotExist()
-    }
+    fun overlayExpiresAtTheExactRecommendedTimeout() = assertNoticeExpiresAtRecommendedTimeout(
+        compose,
+        TestMessageOutcome(TARGET, TestMessageResult.InvalidPairing, pairingRemoved = true),
+        REMOVED,
+        RECOMMENDED_TIMEOUT
+    )
 
     private fun withShortViewport(height: Int, check: () -> Unit) {
         val originalSize = Regex("Override size: (\\d+x\\d+)").find(runHomeTestShell("wm size"))

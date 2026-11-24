@@ -11,7 +11,6 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.platform.AccessibilityManager
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -65,14 +64,7 @@ class PendingTargetTestMessageTest {
     private val targetPane = SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "我的电脑")
     private val inSheet = hasAnyAncestor(targetPane)
     private val sheetContent = compose.onNode(inSheet and hasScrollAction())
-    private val accessibility = object : AccessibilityManager {
-        override fun calculateRecommendedTimeoutMillis(
-            originalTimeoutMillis: Long,
-            containsIcons: Boolean,
-            containsText: Boolean,
-            containsControls: Boolean
-        ): Long = if (containsText) RECOMMENDED_TIMEOUT else originalTimeoutMillis
-    }
+    private val accessibility = textTimeoutAccessibility(RECOMMENDED_TIMEOUT)
 
     @After
     fun stopFixture() = scope.cancel()
@@ -178,28 +170,33 @@ class PendingTargetTestMessageTest {
         val unexpectedEvents = ConcurrentLinkedQueue<Int>()
 
         override fun onAccessibilityEvent(event: AccessibilityEvent) {
+            val unexpected = unexpectedMessage?.let { phrase ->
+                event.text.any { phrase in it } ||
+                    event.contentDescription?.contains(phrase) == true
+            } == true
+            if (unexpected) unexpectedEvents.add(event.eventType)
             when (event.eventType) {
                 AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-                AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> recordTextChange(event)
+                AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> recordTextChange(event, unexpected)
 
                 AccessibilityEvent.TYPE_ANNOUNCEMENT,
                 AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
                     if (event.text.any { duplicatePhrase in it.toString() }) {
                         announcementsOrToasts.add(event.eventType)
                     }
-                    if (unexpectedMessage != null &&
-                        event.text.any { unexpectedMessage in it.toString() }
-                    ) {
-                        unexpectedEvents.add(event.eventType)
-                    }
                 }
             }
         }
 
-        private fun recordTextChange(event: AccessibilityEvent) {
+        private fun recordTextChange(event: AccessibilityEvent, unexpectedInEvent: Boolean) {
             val source = event.source ?: return
-            val text = source.text?.toString() ?: return
-            if (unexpectedMessage != null && unexpectedMessage in text) {
+            val text = source.text?.toString()
+            if (!unexpectedInEvent && unexpectedMessage != null &&
+                (
+                    text?.contains(unexpectedMessage) == true ||
+                        source.contentDescription?.contains(unexpectedMessage) == true
+                    )
+            ) {
                 unexpectedEvents.add(event.eventType)
             }
             if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
@@ -208,7 +205,7 @@ class PendingTargetTestMessageTest {
             ) {
                 status.add(source)
             }
-            if (event.packageName == TALKBACK_PACKAGE &&
+            if (text != null && event.packageName == TALKBACK_PACKAGE &&
                 event.contentChangeTypes == AccessibilityEvent.CONTENT_CHANGE_TYPE_TEXT
             ) {
                 talkBackSpeech.add(text)

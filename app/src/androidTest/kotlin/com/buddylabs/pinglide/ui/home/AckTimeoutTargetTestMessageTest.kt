@@ -1,8 +1,6 @@
 package com.buddylabs.pinglide.ui.home
 
-import android.os.SystemClock
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.platform.AccessibilityManager
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
@@ -16,13 +14,14 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.data.service.TestDeliveryService
+import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
+import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import com.buddylabs.pinglide.generated.http.model.UploadRequest
 import com.buddylabs.pinglide.ui.home.PendingTargetTestMessageTest.TestMessageFeedbackEvents
 import java.time.Instant
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -41,15 +40,6 @@ class AckTimeoutTargetTestMessageTest {
         SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, TARGET)
     )
     private val uploads = ConcurrentLinkedQueue<UploadRequest>()
-    private val responseTime = AtomicLong()
-    private val accessibility = object : AccessibilityManager {
-        override fun calculateRecommendedTimeoutMillis(
-            originalTimeoutMillis: Long,
-            containsIcons: Boolean,
-            containsText: Boolean,
-            containsControls: Boolean
-        ): Long = if (containsText) RECOMMENDED_TIMEOUT else originalTimeoutMillis
-    }
 
     @After
     fun stopFixture() = scope.cancel()
@@ -64,7 +54,7 @@ class AckTimeoutTargetTestMessageTest {
                 RemotePairing("office", "receiver-office", "办公室电脑", Presence.Offline, now)
             ),
             scope,
-            accessibilityManager = accessibility,
+            accessibilityManager = textTimeoutAccessibility(RECOMMENDED_TIMEOUT),
             testDelivery = TestDeliveryService("https://delivery.test", timeoutUpload())
         ) { error("Unexpected Pairing removal") }
 
@@ -96,18 +86,9 @@ class AckTimeoutTargetTestMessageTest {
             send.assertIsEnabled()
             success.assertCountEquals(0)
             compose.waitUntil(3_000L) { feedback.status.isNotEmpty() }
-            compose.waitUntil(RECOMMENDED_TIMEOUT) {
-                SystemClock.elapsedRealtime() - responseTime.get() >= RECOMMENDED_TIMEOUT - 1_000L
-            }
-            notice.assertIsDisplayed()
             compose.waitUntil(RECOMMENDED_TIMEOUT + 2_000L) {
                 notices.fetchSemanticsNodes().isEmpty()
             }
-            val duration = SystemClock.elapsedRealtime() - responseTime.get()
-            assertTrue(
-                "Expected the notice at the recommended deadline, dismissed after ${duration}ms",
-                duration in RECOMMENDED_TIMEOUT..(RECOMMENDED_TIMEOUT + 1_500L)
-            )
             automation.waitForIdle(100L, 2_000L)
             assertTrue(feedback.status.single().isVisibleToUser)
             assertTrue(feedback.announcementsOrToasts.isEmpty())
@@ -125,9 +106,16 @@ class AckTimeoutTargetTestMessageTest {
         }
     }
 
+    @Test
+    fun overlayExpiresAtTheExactRecommendedTimeout() = assertNoticeExpiresAtRecommendedTimeout(
+        compose,
+        TestMessageOutcome(TARGET, TestMessageResult.AckTimeout),
+        UNCONFIRMED,
+        RECOMMENDED_TIMEOUT
+    )
+
     private fun timeoutUpload() = testMessageUploadClient { upload ->
         uploads.add(upload)
-        responseTime.set(SystemClock.elapsedRealtime())
         """
             {"requestId":"request","messageId":"${upload.messageId}","results":[
               {"index":0,"receiverId":"receiver-home","status":"ack_timeout"}
