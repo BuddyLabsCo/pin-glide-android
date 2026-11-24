@@ -24,6 +24,10 @@ class TestMessageActionTest {
         assertNoticeLifetime(TestMessageOutcome("Laptop", TestMessageResult.Offline))
 
     @Test
+    fun acknowledgmentTimeoutFeedbackExpiresAtTheRecommendedTimeoutAfterDelivery() =
+        assertNoticeLifetime(TestMessageOutcome("Laptop", TestMessageResult.AckTimeout))
+
+    @Test
     fun uncertainFeedbackExpiresAtTheRecommendedTimeoutAfterDelivery() =
         assertNoticeLifetime(TestMessageOutcome("Laptop", TestMessageResult.Uncertain))
 

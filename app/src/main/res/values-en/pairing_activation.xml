@@ -13,6 +13,7 @@
     <string name="pairing_test_sending">Sending…</string>
     <string name="pairing_test_received">Test message sent</string>
     <string name="home_test_offline_notice">Test message not sent: target device is offline</string>
+    <string name="home_test_ack_timeout_notice">Delivery unconfirmed: timed out waiting for device acknowledgment</string>
     <string name="home_test_uncertain_notice">Delivery unconfirmed: unable to retrieve the delivery result</string>
     <string name="pairing_test_offline">Target device is offline; test message was not delivered</string>
     <string name="pairing_test_rejected">Test message was not sent: delivery was rejected</string>
