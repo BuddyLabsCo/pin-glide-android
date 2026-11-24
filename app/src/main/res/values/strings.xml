@@ -163,12 +163,15 @@
     <string name="pairing_consent_title">确认配对</string>
     <string name="pairing_connect_title">连接新设备</string>
     <string name="pairing_add_title">添加新设备</string>
-    <string name="pairing_consent_description">请为这台目标设备设置一个易于识别的名称。</string>
+    <string name="pairing_consent_description">确认后，目标设备会开始接收你选中的短信，双方会建立一条独立的加密配对。</string>
+    <string name="pairing_alias_help">不能为空，也不能与本机已配对的设备重名。</string>
     <string name="pairing_default_alias">我的设备</string>
     <string name="pairing_cancel">取消</string>
     <string name="pairing_confirm">确认添加设备</string>
+    <string name="pairing_confirm_first">确认并建立密钥</string>
     <string name="pairing_confirmed">设备名称已确认，设备尚未连接。</string>
-    <string name="pairing_remaining">配对会话剩余时间：%1$02d:%2$02d</string>
+    <string name="pairing_remaining_label">配对会话剩余时间</string>
+    <string name="pairing_remaining_time">%1$02d:%2$02d</string>
     <string name="pairing_validating">正在验证配对会话…</string>
     <string name="pairing_invalid_qr">这不是有效的鹊信配对二维码。</string>
     <string name="pairing_scanner_invalid_qr">不是鹊信配对码，请继续对准二维码</string>

@@ -8,11 +8,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,7 +19,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -32,21 +28,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
@@ -54,8 +43,6 @@ import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -65,6 +52,7 @@ import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.PairingAliasError
 import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.domain.pairing.pairingAliasError
+import com.buddylabs.pinglide.ui.components.PairingAliasField
 import kotlinx.coroutines.flow.first
 
 @Composable
@@ -98,8 +86,6 @@ private fun RenameAliasField(
     pending: Boolean,
     onDraft: (String) -> Unit
 ) {
-    val colors = MaterialTheme.colorScheme
-    val label = stringResource(R.string.home_alias_label)
     val guidance = stringResource(
         when (validation) {
             PairingAliasError.Blank -> R.string.home_rename_blank
@@ -109,46 +95,6 @@ private fun RenameAliasField(
             null -> if (rejected) R.string.home_rename_rejected else R.string.home_rename_help
         }
     )
-    val invalid = validation != null || rejected
-    val danger = colorResource(R.color.error_emblem)
-    val smallText = MaterialTheme.typography.bodySmall.copy(
-        fontSize = 11.sp,
-        lineHeight = 15.4.sp,
-        letterSpacing = 0.sp
-    )
-    Column(
-        Modifier.fillMaxWidth().testTag("renameAliasGroup")
-            .background(colors.surfaceContainer, RoundedCornerShape(16.dp))
-            .padding(start = 15.dp, top = 14.dp, end = 15.dp, bottom = 12.dp)
-    ) {
-        Text(
-            label,
-            color = colors.onSurfaceVariant,
-            style = smallText,
-            fontWeight = FontWeight(650)
-        )
-        Spacer(Modifier.height(7.dp))
-        RenameAliasInput(draft, label, guidance.takeIf { invalid }, pending, onDraft)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            guidance,
-            color = if (invalid) danger else colors.onSurfaceVariant,
-            style = smallText,
-            fontWeight = if (invalid) FontWeight(650) else FontWeight.Normal,
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-        )
-    }
-}
-
-@Composable
-private fun RenameAliasInput(
-    draft: String,
-    label: String,
-    validationError: String?,
-    pending: Boolean,
-    onDraft: (String) -> Unit
-) {
-    val colors = MaterialTheme.colorScheme
     val focus = remember { FocusRequester() }
     val window = LocalWindowInfo.current
     LaunchedEffect(window) {
@@ -157,58 +103,14 @@ private fun RenameAliasInput(
             focus.requestFocus()
         }
     }
-    var focused by remember { mutableStateOf(false) }
-    val active = focused && !pending
-    val border = when {
-        validationError != null -> colorResource(R.color.error_emblem)
-        active -> colors.primary
-        else -> colors.onSurface.copy(alpha = renameOutlineAlpha())
-    }
-    val halo = when {
-        validationError != null -> 0.16f
-        active -> 0.18f
-        else -> 0f
-    }
-    val fieldShape = RoundedCornerShape(12.dp)
-    BasicTextField(
-        value = draft,
-        onValueChange = onDraft,
+    PairingAliasField(
+        alias = draft,
+        guidance = guidance,
+        invalid = validation != null || rejected,
         enabled = !pending,
-        singleLine = true,
-        textStyle = MaterialTheme.typography.bodyLarge.copy(
-            color = if (pending) colors.onSurfaceVariant else colors.onSurface,
-            letterSpacing = 0.sp
-        ),
-        cursorBrush = SolidColor(colors.primary),
-        modifier = Modifier.fillMaxWidth().focusRequester(focus)
-            .onFocusChanged { focused = it.isFocused }
-            .semantics {
-                contentDescription = label
-                if (validationError != null) error(validationError)
-            },
-        decorationBox = { input ->
-            Box(
-                Modifier.fillMaxWidth().heightIn(min = 52.dp)
-                    .drawBehind {
-                        if (halo > 0f) {
-                            val outset = 2.dp.toPx()
-                            drawRoundRect(
-                                border.copy(alpha = halo),
-                                topLeft = Offset(-outset, -outset),
-                                size = Size(size.width + 2 * outset, size.height + 2 * outset),
-                                cornerRadius = CornerRadius(14.dp.toPx())
-                            )
-                        }
-                    }
-                    .background(
-                        if (pending) colors.surfaceContainerHigh else colors.surface,
-                        fieldShape
-                    )
-                    .border(1.dp, border, fieldShape)
-                    .padding(horizontal = 15.dp, vertical = 8.dp),
-                contentAlignment = Alignment.CenterStart
-            ) { input() }
-        }
+        onAliasChange = onDraft,
+        modifier = Modifier.testTag("renameAliasGroup"),
+        inputModifier = Modifier.focusRequester(focus)
     )
 }
 
