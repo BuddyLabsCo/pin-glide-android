@@ -16,15 +16,19 @@ import org.junit.Test
 class TestMessageActionTest {
     @Test
     fun successExpiresAtTheRecommendedTimeoutAfterDelivery() =
-        assertNoticeExpiresAfterDelivery(TestMessageResult.Received)
+        assertNoticeLifetime(TestMessageOutcome("Laptop", TestMessageResult.Received))
 
     @Test
     fun offlineFeedbackExpiresAtTheRecommendedTimeoutAfterDelivery() =
-        assertNoticeExpiresAfterDelivery(TestMessageResult.Offline)
+        assertNoticeLifetime(TestMessageOutcome("Laptop", TestMessageResult.Offline))
 
-    private fun assertNoticeExpiresAfterDelivery(result: TestMessageResult) = runTest {
+    @Test
+    fun confirmedRemovalExpiresAtTheRecommendedTimeoutAfterDelivery() = assertNoticeLifetime(
+        TestMessageOutcome("Laptop", TestMessageResult.InvalidPairing, pairingRemoved = true)
+    )
+
+    private fun assertNoticeLifetime(outcome: TestMessageOutcome) = runTest {
         val delivery = CompletableDeferred<TestMessageOutcome>()
-        val outcome = TestMessageOutcome("Laptop", result)
         val action = TestMessageAction(this) { delivery.await() }
         action.enter("laptop")
         action.send(5_000L)

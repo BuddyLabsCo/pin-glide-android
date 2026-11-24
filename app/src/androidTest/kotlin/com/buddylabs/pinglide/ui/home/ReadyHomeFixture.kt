@@ -1,6 +1,7 @@
 package com.buddylabs.pinglide.ui.home
 
 import android.content.res.Configuration
+import android.os.ParcelFileDescriptor
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
@@ -11,19 +12,27 @@ import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.test.ext.junit.rules.ActivityScenarioRule
+import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
+import com.buddylabs.pinglide.domain.forwarding.PairingTestMessage
+import com.buddylabs.pinglide.domain.forwarding.TestDeliveryService
 import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
 import com.buddylabs.pinglide.domain.pairing.PairingService
 import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import com.buddylabs.pinglide.domain.settings.AppLanguage
+import com.buddylabs.pinglide.platform.crypto.encryptTestMessage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+
+internal fun runHomeTestShell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
+    InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
+).bufferedReader().use { it.readText() }
 
 internal fun renderReadyHome(
     compose: AndroidComposeTestRule<ActivityScenarioRule<ComponentActivity>, ComponentActivity>,
@@ -36,6 +45,7 @@ internal fun renderReadyHome(
     sendTest: suspend (String) -> TestMessageOutcome? = { null },
     missingKeyId: String? = null,
     accessibilityManager: AccessibilityManager? = null,
+    testDelivery: TestDeliveryService? = null,
     onRemove: suspend (String) -> Unit
 ): HomeViewModel {
     val store = HomePairingStore(
@@ -75,7 +85,14 @@ internal fun renderReadyHome(
     runBlocking(Dispatchers.Main) { pairings.refresh() }
     compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
     val app = compose.activity.application as PinGlideApplication
-    val home = HomeViewModel(pairings, app.senderRestoration(), sendTest)
+    val message = testDelivery?.let {
+        PairingTestMessage(store, renewal, ::encryptTestMessage, it)
+    }
+    val home = HomeViewModel(
+        pairings,
+        app.senderRestoration(),
+        if (message == null) sendTest else { pairingId -> message.sendFromHome(pairingId, service) }
+    )
     compose.setContent {
         val state by home.state.collectAsState()
         val systemConfiguration = LocalConfiguration.current

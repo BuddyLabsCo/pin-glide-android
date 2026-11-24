@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
                             HomeViewModel(
                                 it.ownPairings,
                                 it.senderRestoration(),
-                                it.pairingTestMessage::send
+                                it::sendHomeTestMessage
                             )
                         }
                     )!!

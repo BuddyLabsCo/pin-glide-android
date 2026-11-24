@@ -51,7 +51,7 @@ import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 import kotlin.math.roundToInt
 
-private const val DETAILS_NOTICE_MILLIS = 4_000L
+private const val TEST_NOTICE_MILLIS = 4_000L
 
 @Composable
 internal fun PairingTestAction(action: TestMessageAction) {
@@ -102,7 +102,8 @@ internal fun AnchoredPairingTestAction(
     action: TestMessageAction,
     accessibility: AccessibilityManager?,
     active: Boolean,
-    modifier: Modifier,
+    headerBottom: Float,
+    modifier: Modifier = Modifier,
     content: @Composable (
         state: TestMessageState,
         send: () -> Unit,
@@ -110,22 +111,29 @@ internal fun AnchoredPairingTestAction(
     ) -> Unit
 ) {
     val state by action.state.collectAsState()
-    val result = state.outcome?.result?.takeIf { active }
-    val label = result?.detailsNoticeLabel
+    val notice = state.outcome?.takeIf { active }
+    val label = notice?.detailsNoticeLabel
+    val removed = notice?.pairingRemoved == true
+    val offline = notice?.result == TestMessageResult.Offline
     val message = if (label == null) "" else stringResource(label)
-    val offline = result == TestMessageResult.Offline
+    val status = if (removed) {
+        val alias = notice.targetAlias.ifBlank { stringResource(R.string.home_target_device) }
+        stringResource(R.string.pairing_test_target_result, alias, message)
+    } else {
+        message
+    }
     var dividerTop by remember { mutableFloatStateOf(0f) }
     var dividerVisible by remember { mutableStateOf(false) }
     var viewportTop by remember { mutableFloatStateOf(0f) }
     Box(modifier.onGloballyPositioned { viewportTop = it.positionInRoot().y }) {
         content(
-            if (label != null) state.copy(outcome = null) else state,
+            state,
             {
                 action.send(
                     accessibility?.calculateRecommendedTimeoutMillis(
-                        DETAILS_NOTICE_MILLIS,
+                        TEST_NOTICE_MILLIS,
                         containsText = true
-                    ) ?: DETAILS_NOTICE_MILLIS
+                    ) ?: TEST_NOTICE_MILLIS
                 )
             },
             Modifier.onGloballyPositioned {
@@ -133,27 +141,18 @@ internal fun AnchoredPairingTestAction(
                 dividerVisible = it.boundsInRoot().height > 0f
             }
         )
-        PairingTestStatus(message, Modifier.align(Alignment.Center))
-        if (label != null && (dividerVisible || offline)) {
-            Layout(
-                modifier = Modifier.matchParentSize(),
-                content = { PairingTestNotice(message) }
-            ) { measurables, constraints ->
-                val notice = measurables.single().measure(
-                    constraints.copy(minWidth = 0, minHeight = 0)
-                )
-                layout(constraints.maxWidth, constraints.maxHeight) {
-                    val anchor = dividerTop - viewportTop
-                    val top = if (offline) {
-                        anchor + 29.dp.toPx() - notice.height
-                    } else {
-                        anchor + 8.dp.toPx() - notice.height / 2f
-                    }
-                    val visibleTop = top.roundToInt()
-                        .coerceIn(0, constraints.maxHeight - notice.height)
-                    notice.placeRelative((constraints.maxWidth - notice.width) / 2, visibleTop)
-                }
-            }
+        PairingTestStatus(
+            message = status,
+            modifier = Modifier.align(Alignment.Center)
+        )
+        if (label != null && (dividerVisible || removed || offline)) {
+            PairingTestNotice(
+                message = message,
+                anchor = (dividerTop - viewportTop).takeIf { dividerVisible || offline },
+                headerBottom = if (removed) headerBottom - viewportTop else 0f,
+                offline = offline,
+                modifier = Modifier.matchParentSize()
+            )
         }
     }
 }
@@ -175,25 +174,51 @@ private fun PairingTestStatus(message: String, modifier: Modifier) {
 }
 
 @Composable
-private fun PairingTestNotice(message: String) {
+private fun PairingTestNotice(
+    message: String,
+    anchor: Float?,
+    headerBottom: Float,
+    offline: Boolean,
+    modifier: Modifier
+) {
     val colors = MaterialTheme.colorScheme
     val shadowColor = if (isSystemInDarkTheme()) Color(0x61000000) else Color(0x260A1210)
-    Text(
-        message,
-        Modifier
-            .padding(horizontal = 24.dp)
-            .widthIn(max = 280.dp)
-            .dropShadow(CircleShape, Shadow(24.dp, shadowColor, offset = DpOffset(0.dp, 8.dp)))
-            .background(colors.onSurface.copy(alpha = 0.88f), CircleShape)
-            .semantics { hideFromAccessibility() }
-            .padding(horizontal = 18.dp, vertical = 12.dp),
-        color = colors.surface,
-        style = TextStyle(
-            fontSize = 12.sp,
-            fontWeight = FontWeight(650),
-            textAlign = TextAlign.Center
-        )
-    )
+    Layout(
+        modifier = modifier,
+        content = {
+            Text(
+                message,
+                Modifier.padding(horizontal = 24.dp)
+                    .widthIn(max = 280.dp)
+                    .dropShadow(
+                        CircleShape,
+                        Shadow(24.dp, shadowColor, offset = DpOffset(0.dp, 8.dp))
+                    )
+                    .background(colors.onSurface.copy(alpha = 0.88f), CircleShape)
+                    .semantics { hideFromAccessibility() }
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                color = colors.surface,
+                style = TextStyle(
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight(650),
+                    textAlign = TextAlign.Center
+                )
+            )
+        }
+    ) { measurables, constraints ->
+        val notice = measurables.single().measure(constraints.copy(minWidth = 0, minHeight = 0))
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            val maxTop = constraints.maxHeight - notice.height
+            val minTop = headerBottom.roundToInt().coerceIn(0, maxTop)
+            val top = when {
+                anchor == null -> (minTop + maxTop) / 2
+                offline -> (anchor + 29.dp.toPx() - notice.height).roundToInt()
+                else -> (anchor + 8.dp.toPx() - notice.height / 2f).roundToInt()
+            }
+            val visibleTop = top.coerceIn(minTop, maxTop)
+            notice.placeRelative((constraints.maxWidth - notice.width) / 2, visibleTop)
+        }
+    }
 }
 
 private val testMessageLabels = mapOf(

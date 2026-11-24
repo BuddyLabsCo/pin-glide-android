@@ -10,11 +10,15 @@ import com.buddylabs.pinglide.domain.identity.RefreshState
 import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import com.buddylabs.pinglide.domain.pairing.OwnPairing
 import com.buddylabs.pinglide.domain.pairing.PairingFailure
+import com.buddylabs.pinglide.domain.pairing.PairingService
 import com.buddylabs.pinglide.domain.pairing.PairingServiceException
 import com.buddylabs.pinglide.domain.pairing.PairingSnapshot
 import com.buddylabs.pinglide.domain.pairing.PairingStore
 import java.time.Clock
 import java.util.UUID
+import kotlinx.coroutines.withTimeoutOrNull
+
+private const val REMOVAL_LOOKUP_TIMEOUT_MILLIS = 2_000L
 
 class TestCiphertext(val nonce: String, val ciphertext: String)
 
@@ -35,7 +39,11 @@ enum class TestMessageResult {
     LoginRequired
 }
 
-data class TestMessageOutcome(val targetAlias: String, val result: TestMessageResult)
+data class TestMessageOutcome(
+    val targetAlias: String,
+    val result: TestMessageResult,
+    val pairingRemoved: Boolean = false
+)
 
 class DeliveryItem(val target: OwnPairing, val encrypted: TestCiphertext)
 
@@ -54,27 +62,36 @@ class PairingTestMessage(
     private val service: TestDeliveryService,
     private val clock: Clock = Clock.systemUTC()
 ) {
-    suspend fun send(pairingId: String): TestMessageOutcome? {
+    suspend fun send(pairingId: String): TestMessageOutcome? = sendTest(pairingId, inventory = null)
+
+    internal suspend fun sendFromHome(
+        pairingId: String,
+        inventory: PairingService
+    ): TestMessageOutcome? = sendTest(pairingId, inventory)
+
+    private suspend fun sendTest(
+        pairingId: String,
+        inventory: PairingService?
+    ): TestMessageOutcome? {
         val receivedAt = clock.millis()
         val session = renewal.sessionGeneration
         var alias = ""
-        var authorized = false
+        var authorizedSender: SenderIdentity? = null
         val result = try {
             val origin = store.readPairings()
             alias = origin.items.find { it.pairingId == pairingId }?.alias.orEmpty()
             renewal.withAccess(CredentialAccess.Upload) { identity ->
                 if (!renewal.isSessionCurrent(session) ||
-                    identity.accountId != origin.authority.identity?.accountId ||
-                    identity.senderId != origin.authority.identity.senderId
+                    origin.authority.identity?.sameSender(identity) != true
                 ) {
                     return@withAccess null
                 }
-                authorized = true
+                authorizedSender = identity
                 sendAuthorized(origin, pairingId, identity, session, receivedAt)
             }
         } catch (failure: AuthorizationException) {
             when {
-                authorized || !renewal.isSessionCurrent(session) -> null
+                authorizedSender != null || !renewal.isSessionCurrent(session) -> null
 
                 failure.outcome in
                     setOf(AuthorizationState.LoginRequired, AuthorizationState.RecoveryRequired) ->
@@ -94,9 +111,64 @@ class PairingTestMessage(
             }
         }
         return result?.takeIf { renewal.isSessionCurrent(session) }?.let {
-            TestMessageOutcome(alias, it)
+            verifyOutcome(
+                TestMessageOutcome(alias, it),
+                inventory,
+                pairingId,
+                authorizedSender,
+                session
+            )
         }
     }
+
+    private suspend fun verifyOutcome(
+        outcome: TestMessageOutcome,
+        inventory: PairingService?,
+        pairingId: String,
+        authorizedSender: SenderIdentity?,
+        session: Long
+    ): TestMessageOutcome? {
+        if (outcome.result != TestMessageResult.InvalidPairing || inventory == null) return outcome
+        val sender = checkNotNull(authorizedSender)
+        val removed = withTimeoutOrNull(REMOVAL_LOOKUP_TIMEOUT_MILLIS) {
+            isRemovalConfirmed(pairingId, inventory, sender, session)
+        } == true
+        return outcome.copy(pairingRemoved = removed).takeIf {
+            isCurrentSender(sender, session)
+        }
+    }
+
+    private suspend fun isRemovalConfirmed(
+        pairingId: String,
+        inventory: PairingService,
+        sender: SenderIdentity,
+        session: Long
+    ): Boolean = try {
+        renewal.withAccess(CredentialAccess.Management) { identity ->
+            renewal.isSessionCurrent(session) && identity.sameSender(sender) &&
+                inventory.list(identity.management.token).none { it.pairingId == pairingId }
+        }
+    } catch (_: PairingServiceException) {
+        false
+    } catch (_: AccessExpiredException) {
+        false
+    } catch (_: AuthorizationException) {
+        false
+    } catch (_: IdentityStorageException) {
+        false
+    }
+
+    private suspend fun isCurrentSender(sender: SenderIdentity, session: Long): Boolean = try {
+        val authority = store.readPairings().authority
+        authority.refreshState == RefreshState.Active &&
+            authority.identity?.sameSender(sender) == true &&
+            !renewal.isRegistrationClosed(sender) && renewal.isSessionCurrent(session)
+    } catch (_: IdentityStorageException) {
+        false
+    }
+
+    private fun SenderIdentity.sameSender(other: SenderIdentity): Boolean =
+        accountId == other.accountId && senderId == other.senderId
 
     private suspend fun sendAuthorized(
         origin: PairingSnapshot,
