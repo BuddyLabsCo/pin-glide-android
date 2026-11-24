@@ -8,16 +8,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -27,13 +30,18 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.PairingEntryPage
 import com.buddylabs.pinglide.domain.pairing.PairingEntryProblem
 import com.buddylabs.pinglide.domain.pairing.PairingEntryState
 import com.buddylabs.pinglide.domain.pairing.PairingHost
 import com.buddylabs.pinglide.domain.pairing.PairingStage
+import com.buddylabs.pinglide.ui.components.BrandIcon
+import com.buddylabs.pinglide.ui.components.LoadingEmblem
 import com.buddylabs.pinglide.ui.components.PairingTestAction
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
@@ -54,6 +62,10 @@ internal fun PairingResultScreen(
         }
     )
     BackHandler(onBack = model::close)
+    if (!success && state.problem == null) {
+        PairingProgressScreen(state.stage)
+        return
+    }
     val titleFocus = remember { FocusRequester() }
     LaunchedEffect(title) { titleFocus.requestFocus() }
     ScreenLayout {
@@ -120,28 +132,53 @@ internal fun PairingResultScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+}
 
-                else -> {
-                    CircularProgressIndicator()
-                    Text(
-                        stringResource(state.stage.label()),
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+@Composable
+internal fun PairingProgressScreen(stage: PairingStage) {
+    val title = stringResource(R.string.pairing_progress_title)
+    val titleFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { titleFocus.requestFocus() }
+    ScreenLayout {
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
+                .semantics { paneTitle = title },
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 700.dp).padding(6.dp, 26.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                LoadingEmblem { BrandIcon(Modifier.size(92.dp), RoundedCornerShape(28.dp)) }
+                Text(
+                    stringResource(stage.label()),
+                    modifier = Modifier.padding(top = 44.dp).focusRequester(titleFocus)
+                        .focusable().semantics {
+                            heading()
+                            liveRegion = LiveRegionMode.Polite
+                        },
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontSize = 26.sp,
+                        lineHeight = 32.sp,
+                        fontWeight = FontWeight(750),
+                        letterSpacing = (-1.17).sp,
+                        textAlign = TextAlign.Center
                     )
-                    PairingStage.entries.forEach { stage ->
-                        Text(
-                            stringResource(stage.label()),
-                            color = if (stage ==
-                                state.stage
-                            ) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                    }
-                }
+                )
+                Text(
+                    stringResource(R.string.pairing_progress_instruction),
+                    modifier = Modifier.padding(top = 10.dp).widthIn(max = 286.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        textAlign = TextAlign.Center
+                    )
+                )
             }
         }
     }

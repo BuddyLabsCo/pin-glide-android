@@ -73,6 +73,14 @@ internal fun QqEmblem(size: Dp = 92.dp) {
 
 @Composable
 internal fun QqLoadingEmblem(progressModifier: Modifier = Modifier.size(168.dp)) {
+    LoadingEmblem(progressModifier) { QqEmblem() }
+}
+
+@Composable
+internal fun LoadingEmblem(
+    progressModifier: Modifier = Modifier.size(168.dp),
+    emblem: @Composable () -> Unit
+) {
     var motionEnabled by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val durationScale = coroutineContext[MotionDurationScale]
@@ -81,7 +89,7 @@ internal fun QqLoadingEmblem(progressModifier: Modifier = Modifier.size(168.dp))
         }
     }
     val rotation = if (motionEnabled) {
-        rememberInfiniteTransition(label = "QQ sign-in").animateFloat(
+        rememberInfiniteTransition(label = "Progress").animateFloat(
             initialValue = 0f,
             targetValue = 360f,
             animationSpec = infiniteRepeatable(tween(1000, easing = LinearEasing)),
@@ -108,6 +116,6 @@ internal fun QqLoadingEmblem(progressModifier: Modifier = Modifier.size(168.dp))
                 style = stroke
             )
         }
-        QqEmblem()
+        emblem()
     }
 }

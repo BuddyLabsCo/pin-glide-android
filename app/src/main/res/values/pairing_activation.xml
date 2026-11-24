@@ -7,6 +7,7 @@
     <string name="pairing_progress_identity">正在生成设备身份</string>
     <string name="pairing_progress_key">正在交换加密密钥</string>
     <string name="pairing_progress_confirm">正在确认配对信息</string>
+    <string name="pairing_progress_instruction">保持接收端上的鹊信窗口打开。完成后会自动进入配对完成页面。</string>
     <string name="pairing_home">进入首页</string>
     <string name="pairing_return">返回</string>
     <string name="pairing_test_send">发送测试消息</string>
