@@ -162,12 +162,15 @@
     <string name="pairing_consent_title">Confirm Pairing</string>
     <string name="pairing_connect_title">Connect a new device</string>
     <string name="pairing_add_title">Add a new device</string>
-    <string name="pairing_consent_description">Choose a name you can recognize for this target device.</string>
+    <string name="pairing_consent_description">After confirmation, the target device will start receiving your selected SMS messages. An independent encrypted Pairing will be established between the two devices.</string>
+    <string name="pairing_alias_help">The name cannot be blank or match another device paired with this Sender.</string>
     <string name="pairing_default_alias">My device</string>
     <string name="pairing_cancel">Cancel</string>
     <string name="pairing_confirm">Confirm target</string>
+    <string name="pairing_confirm_first">Confirm and establish key</string>
     <string name="pairing_confirmed">Device name confirmed. This device is not connected yet.</string>
-    <string name="pairing_remaining">Session time remaining: %1$02d:%2$02d</string>
+    <string name="pairing_remaining_label">Pairing session time remaining</string>
+    <string name="pairing_remaining_time">%1$02d:%2$02d</string>
     <string name="pairing_validating">Validating Pairing session…</string>
     <string name="pairing_invalid_qr">This is not a valid Pin Glide Pairing QR code.</string>
     <string name="pairing_scanner_invalid_qr">Not a Pin Glide Pairing code. Keep aiming at the QR code.</string>

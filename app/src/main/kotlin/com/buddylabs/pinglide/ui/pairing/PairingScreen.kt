@@ -1,36 +1,18 @@
 package com.buddylabs.pinglide.ui.pairing
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -38,12 +20,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import com.buddylabs.pinglide.R
-import com.buddylabs.pinglide.domain.pairing.PairingAliasError
 import com.buddylabs.pinglide.domain.pairing.PairingEntryPage
 import com.buddylabs.pinglide.domain.pairing.PairingEntryProblem
 import com.buddylabs.pinglide.domain.pairing.PairingEntryState
-import com.buddylabs.pinglide.domain.pairing.PairingHost
-import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
 fun PairingScreen(state: PairingEntryState, model: PairingEntryViewModel, onLeave: () -> Unit) {
@@ -66,97 +45,14 @@ fun PairingScreen(state: PairingEntryState, model: PairingEntryViewModel, onLeav
         PairingScannerScreen(state, model, resumed)
         return
     }
-    val title = stringResource(R.string.pairing_consent_title)
-    ScreenLayout {
-        Column(
-            Modifier.weight(1f).imePadding().verticalScroll(rememberScrollState())
-                .semantics { paneTitle = title },
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = model::back,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_back),
-                        contentDescription = stringResource(R.string.setup_back)
-                    )
-                }
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.semantics { heading() }
-                )
-            }
-            ConsentContent(state, model)
-            if (state.problem != null) {
-                PairingProblem(state.problem, model::freshScan)
-            }
-            TextButton(
-                onClick = model::close,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            ) {
-                Text(stringResource(R.string.pairing_cancel))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ConsentContent(state: PairingEntryState, model: PairingEntryViewModel) {
-    Image(painterResource(R.mipmap.ic_launcher), null, Modifier.size(72.dp))
-    val title = if (state.host == PairingHost.Onboarding) {
-        R.string.pairing_connect_title
-    } else {
-        R.string.pairing_add_title
-    }
-    Text(
-        stringResource(title),
-        style = MaterialTheme.typography.headlineMedium,
-        modifier = Modifier.semantics { heading() }
+    PairingConsentScreen(
+        state = state,
+        onBack = model::back,
+        onCancel = model::close,
+        onAliasChange = model::editAlias,
+        onConfirm = model::confirm,
+        onRescan = model::freshScan
     )
-    Text(stringResource(R.string.pairing_consent_description))
-    val aliasHelp = when (state.aliasError) {
-        PairingAliasError.Blank -> R.string.home_alias_blank
-        PairingAliasError.TooLong -> R.string.home_alias_too_long
-        PairingAliasError.InvalidCharacters -> R.string.home_alias_invalid_characters
-        PairingAliasError.Duplicate -> R.string.home_alias_duplicate
-        null -> R.string.home_alias_help
-    }
-    OutlinedTextField(
-        value = state.alias,
-        onValueChange = model::editAlias,
-        enabled = !state.pending && !state.confirmed && state.problem == null,
-        isError = state.aliasError != null,
-        label = { Text(stringResource(R.string.home_alias_label)) },
-        supportingText = { Text(stringResource(aliasHelp)) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth()
-    )
-    Text(
-        stringResource(
-            R.string.pairing_remaining,
-            state.remainingSeconds / 60,
-            state.remainingSeconds % 60
-        ),
-        modifier = Modifier.focusable()
-    )
-    if (state.confirmed) {
-        Text(
-            stringResource(R.string.pairing_confirmed),
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-        )
-    }
-    val aliasValid = state.aliasError == null && state.problem == null
-    Button(
-        onClick = model::confirm,
-        enabled = !state.pending && !state.confirmed && aliasValid,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
-    ) {
-        val label = if (state.pending) R.string.pairing_validating else R.string.pairing_confirm
-        Text(stringResource(label))
-    }
 }
 
 @Composable
