@@ -23,16 +23,35 @@ import com.buddylabs.pinglide.domain.pairing.OwnPairings
 import com.buddylabs.pinglide.domain.pairing.PairingService
 import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import com.buddylabs.pinglide.domain.settings.AppLanguage
+import com.buddylabs.pinglide.generated.http.model.UploadRequest
 import com.buddylabs.pinglide.platform.crypto.encryptTestMessage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.Buffer
 
 internal fun runHomeTestShell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
     InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
 ).bufferedReader().use { it.readText() }
+
+internal fun testMessageUploadClient(responseBody: (UploadRequest) -> String): OkHttpClient =
+    OkHttpClient.Builder().addInterceptor { chain ->
+        val request = chain.request()
+        check(request.method == "POST" && request.url.encodedPath == "/v1/messages")
+        val json = Buffer().also { checkNotNull(request.body).writeTo(it) }.readUtf8()
+        val upload = Json.decodeFromString<UploadRequest>(json)
+        val body = responseBody(upload).toResponseBody("application/json".toMediaType())
+        Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(207)
+            .message("Multi-Status").body(body).build()
+    }.build()
 
 internal fun renderReadyHome(
     compose: AndroidComposeTestRule<ActivityScenarioRule<ComponentActivity>, ComponentActivity>,

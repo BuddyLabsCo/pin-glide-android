@@ -169,20 +169,28 @@ class PendingTargetTestMessageTest {
     @Suppress("DEPRECATION")
     internal class TestMessageFeedbackEvents(
         private val message: String,
-        private val duplicatePhrase: String = message
+        private val duplicatePhrase: String = message,
+        private val unexpectedMessage: String? = null
     ) : UiAutomation.OnAccessibilityEventListener {
         val status = ConcurrentLinkedQueue<AccessibilityNodeInfo>()
         val talkBackSpeech = ConcurrentLinkedQueue<String>()
         val announcementsOrToasts = ConcurrentLinkedQueue<Int>()
+        val unexpectedEvents = ConcurrentLinkedQueue<Int>()
 
         override fun onAccessibilityEvent(event: AccessibilityEvent) {
             when (event.eventType) {
-                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> recordTextChange(event)
+                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+                AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> recordTextChange(event)
 
                 AccessibilityEvent.TYPE_ANNOUNCEMENT,
                 AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
                     if (event.text.any { duplicatePhrase in it.toString() }) {
                         announcementsOrToasts.add(event.eventType)
+                    }
+                    if (unexpectedMessage != null &&
+                        event.text.any { unexpectedMessage in it.toString() }
+                    ) {
+                        unexpectedEvents.add(event.eventType)
                     }
                 }
             }
@@ -191,7 +199,11 @@ class PendingTargetTestMessageTest {
         private fun recordTextChange(event: AccessibilityEvent) {
             val source = event.source ?: return
             val text = source.text?.toString() ?: return
-            if (source.liveRegion == View.ACCESSIBILITY_LIVE_REGION_POLITE &&
+            if (unexpectedMessage != null && unexpectedMessage in text) {
+                unexpectedEvents.add(event.eventType)
+            }
+            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
+                source.liveRegion == View.ACCESSIBILITY_LIVE_REGION_POLITE &&
                 text == message
             ) {
                 status.add(source)

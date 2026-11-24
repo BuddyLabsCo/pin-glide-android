@@ -1,6 +1,8 @@
 package com.buddylabs.pinglide.ui.home
 
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.platform.AccessibilityManager
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
@@ -20,16 +22,10 @@ import com.buddylabs.pinglide.generated.http.model.UploadRequest
 import com.buddylabs.pinglide.ui.home.PendingTargetTestMessageTest.TestMessageFeedbackEvents
 import java.time.Instant
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
-import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Protocol
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import okio.Buffer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -45,6 +41,15 @@ class AckTimeoutTargetTestMessageTest {
         SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, TARGET)
     )
     private val uploads = ConcurrentLinkedQueue<UploadRequest>()
+    private val responseTime = AtomicLong()
+    private val accessibility = object : AccessibilityManager {
+        override fun calculateRecommendedTimeoutMillis(
+            originalTimeoutMillis: Long,
+            containsIcons: Boolean,
+            containsText: Boolean,
+            containsControls: Boolean
+        ): Long = if (containsText) RECOMMENDED_TIMEOUT else originalTimeoutMillis
+    }
 
     @After
     fun stopFixture() = scope.cancel()
@@ -59,6 +64,7 @@ class AckTimeoutTargetTestMessageTest {
                 RemotePairing("office", "receiver-office", "办公室电脑", Presence.Offline, now)
             ),
             scope,
+            accessibilityManager = accessibility,
             testDelivery = TestDeliveryService("https://delivery.test", timeoutUpload())
         ) { error("Unexpected Pairing removal") }
 
@@ -68,8 +74,9 @@ class AckTimeoutTargetTestMessageTest {
         val sendBounds = send.fetchSemanticsNode().boundsInWindow
         val renameBounds = rename.fetchSemanticsNode().boundsInWindow
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-        val feedback = TestMessageFeedbackEvents(UNCONFIRMED)
+        val feedback = TestMessageFeedbackEvents(UNCONFIRMED, unexpectedMessage = SUCCESS)
         val notices = compose.onAllNodes(inSheet and hasText(UNCONFIRMED))
+        val success = compose.onAllNodes(hasText(SUCCESS, substring = true), useUnmergedTree = true)
         automation.setOnAccessibilityEventListener(feedback)
         try {
             send.performClick()
@@ -87,11 +94,28 @@ class AckTimeoutTargetTestMessageTest {
             assertTrue(bounds.top < renameBounds.top && bounds.bottom > renameBounds.top)
             assertEquals(renameBounds, rename.fetchSemanticsNode().boundsInWindow)
             send.assertIsEnabled()
-            sheetText("测试消息已发送").assertDoesNotExist()
+            success.assertCountEquals(0)
             compose.waitUntil(3_000L) { feedback.status.isNotEmpty() }
+            compose.waitUntil(RECOMMENDED_TIMEOUT) {
+                SystemClock.elapsedRealtime() - responseTime.get() >= RECOMMENDED_TIMEOUT - 1_000L
+            }
+            notice.assertIsDisplayed()
+            compose.waitUntil(RECOMMENDED_TIMEOUT + 2_000L) {
+                notices.fetchSemanticsNodes().isEmpty()
+            }
+            val duration = SystemClock.elapsedRealtime() - responseTime.get()
+            assertTrue(
+                "Expected the notice at the recommended deadline, dismissed after ${duration}ms",
+                duration in RECOMMENDED_TIMEOUT..(RECOMMENDED_TIMEOUT + 1_500L)
+            )
+            automation.waitForIdle(100L, 2_000L)
             assertTrue(feedback.status.single().isVisibleToUser)
             assertTrue(feedback.announcementsOrToasts.isEmpty())
-            compose.waitUntil(6_000L) { notices.fetchSemanticsNodes().isEmpty() }
+            assertTrue(
+                "Unexpected success events: ${feedback.unexpectedEvents}",
+                feedback.unexpectedEvents.isEmpty()
+            )
+            success.assertCountEquals(0)
             sheetText(TARGET).assertIsDisplayed()
             sheetText("接收短信").assertIsDisplayed()
             sheetText("移除这台设备的配对").assertIsDisplayed()
@@ -101,26 +125,22 @@ class AckTimeoutTargetTestMessageTest {
         }
     }
 
-    private fun timeoutUpload() = OkHttpClient.Builder().addInterceptor { chain ->
-        val request = chain.request()
-        check(request.method == "POST" && request.url.encodedPath == "/v1/messages")
-        val json = Buffer().also { checkNotNull(request.body).writeTo(it) }.readUtf8()
-        val upload = Json.decodeFromString<UploadRequest>(json)
+    private fun timeoutUpload() = testMessageUploadClient { upload ->
         uploads.add(upload)
-        val response = """
+        responseTime.set(SystemClock.elapsedRealtime())
+        """
             {"requestId":"request","messageId":"${upload.messageId}","results":[
               {"index":0,"receiverId":"receiver-home","status":"ack_timeout"}
             ]}
         """.trimIndent()
-        Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(207)
-            .message("Multi-Status").body(response.toResponseBody("application/json".toMediaType()))
-            .build()
-    }.build()
+    }
 
     private fun sheetText(text: String) = compose.onNode(inSheet and hasText(text))
 
     private companion object {
         const val TARGET = "我的电脑"
         const val UNCONFIRMED = "投递未确认：等待设备确认超时"
+        const val SUCCESS = "测试消息已发送"
+        const val RECOMMENDED_TIMEOUT = 8_000L
     }
 }

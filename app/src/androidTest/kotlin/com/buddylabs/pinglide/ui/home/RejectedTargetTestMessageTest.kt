@@ -52,13 +52,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Protocol
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import okio.Buffer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -301,11 +294,7 @@ class RejectedTargetTestMessageTest {
         sheetText(TARGET).assertIsDisplayed()
     }
 
-    private fun rejectedUpload(errorCode: String) = OkHttpClient.Builder().addInterceptor { chain ->
-        val request = chain.request()
-        check(request.method == "POST" && request.url.encodedPath == "/v1/messages")
-        val json = Buffer().also { checkNotNull(request.body).writeTo(it) }.readUtf8()
-        val upload = Json.decodeFromString<UploadRequest>(json)
+    private fun rejectedUpload(errorCode: String) = testMessageUploadClient { upload ->
         val item = upload.items.single()
         val decoder = Base64.getDecoder()
         val encoder = Base64.getEncoder()
@@ -315,16 +304,13 @@ class RejectedTargetTestMessageTest {
         check(encoder.encodeToString(nonce) == item.nonce)
         check(encoder.encodeToString(ciphertext) == item.ciphertext)
         uploads.add(upload)
-        val response = """
+        """
             {"requestId":"request","messageId":"${upload.messageId}","results":[
               {"index":0,"receiverId":"receiver-home","status":"rejected",
                "error":{"code":"$errorCode","detail":"Rejected"}}
             ]}
         """.trimIndent()
-        Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(207)
-            .message("Multi-Status").body(response.toResponseBody("application/json".toMediaType()))
-            .build()
-    }.build()
+    }
 
     private fun sheetText(text: String) = compose.onNode(inSheet and hasText(text))
 
