@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -152,6 +153,7 @@ internal fun AnchoredPairingTestAction(
                 anchor = (dividerTop - viewportTop).takeIf { dividerVisible || offline },
                 headerBottom = if (removed) headerBottom - viewportTop else 0f,
                 offline = offline,
+                bottomOffset = 164.dp.takeIf { uncertain },
                 modifier = Modifier.matchParentSize()
             )
         }
@@ -180,6 +182,7 @@ private fun PairingTestNotice(
     anchor: Float?,
     headerBottom: Float,
     offline: Boolean,
+    bottomOffset: Dp?,
     modifier: Modifier
 ) {
     val colors = MaterialTheme.colorScheme
@@ -212,6 +215,7 @@ private fun PairingTestNotice(
             val maxTop = constraints.maxHeight - notice.height
             val minTop = headerBottom.roundToInt().coerceIn(0, maxTop)
             val top = when {
+                bottomOffset != null -> maxTop - bottomOffset.roundToPx()
                 anchor == null -> (minTop + maxTop) / 2
                 offline -> (anchor + 29.dp.toPx() - notice.height).roundToInt()
                 else -> (anchor + 8.dp.toPx() - notice.height / 2f).roundToInt()
