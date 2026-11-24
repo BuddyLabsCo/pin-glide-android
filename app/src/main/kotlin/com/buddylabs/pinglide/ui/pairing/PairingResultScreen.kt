@@ -3,6 +3,7 @@ package com.buddylabs.pinglide.ui.pairing
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -143,13 +144,11 @@ internal fun PairingProgressScreen(stage: PairingStage) {
     val titleFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { titleFocus.requestFocus() }
     ScreenLayout {
-        Column(
-            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
-                .semantics { paneTitle = title },
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             Column(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 700.dp).padding(6.dp, 26.dp),
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    .heightIn(min = minOf(maxHeight, 700.dp)).padding(6.dp, 26.dp)
+                    .semantics { paneTitle = title },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
