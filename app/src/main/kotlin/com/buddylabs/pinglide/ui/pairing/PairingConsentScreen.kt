@@ -12,14 +12,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -82,48 +83,72 @@ internal fun PairingConsentScreen(
 ) {
     val title = stringResource(R.string.pairing_consent_title)
     ScreenLayout {
-        Column(Modifier.weight(1f).imePadding().semantics { paneTitle = title }) {
-            Row(
-                Modifier.padding(top = 16.dp, bottom = 8.dp).heightIn(min = 64.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        painterResource(R.drawable.ic_back_chevron),
-                        contentDescription = stringResource(R.string.setup_back),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    title,
-                    fontSize = 20.sp,
-                    letterSpacing = (-0.7).sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.semantics { heading() }
-                )
-            }
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val compact = maxHeight < 360.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+            val scroll = Modifier.verticalScroll(rememberScrollState())
             Column(
-                Modifier.weight(1f).verticalScroll(rememberScrollState())
-                    .padding(top = 10.dp, bottom = 14.dp)
+                Modifier.fillMaxSize().then(if (compact) scroll else Modifier)
+                    .semantics { paneTitle = title }
             ) {
-                ConsentIllustration()
-                Spacer(Modifier.height(16.dp))
-                ConsentDescription(state.host)
-                Spacer(Modifier.height(18.dp))
-                ConsentAliasField(state, onAliasChange)
-                Spacer(Modifier.height(12.dp))
-                ConsentCountdown(state.remainingSeconds)
-                if (state.confirmed) {
-                    Text(
-                        stringResource(R.string.pairing_confirmed),
-                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-                    )
-                }
-                state.problem?.let { PairingProblem(it, onRescan) }
+                ConsentHeader(title, onBack)
+                ConsentBody(
+                    state,
+                    onAliasChange,
+                    onRescan,
+                    if (compact) Modifier else Modifier.weight(1f).then(scroll)
+                )
+                ConsentActions(state, onConfirm, onCancel)
             }
-            ConsentActions(state, onConfirm, onCancel)
         }
+    }
+}
+
+@Composable
+private fun ConsentHeader(title: String, onBack: () -> Unit) {
+    Row(
+        Modifier.padding(top = 16.dp, bottom = 8.dp).heightIn(min = 64.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+            Icon(
+                painterResource(R.drawable.ic_back_chevron),
+                contentDescription = stringResource(R.string.setup_back),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            title,
+            fontSize = 20.sp,
+            letterSpacing = (-0.7).sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.semantics { heading() }
+        )
+    }
+}
+
+@Composable
+private fun ConsentBody(
+    state: PairingEntryState,
+    onAliasChange: (String) -> Unit,
+    onRescan: () -> Unit,
+    modifier: Modifier
+) {
+    Column(modifier.padding(top = 10.dp, bottom = 14.dp)) {
+        ConsentIllustration()
+        Spacer(Modifier.height(16.dp))
+        ConsentDescription(state.host)
+        Spacer(Modifier.height(18.dp))
+        ConsentAliasField(state, onAliasChange)
+        Spacer(Modifier.height(12.dp))
+        ConsentCountdown(state.remainingSeconds)
+        if (state.confirmed) {
+            Text(
+                stringResource(R.string.pairing_confirmed),
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            )
+        }
+        state.problem?.let { PairingProblem(it, onRescan) }
     }
 }
 
