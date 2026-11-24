@@ -46,14 +46,20 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalAccessibilityManager
+import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
@@ -71,6 +77,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.zIndex
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.pairing.PairingChange
@@ -80,7 +87,7 @@ import com.buddylabs.pinglide.ui.components.AnchoredPairingTestAction
 import com.buddylabs.pinglide.ui.components.PairingTestFeedback
 import com.buddylabs.pinglide.ui.components.TestMessageAction
 import com.buddylabs.pinglide.ui.components.TestMessageState
-import com.buddylabs.pinglide.ui.components.hasAnchoredNotice
+import com.buddylabs.pinglide.ui.components.detailsNoticeLabel
 import com.buddylabs.pinglide.ui.components.testMessageButtonLabel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -140,14 +147,7 @@ internal fun TargetDetailsSheet(
     var headerBottom by remember(target.pairingId) { mutableFloatStateOf(0f) }
     val confirmation = stringResource(R.string.home_renamed)
         .takeIf { action.result == PairingChange.Renamed }
-    val sheetShadow = if (showingDetails) {
-        Modifier
-    } else {
-        Modifier.dropShadow(
-            BottomSheetDefaults.ExpandedShape,
-            Shadow(42.dp, Color.Black, offset = DpOffset(0.dp, (-14).dp), alpha = 0.18f)
-        )
-    }
+    val sheetShadow = remember { TargetSheetShadow() }
     ModalBottomSheet(
         onDismissRequest = {
             if (!pending) {
@@ -172,11 +172,19 @@ internal fun TargetDetailsSheet(
             )
         },
         contentWindowInsets = { WindowInsets.safeDrawing },
-        modifier = Modifier.imePadding().then(sheetShadow).semantics { paneTitle = title }
+        modifier = Modifier.imePadding()
+            .targetSheetShadow(sheetShadow)
+            .semantics { paneTitle = title }
     ) {
         val contentModifier = Modifier.fillMaxWidth().verticalScroll(scroll)
             .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
-        AnchoredPairingTestAction(testMessage, accessibility, showingDetails, headerBottom) {
+        AnchoredPairingTestAction(
+            testMessage,
+            accessibility,
+            showingDetails,
+            headerBottom,
+            Modifier.onGloballyPositioned(sheetShadow::update)
+        ) {
                 testState,
                 sendTest,
                 anchor
@@ -250,6 +258,47 @@ internal fun TargetDetailsSheet(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun Modifier.targetSheetShadow(sheetShadow: TargetSheetShadow): Modifier {
+    val shadowContext = LocalGraphicsContext.current.shadowContext
+    val sheetShape = BottomSheetDefaults.ExpandedShape
+    return onGloballyPositioned { sheetShadow.frame = it }.drawWithCache {
+        val painter = shadowContext.createDropShadowPainter(
+            sheetShape,
+            Shadow(42.dp, Color.Black, offset = DpOffset(0.dp, (-14).dp), alpha = 0.18f)
+        )
+        onDrawWithContent {
+            val (bounds, unscaledSize) = sheetShadow.geometry
+            if (!bounds.isEmpty) {
+                withTransform({
+                    translate(bounds.left, bounds.top)
+                    scale(
+                        bounds.width / unscaledSize.width,
+                        bounds.height / unscaledSize.height,
+                        Offset.Zero
+                    )
+                }) {
+                    with(painter) { draw(unscaledSize) }
+                }
+            }
+            drawContent()
+        }
+    }
+}
+
+private class TargetSheetShadow {
+    var frame: LayoutCoordinates? = null
+    var geometry by mutableStateOf(Rect.Zero to Size.Zero)
+        private set
+
+    fun update(content: LayoutCoordinates) {
+        val frame = frame?.takeIf { it.isAttached } ?: return
+        val surface = content.parentLayoutCoordinates?.parentLayoutCoordinates ?: return
+        geometry = frame.localBoundingBoxOf(surface, clipBounds = false) to surface.size.toSize()
     }
 }
 
@@ -345,7 +394,7 @@ private fun TargetDetailsActions(
             }
         }
         PairingTestFeedback(
-            testState.outcome?.takeUnless { it.hasAnchoredNotice },
+            testState.outcome?.takeIf { it.detailsNoticeLabel == null },
             Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
         )
         val testDividerOpacity = if (testState.pending) disabledAlpha else 1f

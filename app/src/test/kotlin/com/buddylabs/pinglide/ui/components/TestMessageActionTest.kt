@@ -19,6 +19,10 @@ class TestMessageActionTest {
         assertNoticeLifetime(TestMessageOutcome("Laptop", TestMessageResult.Received))
 
     @Test
+    fun offlineFeedbackExpiresAtTheRecommendedTimeoutAfterDelivery() =
+        assertNoticeLifetime(TestMessageOutcome("Laptop", TestMessageResult.Offline))
+
+    @Test
     fun confirmedRemovalExpiresAtTheRecommendedTimeoutAfterDelivery() = assertNoticeLifetime(
         TestMessageOutcome("Laptop", TestMessageResult.InvalidPairing, pairingRemoved = true)
     )

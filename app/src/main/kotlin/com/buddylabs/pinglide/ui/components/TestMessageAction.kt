@@ -1,5 +1,7 @@
 package com.buddylabs.pinglide.ui.components
 
+import androidx.annotation.StringRes
+import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
 import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 import kotlinx.coroutines.CoroutineScope
@@ -8,9 +10,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-
-internal val TestMessageOutcome.hasAnchoredNotice: Boolean
-    get() = result == TestMessageResult.Received || pairingRemoved
 
 class TestMessageAction(
     private val scope: CoroutineScope,
@@ -51,7 +50,7 @@ class TestMessageAction(
                     outcome = result,
                     announceReceived = received && noticeMillis == null
                 )
-                if (result?.hasAnchoredNotice == true && noticeMillis != null) {
+                if (result?.detailsNoticeLabel != null && noticeMillis != null) {
                     delay(noticeMillis)
                     mutableState.value = TestMessageState()
                 }
@@ -65,6 +64,15 @@ class TestMessageAction(
         return true
     }
 }
+
+@get:StringRes
+internal val TestMessageOutcome.detailsNoticeLabel: Int?
+    get() = when {
+        pairingRemoved -> R.string.home_test_pairing_removed
+        result == TestMessageResult.Received -> R.string.pairing_test_received
+        result == TestMessageResult.Offline -> R.string.home_test_offline_notice
+        else -> null
+    }
 
 data class TestMessageState(
     val pending: Boolean = false,

@@ -103,6 +103,7 @@ internal fun AnchoredPairingTestAction(
     accessibility: AccessibilityManager?,
     active: Boolean,
     headerBottom: Float,
+    modifier: Modifier = Modifier,
     content: @Composable (
         state: TestMessageState,
         send: () -> Unit,
@@ -110,13 +111,11 @@ internal fun AnchoredPairingTestAction(
     ) -> Unit
 ) {
     val state by action.state.collectAsState()
-    val notice = state.outcome?.takeIf { active && it.hasAnchoredNotice }
+    val notice = state.outcome?.takeIf { active }
+    val label = notice?.detailsNoticeLabel
     val removed = notice?.pairingRemoved == true
-    val message = when {
-        removed -> stringResource(R.string.home_test_pairing_removed)
-        notice != null -> stringResource(R.string.pairing_test_received)
-        else -> ""
-    }
+    val offline = notice?.result == TestMessageResult.Offline
+    val message = if (label == null) "" else stringResource(label)
     val status = if (removed) {
         val alias = notice.targetAlias.ifBlank { stringResource(R.string.home_target_device) }
         stringResource(R.string.pairing_test_target_result, alias, message)
@@ -126,7 +125,7 @@ internal fun AnchoredPairingTestAction(
     var dividerTop by remember { mutableFloatStateOf(0f) }
     var dividerVisible by remember { mutableStateOf(false) }
     var viewportTop by remember { mutableFloatStateOf(0f) }
-    Box(Modifier.onGloballyPositioned { viewportTop = it.positionInRoot().y }) {
+    Box(modifier.onGloballyPositioned { viewportTop = it.positionInRoot().y }) {
         content(
             state,
             {
@@ -146,12 +145,13 @@ internal fun AnchoredPairingTestAction(
             message = status,
             modifier = Modifier.align(Alignment.Center)
         )
-        if (notice != null && (dividerVisible || removed)) {
+        if (label != null && (dividerVisible || removed || offline)) {
             PairingTestNotice(
-                message,
-                (dividerTop - viewportTop).takeIf { dividerVisible },
-                if (removed) headerBottom - viewportTop else 0f,
-                Modifier.matchParentSize()
+                message = message,
+                anchor = (dividerTop - viewportTop).takeIf { dividerVisible || offline },
+                headerBottom = if (removed) headerBottom - viewportTop else 0f,
+                offline = offline,
+                modifier = Modifier.matchParentSize()
             )
         }
     }
@@ -178,6 +178,7 @@ private fun PairingTestNotice(
     message: String,
     anchor: Float?,
     headerBottom: Float,
+    offline: Boolean,
     modifier: Modifier
 ) {
     val colors = MaterialTheme.colorScheme
@@ -209,12 +210,13 @@ private fun PairingTestNotice(
         layout(constraints.maxWidth, constraints.maxHeight) {
             val maxTop = constraints.maxHeight - notice.height
             val minTop = headerBottom.roundToInt().coerceIn(0, maxTop)
-            val top = if (anchor == null) {
-                (minTop + maxTop) / 2
-            } else {
-                (anchor + 8.dp.toPx() - notice.height / 2f).roundToInt().coerceIn(minTop, maxTop)
+            val top = when {
+                anchor == null -> (minTop + maxTop) / 2
+                offline -> (anchor + 29.dp.toPx() - notice.height).roundToInt()
+                else -> (anchor + 8.dp.toPx() - notice.height / 2f).roundToInt()
             }
-            notice.placeRelative((constraints.maxWidth - notice.width) / 2, top)
+            val visibleTop = top.coerceIn(minTop, maxTop)
+            notice.placeRelative((constraints.maxWidth - notice.width) / 2, visibleTop)
         }
     }
 }
