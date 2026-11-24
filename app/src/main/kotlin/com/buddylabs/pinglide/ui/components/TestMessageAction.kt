@@ -71,6 +71,7 @@ internal val TestMessageOutcome.detailsNoticeLabel: Int?
         pairingRemoved -> R.string.home_test_pairing_removed
         result == TestMessageResult.Received -> R.string.pairing_test_received
         result == TestMessageResult.Offline -> R.string.home_test_offline_notice
+        result == TestMessageResult.Uncertain -> R.string.home_test_uncertain_notice
         else -> null
     }
 

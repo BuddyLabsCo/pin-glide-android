@@ -115,6 +115,7 @@ internal fun AnchoredPairingTestAction(
     val label = notice?.detailsNoticeLabel
     val removed = notice?.pairingRemoved == true
     val offline = notice?.result == TestMessageResult.Offline
+    val uncertain = notice?.result == TestMessageResult.Uncertain
     val message = if (label == null) "" else stringResource(label)
     val status = if (removed) {
         val alias = notice.targetAlias.ifBlank { stringResource(R.string.home_target_device) }
@@ -145,7 +146,7 @@ internal fun AnchoredPairingTestAction(
             message = status,
             modifier = Modifier.align(Alignment.Center)
         )
-        if (label != null && (dividerVisible || removed || offline)) {
+        if (label != null && (dividerVisible || removed || offline || uncertain)) {
             PairingTestNotice(
                 message = message,
                 anchor = (dividerTop - viewportTop).takeIf { dividerVisible || offline },
