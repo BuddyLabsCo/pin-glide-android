@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -116,6 +117,7 @@ internal fun AnchoredPairingTestAction(
     val removed = notice?.pairingRemoved == true
     val alignNoticeBottom = notice?.result == TestMessageResult.Offline ||
         notice?.result == TestMessageResult.AckTimeout
+    val uncertain = notice?.result == TestMessageResult.Uncertain
     val message = if (label == null) "" else stringResource(label)
     val status = if (removed) {
         val alias = notice.targetAlias.ifBlank { stringResource(R.string.home_target_device) }
@@ -146,12 +148,13 @@ internal fun AnchoredPairingTestAction(
             message = status,
             modifier = Modifier.align(Alignment.Center)
         )
-        if (label != null && (dividerVisible || removed || alignNoticeBottom)) {
+        if (label != null && (dividerVisible || removed || alignNoticeBottom || uncertain)) {
             PairingTestNotice(
                 message = message,
                 anchor = (dividerTop - viewportTop).takeIf { dividerVisible || alignNoticeBottom },
                 headerBottom = if (removed) headerBottom - viewportTop else 0f,
                 alignBottom = alignNoticeBottom,
+                bottomOffset = 164.dp.takeIf { uncertain },
                 modifier = Modifier.matchParentSize()
             )
         }
@@ -180,6 +183,7 @@ private fun PairingTestNotice(
     anchor: Float?,
     headerBottom: Float,
     alignBottom: Boolean,
+    bottomOffset: Dp?,
     modifier: Modifier
 ) {
     val colors = MaterialTheme.colorScheme
@@ -212,6 +216,7 @@ private fun PairingTestNotice(
             val maxTop = constraints.maxHeight - notice.height
             val minTop = headerBottom.roundToInt().coerceIn(0, maxTop)
             val top = when {
+                bottomOffset != null -> maxTop - bottomOffset.roundToPx()
                 anchor == null -> (minTop + maxTop) / 2
                 alignBottom -> (anchor + 29.dp.toPx() - notice.height).roundToInt()
                 else -> (anchor + 8.dp.toPx() - notice.height / 2f).roundToInt()

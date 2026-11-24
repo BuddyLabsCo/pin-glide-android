@@ -72,6 +72,7 @@ internal val TestMessageOutcome.detailsNoticeLabel: Int?
         result == TestMessageResult.Received -> R.string.pairing_test_received
         result == TestMessageResult.Offline -> R.string.home_test_offline_notice
         result == TestMessageResult.AckTimeout -> R.string.home_test_ack_timeout_notice
+        result == TestMessageResult.Uncertain -> R.string.home_test_uncertain_notice
         else -> null
     }
 

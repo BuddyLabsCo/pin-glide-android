@@ -36,6 +36,7 @@ import com.buddylabs.pinglide.ui.components.AnchoredPairingTestAction
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import com.buddylabs.pinglide.ui.components.TestMessageAction
 import java.time.Instant
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -110,6 +111,40 @@ internal fun testMessageUploadClient(responseBody: (UploadRequest) -> String): O
         Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(207)
             .message("Multi-Status").body(body).build()
     }.build()
+
+internal fun withShortHomeViewport(
+    compose: AndroidComposeTestRule<ActivityScenarioRule<ComponentActivity>, ComponentActivity>,
+    check: () -> Unit
+) {
+    val overrideSize = Regex("Override size: (\\d+x\\d+)").find(runHomeTestShell("wm size"))
+        ?.groupValues?.get(1)
+    val originalFont = runHomeTestShell("settings get system font_scale").trim()
+    val density = compose.activity.resources.displayMetrics.density
+    try {
+        runHomeTestShell("settings put system font_scale 2.0")
+        runHomeTestShell("wm size ${(366 * density).roundToInt()}x${(260 * density).roundToInt()}")
+        compose.waitUntil(5_000L) {
+            compose.runOnUiThread {
+                val configuration = compose.activity.resources.configuration
+                configuration.screenHeightDp <= 260 && configuration.fontScale == 2f
+            }
+        }
+        check()
+    } finally {
+        runHomeTestShell("wm size ${overrideSize ?: "reset"}")
+        if (originalFont == "null") {
+            runHomeTestShell("settings delete system font_scale")
+        } else {
+            runHomeTestShell("settings put system font_scale $originalFont")
+        }
+        compose.waitUntil(5_000L) {
+            compose.runOnUiThread {
+                compose.activity.resources.configuration.fontScale ==
+                    (originalFont.toFloatOrNull() ?: 1f)
+            }
+        }
+    }
+}
 
 internal fun renderReadyHome(
     compose: AndroidComposeTestRule<ActivityScenarioRule<ComponentActivity>, ComponentActivity>,

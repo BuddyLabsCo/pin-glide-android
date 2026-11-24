@@ -144,6 +144,7 @@ class PendingTargetTestMessageTest {
                 feedback.announcementsOrToasts.isEmpty()
             )
             assertEquals("One native live-region update", 1, feedback.status.size)
+            assertEquals(View.ACCESSIBILITY_LIVE_REGION_POLITE, feedback.status.single().liveRegion)
             if (verifyTalkBackSpeech) {
                 assertEquals(send, automation.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY))
                 assertEquals(
@@ -200,7 +201,7 @@ class PendingTargetTestMessageTest {
                 unexpectedEvents.add(event.eventType)
             }
             if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
-                source.liveRegion == View.ACCESSIBILITY_LIVE_REGION_POLITE &&
+                source.liveRegion != View.ACCESSIBILITY_LIVE_REGION_NONE &&
                 text == message
             ) {
                 status.add(source)
@@ -244,33 +245,21 @@ class PendingTargetTestMessageTest {
 
     @Test
     fun delayedSuccessStaysWithTheDividerInAShortSheetAtDoubleFontScale() =
-        assertDelayedFeedbackInShortSheet(TestMessageResult.Received, SUCCESS_MESSAGE)
+        withShortHomeViewport(compose) {
+            assertDelayedFeedbackInShortSheet(TestMessageResult.Received, SUCCESS_MESSAGE)
+        }
 
     @Test
     fun delayedOfflineFeedbackStaysVisibleAndWrapsAboveThePrototypeLowerEdge() =
-        assertDelayedFeedbackInShortSheet(TestMessageResult.Offline, OFFLINE_MESSAGE)
+        withShortHomeViewport(compose) {
+            assertDelayedFeedbackInShortSheet(TestMessageResult.Offline, OFFLINE_MESSAGE)
+        }
 
     private fun assertDelayedFeedbackInShortSheet(result: TestMessageResult, message: String) {
-        val originalSize = runHomeTestShell("wm size")
-        val overrideSize = Regex(
-            "Override size: (\\d+x\\d+)"
-        ).find(originalSize)?.groupValues?.get(1)
-        val originalFont = runHomeTestShell("settings get system font_scale").trim()
-        val density = compose.activity.resources.displayMetrics.density
         val delivery = CompletableDeferred<TestMessageOutcome>()
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         val feedback = TestMessageFeedbackEvents(message)
         try {
-            runHomeTestShell("settings put system font_scale 2.0")
-            runHomeTestShell(
-                "wm size ${(366 * density).roundToInt()}x${(260 * density).roundToInt()}"
-            )
-            compose.waitUntil(5_000) {
-                compose.runOnUiThread {
-                    val configuration = compose.activity.resources.configuration
-                    configuration.screenHeightDp <= 260 && configuration.fontScale == 2f
-                }
-            }
             renderReadyHome(
                 compose,
                 targets(),
@@ -312,7 +301,9 @@ class PendingTargetTestMessageTest {
                 sheetText(message).assertDoesNotExist()
             }
             compose.waitUntil(3_000L) { feedback.status.isNotEmpty() }
-            assertTrue(feedback.status.first().isVisibleToUser)
+            val update = feedback.status.first()
+            assertEquals(View.ACCESSIBILITY_LIVE_REGION_POLITE, update.liveRegion)
+            assertTrue(update.isVisibleToUser)
 
             send.performScrollTo()
             rename.performScrollTo()
@@ -337,18 +328,6 @@ class PendingTargetTestMessageTest {
             }
         } finally {
             automation.setOnAccessibilityEventListener(null)
-            runHomeTestShell("wm size ${overrideSize ?: "reset"}")
-            if (originalFont == "null") {
-                runHomeTestShell("settings delete system font_scale")
-            } else {
-                runHomeTestShell("settings put system font_scale $originalFont")
-            }
-            compose.waitUntil(5_000) {
-                compose.runOnUiThread {
-                    compose.activity.resources.configuration.fontScale ==
-                        (originalFont.toFloatOrNull() ?: 1f)
-                }
-            }
         }
     }
 

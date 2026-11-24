@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -27,6 +28,10 @@ class TestMessageActionTest {
         assertNoticeLifetime(TestMessageOutcome("Laptop", TestMessageResult.AckTimeout))
 
     @Test
+    fun uncertainFeedbackExpiresAtTheRecommendedTimeoutAfterDelivery() =
+        assertNoticeLifetime(TestMessageOutcome("Laptop", TestMessageResult.Uncertain))
+
+    @Test
     fun confirmedRemovalExpiresAtTheRecommendedTimeoutAfterDelivery() = assertNoticeLifetime(
         TestMessageOutcome("Laptop", TestMessageResult.InvalidPairing, pairingRemoved = true)
     )
@@ -41,6 +46,7 @@ class TestMessageActionTest {
 
         delivery.complete(outcome)
         runCurrent()
+        assertFalse(action.state.value.announceReceived)
         advanceTimeBy(4_999L)
         runCurrent()
         assertEquals(outcome, action.state.value.outcome)

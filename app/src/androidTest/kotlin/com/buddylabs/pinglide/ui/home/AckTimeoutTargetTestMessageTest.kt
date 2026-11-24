@@ -1,5 +1,6 @@
 package com.buddylabs.pinglide.ui.home
 
+import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -90,7 +91,9 @@ class AckTimeoutTargetTestMessageTest {
                 notices.fetchSemanticsNodes().isEmpty()
             }
             automation.waitForIdle(100L, 2_000L)
-            assertTrue(feedback.status.single().isVisibleToUser)
+            val update = feedback.status.single()
+            assertEquals(View.ACCESSIBILITY_LIVE_REGION_POLITE, update.liveRegion)
+            assertTrue(update.isVisibleToUser)
             assertTrue(feedback.announcementsOrToasts.isEmpty())
             assertTrue(
                 "Unexpected success events: ${feedback.unexpectedEvents}",

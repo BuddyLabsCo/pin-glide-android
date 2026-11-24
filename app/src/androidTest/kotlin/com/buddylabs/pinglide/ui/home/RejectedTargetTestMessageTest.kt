@@ -2,6 +2,7 @@ package com.buddylabs.pinglide.ui.home
 
 import android.content.res.Configuration
 import android.os.SystemClock
+import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -184,7 +185,9 @@ class RejectedTargetTestMessageTest {
             )
             assertEquals(renameBounds, rename.fetchSemanticsNode().boundsInWindow)
             compose.waitUntil(3_000L) { feedback.status.isNotEmpty() }
-            assertTrue(feedback.status.first().isVisibleToUser)
+            val update = feedback.status.first()
+            assertEquals(View.ACCESSIBILITY_LIVE_REGION_POLITE, update.liveRegion)
+            assertTrue(update.isVisibleToUser)
             compose.waitUntil(RECOMMENDED_TIMEOUT) {
                 SystemClock.uptimeMillis() - visibleAt >= 6_500L
             }
