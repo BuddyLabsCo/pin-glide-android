@@ -14,8 +14,10 @@ import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
 
 @Composable
-internal fun BrandIcon(modifier: Modifier) {
-    val tileShape = RoundedCornerShape(11.dp)
+internal fun BrandIcon(
+    modifier: Modifier,
+    tileShape: RoundedCornerShape = RoundedCornerShape(11.dp)
+) {
     Image(
         painterResource(R.mipmap.ic_launcher),
         contentDescription = null,

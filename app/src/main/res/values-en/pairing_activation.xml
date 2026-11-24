@@ -7,6 +7,7 @@
     <string name="pairing_progress_identity">Generating device identity</string>
     <string name="pairing_progress_key">Exchanging encryption keys</string>
     <string name="pairing_progress_confirm">Confirming pairing information</string>
+    <string name="pairing_progress_instruction">Keep the Pin Glide window open on the Receiver. The pairing complete screen will open automatically when finished.</string>
     <string name="pairing_home">Go to Home</string>
     <string name="pairing_return">Return</string>
     <string name="pairing_test_send">Send test message</string>
