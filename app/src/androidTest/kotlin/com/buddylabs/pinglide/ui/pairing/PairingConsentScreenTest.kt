@@ -206,15 +206,20 @@ class PairingConsentScreenTest {
 
     private fun captureEvidence() {
         if (InstrumentationRegistry.getArguments().getString("consentEvidence") != "true") return
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val directory = checkNotNull(instrumentation.targetContext.getExternalFilesDir(null))
         repeat(20) { frame ->
             compose.mainClock.advanceTimeBy(90)
             compose.waitForIdle()
-            val screenshot = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
-            File(directory, "consent-%02d.png".format(frame)).outputStream().use {
-                check(screenshot.compress(Bitmap.CompressFormat.PNG, 100, it))
-            }
+            captureConsentEvidence("consent-%02d.png".format(frame))
         }
+    }
+}
+
+internal fun captureConsentEvidence(filename: String) {
+    if (InstrumentationRegistry.getArguments().getString("consentEvidence") != "true") return
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    val directory = checkNotNull(instrumentation.targetContext.getExternalFilesDir(null))
+    val screenshot = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+    File(directory, filename).outputStream().use {
+        check(screenshot.compress(Bitmap.CompressFormat.PNG, 100, it))
     }
 }

@@ -2,6 +2,7 @@ package com.buddylabs.pinglide.ui.pairing
 
 import android.Manifest
 import android.content.ComponentName
+import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -10,6 +11,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.click
@@ -81,7 +83,7 @@ class OnboardingConsentNavigationTest {
                 store,
                 pairings,
                 sessions,
-                { PairingQr("session", "receiver", ByteArray(0), ByteArray(0)) },
+                { sessionId -> PairingQr(sessionId, "receiver", ByteArray(0), ByteArray(0)) },
                 renewal,
                 entryScope,
                 activation = PairingActivation(
@@ -115,6 +117,63 @@ class OnboardingConsentNavigationTest {
 
     @Test
     fun backReturnsToScannerAndCancelReturnsToFirstDeviceEntry() {
+        render(FirstDeviceSetup, AppLanguage.English, 1.75f)
+        compose.onNodeWithText("Connect your first device").assertIsDisplayed()
+        compose.onNodeWithText("Scan QR code").performScrollTo().performClick()
+        compose.onNodeWithTag("pairing-scanner").assertIsDisplayed()
+        scan()
+        editAliasAcrossKeyboardResize()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithTag("pairing-scanner").assertIsDisplayed()
+        scan()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Connect your first device").assertIsDisplayed()
+        compose.onNodeWithText("Confirm Pairing").assertDoesNotExist()
+        compose.onNodeWithTag("pairing-scanner").assertDoesNotExist()
+    }
+
+    @Test
+    fun standaloneConsentShowsApprovedCopyAndReturnsToHome() {
+        render(HomeSetup, AppLanguage.SimplifiedChinese, 1f)
+        val add = compose.onNodeWithText("添加第一台设备")
+        val title = compose.onNodeWithText("确认配对")
+        val confirm = compose.onNodeWithText("确认添加设备")
+        val cancel = compose.onNodeWithText("取消")
+        add.assertIsDisplayed().performClick()
+        compose.onNodeWithTag("pairing-scanner").assertIsDisplayed()
+        compose.runOnIdle { pairing.scan("fixture", "我的设备") }
+        compose.waitUntil(5_000) { pairing.state.value.page == PairingEntryPage.Consent }
+        title.assertIsDisplayed()
+        compose.onNodeWithText("添加新设备").assertIsDisplayed()
+        compose.onNodeWithText(
+            "确认后，目标设备会开始接收你选中的短信，双方会建立一条独立的加密配对。"
+        ).assertIsDisplayed()
+        compose.onNodeWithText("配对会话剩余时间").assertIsDisplayed()
+        confirm.assertIsDisplayed().assertIsEnabled()
+        cancel.assertIsDisplayed()
+        compose.onNodeWithText("确认并建立密钥").assertDoesNotExist()
+        if (InstrumentationRegistry.getArguments().getString("consentEvidence") == "true") {
+            compose.waitForIdle()
+            SystemClock.sleep(500)
+            captureConsentEvidence("home-consent.png")
+        }
+        compose.onNodeWithContentDescription("返回").performClick()
+        add.assertIsDisplayed()
+        title.assertDoesNotExist()
+        compose.onNodeWithTag("pairing-scanner").assertDoesNotExist()
+
+        add.performClick()
+        compose.onNodeWithTag("pairing-scanner").assertIsDisplayed()
+        compose.runOnIdle { pairing.scan("second-fixture", "我的设备") }
+        compose.waitUntil(5_000) { pairing.state.value.page == PairingEntryPage.Consent }
+        confirm.assertIsDisplayed()
+        cancel.performClick()
+        add.assertIsDisplayed()
+        title.assertDoesNotExist()
+        compose.onNodeWithTag("pairing-scanner").assertDoesNotExist()
+    }
+
+    private fun render(progress: SetupProgress, language: AppLanguage, fontScale: Float) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.uiAutomation.grantRuntimePermission(
             instrumentation.targetContext.packageName,
@@ -125,12 +184,12 @@ class OnboardingConsentNavigationTest {
         compose.setContent {
             CompositionLocalProvider(
                 LocalActivityResultRegistryOwner provides activity,
-                LocalDensity provides Density(LocalDensity.current.density, 1.75f)
+                LocalDensity provides Density(LocalDensity.current.density, fontScale)
             ) {
-                LocalizedContent(AppLanguage.English) {
+                LocalizedContent(language) {
                     PinGlideTheme {
                         AcceptedNavigation(
-                            progress = FirstDeviceSetup,
+                            progress = progress,
                             smsGranted = true,
                             onCheckSms = { true },
                             loginState = LoginState.FirstDevice,
@@ -146,18 +205,6 @@ class OnboardingConsentNavigationTest {
                 }
             }
         }
-        compose.onNodeWithText("Connect your first device").assertIsDisplayed()
-        compose.onNodeWithText("Scan QR code").performScrollTo().performClick()
-        compose.onNodeWithTag("pairing-scanner").assertIsDisplayed()
-        scan()
-        editAliasAcrossKeyboardResize()
-        compose.onNodeWithContentDescription("Back").performClick()
-        compose.onNodeWithTag("pairing-scanner").assertIsDisplayed()
-        scan()
-        compose.onNodeWithText("Cancel").performClick()
-        compose.onNodeWithText("Connect your first device").assertIsDisplayed()
-        compose.onNodeWithText("Confirm Pairing").assertDoesNotExist()
-        compose.onNodeWithTag("pairing-scanner").assertDoesNotExist()
     }
 
     @Suppress("DEPRECATION")
@@ -217,4 +264,9 @@ private object FirstDeviceSetup : SetupProgress {
     override fun completeSmsPrerequisite() = error("Unexpected permission request")
     override fun acknowledgeBattery() = error("Unexpected battery setup")
     override fun complete() = error("Cancel must not complete onboarding")
+}
+
+private object HomeSetup : SetupProgress by FirstDeviceSetup {
+    override val state = SetupState(completed = true)
+    override fun complete() = Unit
 }
