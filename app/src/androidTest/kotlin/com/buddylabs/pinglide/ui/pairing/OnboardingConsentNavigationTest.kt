@@ -1,13 +1,19 @@
 package com.buddylabs.pinglide.ui.pairing
 
 import android.Manifest
+import android.content.ComponentName
 import android.view.KeyEvent
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -16,11 +22,13 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.Density
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.viewModelScope
 import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.app.LocalizedContent
+import com.buddylabs.pinglide.app.MainActivity
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.LoginState
 import com.buddylabs.pinglide.domain.identity.SenderRestoration
@@ -44,6 +52,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.emptyFlow
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -111,10 +120,13 @@ class OnboardingConsentNavigationTest {
             instrumentation.targetContext.packageName,
             Manifest.permission.CAMERA
         )
-        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        configureWindow()
         val activity = compose.activity
         compose.setContent {
-            CompositionLocalProvider(LocalActivityResultRegistryOwner provides activity) {
+            CompositionLocalProvider(
+                LocalActivityResultRegistryOwner provides activity,
+                LocalDensity provides Density(LocalDensity.current.density, 1.75f)
+            ) {
                 LocalizedContent(AppLanguage.English) {
                     PinGlideTheme {
                         AcceptedNavigation(
@@ -138,19 +150,7 @@ class OnboardingConsentNavigationTest {
         compose.onNodeWithText("Scan QR code").performScrollTo().performClick()
         compose.onNodeWithTag("pairing-scanner").assertIsDisplayed()
         scan()
-        val alias = compose.onNodeWithContentDescription("Target name")
-        alias.performScrollTo().performTouchInput { click() }
-        compose.waitUntil(5_000) {
-            ViewCompat.getRootWindowInsets(activity.window.decorView)
-                ?.isVisible(WindowInsetsCompat.Type.ime()) == true
-        }
-        alias.assertIsDisplayed().performTextReplacement("Renamed device")
-        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-        compose.waitUntil(5_000) {
-            ViewCompat.getRootWindowInsets(activity.window.decorView)
-                ?.isVisible(WindowInsetsCompat.Type.ime()) == false
-        }
-        alias.assertIsDisplayed()
+        editAliasAcrossKeyboardResize()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithTag("pairing-scanner").assertIsDisplayed()
         scan()
@@ -158,6 +158,49 @@ class OnboardingConsentNavigationTest {
         compose.onNodeWithText("Connect your first device").assertIsDisplayed()
         compose.onNodeWithText("Confirm Pairing").assertDoesNotExist()
         compose.onNodeWithTag("pairing-scanner").assertDoesNotExist()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun configureWindow() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val mode = context.packageManager.getActivityInfo(
+            ComponentName(context, MainActivity::class.java),
+            0
+        ).softInputMode
+        assertEquals(
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
+            mode and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST
+        )
+        compose.activityRule.scenario.onActivity {
+            it.enableEdgeToEdge()
+            it.window.setSoftInputMode(mode)
+        }
+    }
+
+    private fun editAliasAcrossKeyboardResize() {
+        val activity = compose.activity
+        val title = compose.onNodeWithText("Confirm Pairing")
+        val confirm = compose.onNodeWithText("Confirm and establish key")
+        val anchored = confirm.assertIsDisplayed().getUnclippedBoundsInRoot()
+        val alias = compose.onNodeWithContentDescription("Target name")
+        alias.performScrollTo().performTouchInput { click() }
+        compose.waitUntil(5_000) {
+            ViewCompat.getRootWindowInsets(activity.window.decorView)
+                ?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        }
+        alias.performScrollTo().assertIsDisplayed().performTextReplacement("Renamed device")
+        confirm.performScrollTo().assertIsDisplayed()
+        title.assertIsNotDisplayed()
+        alias.performScrollTo().assertIsDisplayed().assertTextContains("Renamed device")
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(5_000) {
+            ViewCompat.getRootWindowInsets(activity.window.decorView)
+                ?.isVisible(WindowInsetsCompat.Type.ime()) == false
+        }
+        title.assertIsDisplayed()
+        alias.performScrollTo().assertIsDisplayed().performTextReplacement("Final device")
+        alias.assertTextContains("Final device")
+        assertEquals(anchored, confirm.assertIsDisplayed().getUnclippedBoundsInRoot())
     }
 
     private fun scan() {
