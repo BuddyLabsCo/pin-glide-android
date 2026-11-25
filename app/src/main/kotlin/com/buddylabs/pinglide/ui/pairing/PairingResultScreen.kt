@@ -43,7 +43,6 @@ import com.buddylabs.pinglide.domain.pairing.PairingHost
 import com.buddylabs.pinglide.domain.pairing.PairingStage
 import com.buddylabs.pinglide.ui.components.BrandIcon
 import com.buddylabs.pinglide.ui.components.LoadingEmblem
-import com.buddylabs.pinglide.ui.components.PairingTestAction
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
@@ -52,22 +51,24 @@ internal fun PairingResultScreen(
     model: PairingEntryViewModel,
     onLeave: () -> Unit
 ) {
-    val success = state.page == PairingEntryPage.Success
+    BackHandler(onBack = model::close)
+    if (state.page == PairingEntryPage.Success) {
+        PairingSuccessScreen(model.testMessage, model::close)
+        return
+    }
     val unconfirmed = state.problem == PairingEntryProblem.Unconfirmed
     val title = stringResource(
         when {
-            success -> R.string.pairing_success
             unconfirmed -> R.string.pairing_unconfirmed_title
             state.problem != null -> R.string.pairing_failed_title
             else -> R.string.pairing_progress_title
         }
     )
-    BackHandler(onBack = model::close)
-    if (!success && state.problem == PairingEntryProblem.Unavailable) {
+    if (state.problem == PairingEntryProblem.Unavailable) {
         PairingFailureScreen(state, model::freshScan, onLeave)
         return
     }
-    if (!success && state.problem == null) {
+    if (state.problem == null) {
         PairingProgressScreen(state.stage)
         return
     }
@@ -86,57 +87,36 @@ internal fun PairingResultScreen(
                     heading()
                 }
             )
-            when {
-                success -> {
-                    PairingTestAction(model.testMessage)
-                    TextButton(
-                        onClick = model::close,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    ) {
-                        Text(stringResource(R.string.pairing_home))
-                    }
-                }
-
-                state.problem != null -> {
-                    Text(
-                        stringResource(pairingProblemText(state.problem)),
-                        modifier = Modifier.semantics {
-                            liveRegion =
-                                LiveRegionMode.Polite
+            Text(
+                stringResource(pairingProblemText(state.problem)),
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            )
+            Button(
+                onClick = {
+                    if (unconfirmed) model.foreground() else model.freshScan()
+                },
+                enabled = !state.pending,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+            ) {
+                Text(
+                    stringResource(
+                        if (unconfirmed) R.string.pairing_recheck else R.string.pairing_rescan
+                    )
+                )
+            }
+            TextButton(
+                onClick = onLeave,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            ) {
+                Text(
+                    stringResource(
+                        if (state.host == PairingHost.Onboarding) {
+                            R.string.pairing_later
+                        } else {
+                            R.string.pairing_return
                         }
                     )
-                    Button(
-                        onClick = {
-                            if (unconfirmed) model.foreground() else model.freshScan()
-                        },
-                        enabled = !state.pending,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                    ) {
-                        Text(
-                            stringResource(
-                                if (unconfirmed) {
-                                    R.string.pairing_recheck
-                                } else {
-                                    R.string.pairing_rescan
-                                }
-                            )
-                        )
-                    }
-                    TextButton(
-                        onClick = onLeave,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    ) {
-                        Text(
-                            stringResource(
-                                if (state.host == PairingHost.Onboarding) {
-                                    R.string.pairing_later
-                                } else {
-                                    R.string.pairing_return
-                                }
-                            )
-                        )
-                    }
-                }
+                )
             }
         }
     }

@@ -4,7 +4,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
@@ -17,6 +16,8 @@ import androidx.compose.ui.test.performClick
 import androidx.lifecycle.viewModelScope
 import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.app.LocalizedContent
+import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
+import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.pairing.HomeState
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
@@ -72,6 +73,7 @@ class PairingIdentityProgressTest {
     private val connectionClosed = AtomicBoolean(false)
     private val authorizedSessions = ConcurrentLinkedQueue<String>()
     private val cancelledSessions = ConcurrentLinkedQueue<String>()
+    private val testedPairings = ConcurrentLinkedQueue<String>()
     private var expireDuringActivation = false
     private var successfulHandshakeEnabled = false
     private var connectionFails = false
@@ -83,6 +85,7 @@ class PairingIdentityProgressTest {
     private val finishReconciliation = CompletableDeferred<Unit>()
     private val reconciliationCommitted = CompletableDeferred<PairingSnapshot>()
     private lateinit var renewal: CredentialRenewal
+    private lateinit var pairings: OwnPairings
     private val session = PairingSession(
         "session", "receiver", "sender", "pairing", "new_receiver", "awaiting_confirmation",
         Instant.now().plusSeconds(270), false, false
@@ -172,11 +175,19 @@ class PairingIdentityProgressTest {
     private val model = PairingEntryViewModel(
         { entryScope ->
             renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, entryScope)
-            val pairings = OwnPairings(pairingStore, {
+            pairings = OwnPairings(pairingStore, {
                 if (finishCompletion.isCompleted) {
                     inventoryRequested.complete(Unit)
                     finishInventory.await()
-                    listOf(RemotePairing("pairing", "receiver", "My device", Presence.Online, ""))
+                    listOf(
+                        RemotePairing(
+                            "pairing",
+                            "receiver",
+                            "My device",
+                            Presence.Online,
+                            Instant.now().toString()
+                        )
+                    )
                 } else {
                     emptyList()
                 }
@@ -212,7 +223,10 @@ class PairingIdentityProgressTest {
                 activation = activation
             )
         },
-        { error("Unexpected test delivery") }
+        { pairingId ->
+            testedPairings.add(pairingId)
+            TestMessageOutcome("My device", TestMessageResult.Received)
+        }
     )
 
     @After
@@ -248,22 +262,37 @@ class PairingIdentityProgressTest {
 
     @Test
     fun confirmationRemainsVisibleUntilActivationIsReconciled() {
+        assertSuccessNavigation(PairingHost.Onboarding)
+    }
+
+    @Test
+    fun completedHomePairingReturnsToHome() {
+        assertSuccessNavigation(PairingHost.Home)
+    }
+
+    private fun assertSuccessNavigation(host: PairingHost) {
         successfulHandshakeEnabled = true
-        beginGeneration(AppLanguage.SimplifiedChinese)
+        compose.withPairingSuccessNavigation(model, pairings, store, renewal, host) {
+            verifyActivation()
+        }
+    }
+
+    private fun verifyActivation() {
+        assertTrue(generationStarted.await(5, TimeUnit.SECONDS))
         finishGeneration.countDown()
         compose.waitUntil(5_000) { completionRequested.isCompleted }
-        assertConfirmationVisible()
+        compose.assertConfirmationVisible()
 
         finishCompletion.complete(Unit)
         compose.waitUntil(5_000) { inventoryRequested.isCompleted }
-        assertConfirmationVisible()
+        compose.assertConfirmationVisible()
 
         finishInventory.complete(Unit)
         compose.waitUntil(5_000) { reconciliationRequested.isCompleted }
         val pending = runBlocking { reconciliationRequested.await() }
         assertTrue(pending.items.isEmpty())
         assertEquals(session.pairingId, pending.provisional.single().pairingId)
-        assertConfirmationVisible()
+        compose.assertConfirmationVisible()
 
         finishReconciliation.complete(Unit)
         compose.waitUntil(5_000) { reconciliationCommitted.isCompleted }
@@ -278,6 +307,7 @@ class PairingIdentityProgressTest {
         assertEquals(session.pairingId, model.state.value.activatedPairingId)
         compose.onNodeWithText("配对完成").assertIsDisplayed()
         compose.onNodeWithText("正在确认配对信息").assertDoesNotExist()
+        compose.assertPairingSuccess(checkNotNull(session.pairingId), testedPairings)
     }
 
     @Test
@@ -377,7 +407,7 @@ class PairingIdentityProgressTest {
         finishGeneration.countDown()
         compose.waitUntil(5_000) { model.state.value.problem == PairingEntryProblem.Closed }
         assertEquals(PairingEntryPage.Progress, model.state.value.page)
-        assertExpiredResult()
+        compose.assertExpiredResult()
         compose.waitUntil(5_000) { cancelledSessions.isNotEmpty() }
         assertTrue(initSent.get())
         assertTrue(connectionClosed.get())
@@ -391,7 +421,7 @@ class PairingIdentityProgressTest {
         compose.waitUntil(5_000) { model.state.value.page == PairingEntryPage.Scanner }
         compose.runOnIdle { model.scan(session.sessionId, "My device") }
         compose.waitUntil(5_000) { model.state.value.problem == PairingEntryProblem.Closed }
-        assertExpiredResult()
+        compose.assertExpiredResult()
         assertEquals(listOf(session.sessionId, session.sessionId), authorizedSessions.toList())
         assertEquals(listOf(session.sessionId), cancelledSessions.toList())
 
@@ -406,28 +436,6 @@ class PairingIdentityProgressTest {
             listOf(session.sessionId, session.sessionId, "fresh-session"),
             authorizedSessions.toList()
         )
-    }
-
-    private fun assertExpiredResult() {
-        compose.onNode(
-            hasText("QR code expired") and
-                SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading) and
-                SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
-        ).assertIsDisplayed()
-        compose.onNodeWithText("Pairing incomplete").assertDoesNotExist()
-        compose.onNodeWithText("Exchanging encryption keys").assertDoesNotExist()
-        compose.onNodeWithText("Pair later").assertIsDisplayed()
-    }
-
-    private fun assertConfirmationVisible() {
-        compose.onNodeWithText("正在确认配对信息").assertIsDisplayed()
-        compose.onNodeWithText("正在打开配对通道").assertDoesNotExist()
-        compose.onNodeWithText("正在生成设备身份").assertDoesNotExist()
-        compose.onNodeWithText("正在交换加密密钥").assertDoesNotExist()
-        compose.onNodeWithText("配对完成").assertDoesNotExist()
-        compose.onNodeWithText("保持接收端上的鹊信窗口打开。完成后会自动进入配对完成页面。")
-            .assertIsDisplayed()
-        compose.assertAccessiblePairingProgress()
     }
 
     private fun releaseGenerationAndAssertClosedWithoutSending() {

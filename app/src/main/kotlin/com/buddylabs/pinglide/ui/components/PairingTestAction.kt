@@ -6,6 +6,9 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -13,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,7 +37,9 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.AccessibilityManager
+import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.hideFromAccessibility
@@ -55,24 +61,70 @@ import kotlin.math.roundToInt
 private const val TEST_NOTICE_MILLIS = 4_000L
 
 @Composable
-internal fun PairingTestAction(action: TestMessageAction) {
+internal fun PairingTestAction(
+    action: TestMessageAction,
+    content: @Composable (
+        button: @Composable () -> Unit,
+        notice: @Composable (bottomOffset: Dp?) -> Unit
+    ) -> Unit
+) {
     val state by action.state.collectAsState()
     val context = LocalContext.current
+    val accessibility = LocalAccessibilityManager.current
     LaunchedEffect(state.announceReceived) {
         if (action.consumeSuccess()) {
             Toast.makeText(context, R.string.pairing_test_received, Toast.LENGTH_SHORT).show()
         }
     }
-    Button(
-        onClick = { action.send(null) },
-        enabled = !state.pending,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics {
-            liveRegion = LiveRegionMode.Polite
+    content(
+        {
+            PairingTestButton(state.pending) {
+                action.send(
+                    accessibility?.calculateRecommendedTimeoutMillis(
+                        TEST_NOTICE_MILLIS,
+                        containsText = true
+                    ) ?: TEST_NOTICE_MILLIS,
+                    announceSuccess = true
+                )
+            }
+        },
+        { bottomOffset ->
+            state.outcome?.let { delivery ->
+                val message = testMessageFeedbackText(delivery)
+                if (bottomOffset == null) {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        PairingTestNoticePill(message, accessible = true, modifier = Modifier)
+                    }
+                } else {
+                    PairingTestNotice(
+                        message = message,
+                        anchor = null,
+                        headerBottom = 0f,
+                        alignBottom = false,
+                        bottomOffset = bottomOffset,
+                        modifier = Modifier.fillMaxSize(),
+                        accessible = true
+                    )
+                }
+            }
         }
+    )
+}
+
+@Composable
+private fun PairingTestButton(pending: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        enabled = !pending,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics {
+            liveRegion = LiveRegionMode.Polite
+        },
+        contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp)
     ) {
-        Text(testMessageButtonLabel(state.pending))
+        Icon(painterResource(R.drawable.ic_send), null, Modifier.size(22.dp))
+        Spacer(Modifier.size(8.dp))
+        Text(testMessageButtonLabel(pending), fontWeight = FontWeight.Bold)
     }
-    PairingTestFeedback(state.outcome)
 }
 
 @Composable
@@ -82,18 +134,23 @@ internal fun testMessageButtonLabel(pending: Boolean): String =
 @Composable
 internal fun PairingTestFeedback(outcome: TestMessageOutcome?, modifier: Modifier = Modifier) {
     outcome?.let { delivery ->
-        val label = testMessageLabels.getValue(delivery.result)
         Text(
-            if (delivery.result == TestMessageResult.Received || delivery.targetAlias.isBlank()) {
-                stringResource(label)
-            } else {
-                stringResource(
-                    R.string.pairing_test_target_result,
-                    delivery.targetAlias,
-                    stringResource(label)
-                )
-            },
+            testMessageFeedbackText(delivery),
             modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite }
+        )
+    }
+}
+
+@Composable
+private fun testMessageFeedbackText(delivery: TestMessageOutcome): String {
+    val label = testMessageLabels.getValue(delivery.result)
+    return if (delivery.result == TestMessageResult.Received || delivery.targetAlias.isBlank()) {
+        stringResource(label)
+    } else {
+        stringResource(
+            R.string.pairing_test_target_result,
+            delivery.targetAlias,
+            stringResource(label)
         )
     }
 }
@@ -184,32 +241,12 @@ private fun PairingTestNotice(
     headerBottom: Float,
     alignBottom: Boolean,
     bottomOffset: Dp?,
-    modifier: Modifier
+    modifier: Modifier,
+    accessible: Boolean = false
 ) {
-    val colors = MaterialTheme.colorScheme
-    val shadowColor = if (isSystemInDarkTheme()) Color(0x61000000) else Color(0x260A1210)
     Layout(
         modifier = modifier,
-        content = {
-            Text(
-                message,
-                Modifier.padding(horizontal = 24.dp)
-                    .widthIn(max = 280.dp)
-                    .dropShadow(
-                        CircleShape,
-                        Shadow(24.dp, shadowColor, offset = DpOffset(0.dp, 8.dp))
-                    )
-                    .background(colors.onSurface.copy(alpha = 0.88f), CircleShape)
-                    .semantics { hideFromAccessibility() }
-                    .padding(horizontal = 18.dp, vertical = 12.dp),
-                color = colors.surface,
-                style = TextStyle(
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight(650),
-                    textAlign = TextAlign.Center
-                )
-            )
-        }
+        content = { PairingTestNoticePill(message, accessible) }
     ) { measurables, constraints ->
         val notice = measurables.single().measure(constraints.copy(minWidth = 0, minHeight = 0))
         layout(constraints.maxWidth, constraints.maxHeight) {
@@ -225,6 +262,38 @@ private fun PairingTestNotice(
             notice.placeRelative((constraints.maxWidth - notice.width) / 2, visibleTop)
         }
     }
+}
+
+@Composable
+private fun PairingTestNoticePill(
+    message: String,
+    accessible: Boolean,
+    modifier: Modifier = Modifier.padding(horizontal = 24.dp).widthIn(max = 280.dp)
+) {
+    val colors = MaterialTheme.colorScheme
+    val shadowColor = if (isSystemInDarkTheme()) Color(0x61000000) else Color(0x260A1210)
+    Text(
+        message,
+        modifier.dropShadow(
+            CircleShape,
+            Shadow(24.dp, shadowColor, offset = DpOffset(0.dp, 8.dp))
+        )
+            .background(colors.onSurface.copy(alpha = 0.88f), CircleShape)
+            .semantics {
+                if (accessible) {
+                    liveRegion = LiveRegionMode.Polite
+                } else {
+                    hideFromAccessibility()
+                }
+            }
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        color = colors.surface,
+        style = TextStyle(
+            fontSize = 12.sp,
+            fontWeight = FontWeight(650),
+            textAlign = TextAlign.Center
+        )
+    )
 }
 
 private val testMessageLabels = mapOf(
