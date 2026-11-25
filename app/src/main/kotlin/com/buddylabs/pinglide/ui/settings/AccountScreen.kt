@@ -5,18 +5,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,6 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -39,6 +38,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
@@ -62,7 +62,7 @@ internal fun AccountScreen(account: AccountSession, onLogout: () -> Unit) {
 }
 
 @Composable
-internal fun AccountScreenContent(state: AccountState, onLogout: () -> Unit) {
+private fun AccountScreenContent(state: AccountState, onLogout: () -> Unit) {
     var confirming by remember { mutableStateOf(false) }
     val logoutFocus = remember { FocusRequester() }
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -107,11 +107,7 @@ internal fun AccountScreenContent(state: AccountState, onLogout: () -> Unit) {
 
 @Composable
 private fun AccountProfileCard(state: AccountState) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer
-    ) {
+    SettingsCard(Modifier.testTag("settings-account-profile")) {
         Row(
             Modifier.padding(15.dp),
             horizontalArrangement = Arrangement.spacedBy(13.dp),
@@ -122,6 +118,7 @@ private fun AccountProfileCard(state: AccountState) {
                 Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite },
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
+                val hasNickname = !state.loading && !state.failed && state.nickname != null
                 Text(
                     when {
                         state.loading -> stringResource(R.string.account_loading)
@@ -131,9 +128,11 @@ private fun AccountProfileCard(state: AccountState) {
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     lineHeight = 18.sp,
-                    letterSpacing = 0.sp
+                    letterSpacing = 0.sp,
+                    maxLines = if (hasNickname) 1 else Int.MAX_VALUE,
+                    overflow = TextOverflow.Ellipsis
                 )
-                if (!state.loading && !state.failed && state.nickname != null) {
+                if (hasNickname) {
                     Text(
                         stringResource(R.string.settings_account),
                         fontSize = 11.sp,
@@ -148,11 +147,9 @@ private fun AccountProfileCard(state: AccountState) {
 
 @Composable
 private fun AccountLogoutAction(modifier: Modifier, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = MaterialTheme.colorScheme.error
+    SettingsCard(
+        modifier = Modifier.testTag("settings-account-logout"),
+        contentColor = colorResource(R.color.error_emblem)
     ) {
         SettingsListRow(
             title = stringResource(R.string.account_logout),

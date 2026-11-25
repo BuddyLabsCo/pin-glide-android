@@ -156,14 +156,25 @@ internal fun SettingsGroup(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 2.dp).semantics { heading() }
         )
-        Surface(
-            modifier = Modifier.fillMaxWidth().testTag("settings-group:$title"),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer
-        ) {
+        SettingsCard(Modifier.testTag("settings-group:$title")) {
             Column(modifier, content = content)
         }
     }
+}
+
+@Composable
+internal fun SettingsCard(
+    modifier: Modifier = Modifier,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = contentColor,
+        content = content
+    )
 }
 
 @Composable

@@ -14,8 +14,8 @@ copy and error feedback.
 
 The left side is cropped from the
 [approved reference](../ui-prototype/shots/05-03-account.png).
-The right side is Android running the production page layout and account
-content with a simulated nickname in the instrumentation activity. Both use
+The right side is Android running the production Settings dialog, navigating
+from Settings to Account, with a controlled profile service response. Both use
 Simplified Chinese, 100% font scale and a comparable 366 × 820 dp viewport.
 Native type rendering and system bars are preserved. No prototype changes or
 new motion are introduced.
@@ -33,3 +33,22 @@ The comparison uses simulated presentation data, not a live QQ account. No
 live profile, credential handling or SMS-forwarding scenarios were exercised.
 The full project-wide test suite was not run; verification is scoped to
 Settings UI.
+
+Review follow-up: the Settings group, profile card and Logout row now share
+their rounded surface. Logout uses the approved `#a33b34` light and `#ffb4ab`
+dark colors. Long nicknames remain single-line and ellipsized, while their
+complete text remains available in accessibility semantics.
+
+The four Account tests now open the actual Settings destination with a
+controlled `AccountService` response. They verify the loading and nickname
+states, the failure fallback and actual system Toast accessibility event,
+confirmation and cancellation, card geometry and typography, badge and
+Logout artwork and colors, long nickname ellipsis, and Back and Logout
+reachability in a compact English viewport at 200% font scale. The revised
+Account tests passed in dark mode; the error-event assertion also passed
+on its focused light-mode retry after synchronizing the Compose frame.
+The final light-mode Settings run passed all nine tests, including Account,
+Language and Settings root. Both screenshots were recaptured through the
+production dialog. Debug and
+release Kotlin and instrumentation compilation, both debug APK assemblies,
+and `qualityCheck` passed.
