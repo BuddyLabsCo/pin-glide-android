@@ -32,8 +32,9 @@ require live sign-in or a Receiver, and the underlying workflow is unchanged.
 On compact windows the failure screen scrolls as a whole, rather than
 allowing the fixed actions to consume the viewport. At normal height the
 centered warning illustration and bottom actions retain their approved layout.
-`PairingFailureScreenTest` verifies that the heading, assurance and both
-actions remain reachable in a 120 dp usable viewport at 200% font scale.
+`PairingFailureScreenTest` verifies that the heading and assurance remain
+reachable in a 120 dp usable viewport at 200% font scale for both hosts,
+and that actual touch input after scrolling invokes each action's callback.
 
 Initial implementation verification: the regression initially failed on the
 missing approved status label, then passed in both themes. The full instrumentation report contains
@@ -48,3 +49,10 @@ action tests. Both retry tests also passed with screenshot capture in light
 and dark themes. All 46 JVM tests, `qualityCheck`, debug and release Kotlin
 compilation, and debug and instrumentation APK assembly passed. The full
 instrumentation suite was not repeated for the review fixes.
+
+Second review verification: both compact host tests successfully tap the
+scrolled retry and return actions and observe the corresponding callbacks.
+The English Home workflow test confirms through the correct localized action
+and reaches the failure screen. All 26 Pairing instrumentation tests and
+`qualityCheck` passed; debug/release Kotlin compilation and the 46-test JVM
+suite were up to date. No runtime or screenshot changes were needed.

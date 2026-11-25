@@ -11,17 +11,21 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.domain.pairing.PairingEntryPage
 import com.buddylabs.pinglide.domain.pairing.PairingEntryProblem
 import com.buddylabs.pinglide.domain.pairing.PairingEntryState
+import com.buddylabs.pinglide.domain.pairing.PairingHost
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -30,7 +34,26 @@ class PairingFailureScreenTest {
     val compose = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun compactWindowWithLargeFontsCanScrollToAssuranceAndBothActions() {
+    fun compactHomeWindowWithLargeFontsCanReachAndOperateBothActions() {
+        assertCompactActions(
+            PairingHost.Home,
+            "连接中断或确认超时，未能添加这台设备。已有设备的配对不受影响，请重新扫描后再试。",
+            "返回首页"
+        )
+    }
+
+    @Test
+    fun compactOnboardingWindowWithLargeFontsCanReachAndOperateBothActions() {
+        assertCompactActions(
+            PairingHost.Onboarding,
+            "连接中断或确认超时。原来的配对与密钥仍然有效，不会留下半完成的关联。",
+            "稍后配对"
+        )
+    }
+
+    private fun assertCompactActions(host: PairingHost, assurance: String, returnLabel: String) {
+        var retries = 0
+        var leaves = 0
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         compose.setContent {
             CompositionLocalProvider(
@@ -45,23 +68,31 @@ class PairingFailureScreenTest {
                             PairingFailureScreen(
                                 PairingEntryState(
                                     page = PairingEntryPage.Progress,
+                                    host = host,
                                     problem = PairingEntryProblem.Unavailable
                                 ),
-                                onRetry = {},
-                                onLeave = {}
+                                onRetry = { retries++ },
+                                onLeave = { leaves++ }
                             )
                         }
                     }
                 }
             }
         }
-        val labels = listOf(
-            "配对未完成",
-            "连接中断或确认超时，未能添加这台设备。已有设备的配对不受影响，请重新扫描后再试。",
-            "重新扫描",
-            "返回首页"
-        )
-        labels.forEach { compose.onNodeWithText(it).performScrollTo().assertIsDisplayed() }
-        compose.onNodeWithText(labels.first()).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("配对未完成").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(assurance).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("重新扫描").performScrollTo().assertIsDisplayed()
+            .performTouchInput { click() }
+        compose.runOnIdle {
+            assertEquals(1, retries)
+            assertEquals(0, leaves)
+        }
+        compose.onNodeWithText(returnLabel).performScrollTo().assertIsDisplayed()
+            .performTouchInput { click() }
+        compose.runOnIdle {
+            assertEquals(1, retries)
+            assertEquals(1, leaves)
+        }
+        compose.onNodeWithText("配对未完成").performScrollTo().assertIsDisplayed()
     }
 }

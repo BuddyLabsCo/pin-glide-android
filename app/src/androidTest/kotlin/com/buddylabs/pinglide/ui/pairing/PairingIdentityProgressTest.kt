@@ -255,6 +255,20 @@ class PairingIdentityProgressTest {
     }
 
     @Test
+    fun englishHomeCanConfirmAndReachFailure() {
+        connectionFails = true
+        renderPairing(AppLanguage.English)
+        startPairing(PairingHost.Home, AppLanguage.English)
+        compose.waitUntil(5_000) {
+            model.state.value.page == PairingEntryPage.Progress &&
+                model.state.value.problem == PairingEntryProblem.Unavailable
+        }
+        compose.onNodeWithText("Pairing incomplete").assertIsDisplayed()
+        compose.onNodeWithText("Scan again").assertIsDisplayed()
+        compose.onNodeWithText("Return to Home").assertIsDisplayed()
+    }
+
+    @Test
     fun onboardingFailureCanRetry() {
         assertFailedHostActions(PairingHost.Onboarding, retry = true)
     }
@@ -379,6 +393,7 @@ class PairingIdentityProgressTest {
         compose.waitUntil(5_000) { model.state.value.page == PairingEntryPage.Consent }
         compose.onNodeWithText(
             when {
+                language == AppLanguage.English && host == PairingHost.Home -> "Confirm target"
                 language == AppLanguage.English -> "Confirm and establish key"
                 host == PairingHost.Onboarding -> "确认并建立密钥"
                 else -> "确认添加设备"
