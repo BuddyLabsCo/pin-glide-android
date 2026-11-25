@@ -139,6 +139,12 @@ class PairingConsentNavigationTest {
         val title = compose.onNodeWithText("确认配对")
         val confirm = compose.onNodeWithText("确认添加设备")
         val cancel = compose.onNodeWithText("取消")
+        fun assertReturnedToHome() {
+            add.assertIsDisplayed()
+            title.assertDoesNotExist()
+            compose.onNodeWithTag("pairing-scanner").assertDoesNotExist()
+        }
+
         add.assertIsDisplayed().performClick()
         compose.onNodeWithTag("pairing-scanner").assertIsDisplayed()
         scan("fixture", "我的设备", "确认配对")
@@ -156,27 +162,21 @@ class PairingConsentNavigationTest {
             captureConsentEvidence("home-consent.png")
         }
         compose.onNodeWithContentDescription("返回").performClick()
-        add.assertIsDisplayed()
-        title.assertDoesNotExist()
-        compose.onNodeWithTag("pairing-scanner").assertDoesNotExist()
+        assertReturnedToHome()
 
         add.performClick()
         compose.onNodeWithTag("pairing-scanner").assertIsDisplayed()
         scan("second-fixture", "我的设备", "确认配对")
         confirm.assertIsDisplayed()
         cancel.performClick()
-        add.assertIsDisplayed()
-        title.assertDoesNotExist()
-        compose.onNodeWithTag("pairing-scanner").assertDoesNotExist()
+        assertReturnedToHome()
 
         add.performClick()
         compose.onNodeWithTag("pairing-scanner").assertIsDisplayed()
         scan("third-fixture", "我的设备", "确认配对")
         confirm.assertIsDisplayed()
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-        add.assertIsDisplayed()
-        title.assertDoesNotExist()
-        compose.onNodeWithTag("pairing-scanner").assertDoesNotExist()
+        assertReturnedToHome()
     }
 
     private fun render(progress: SetupProgress, language: AppLanguage, fontScale: Float) {
