@@ -44,6 +44,13 @@ internal fun ComposeContentTestRule.sendTestMessageAndAssertPairingSuccess(
     val title = heading.fetchSemanticsNode().boundsInRoot
     val sendBounds = send.fetchSemanticsNode().boundsInRoot
     val homeBounds = home.fetchSemanticsNode().boundsInRoot
+
+    fun assertCompletionUnchanged() {
+        heading.assertIsDisplayed()
+        assertEquals(sendBounds, send.assertIsEnabled().fetchSemanticsNode().boundsInRoot)
+        assertEquals(homeBounds, home.assertIsEnabled().fetchSemanticsNode().boundsInRoot)
+    }
+
     assertTrue(title.center.y > viewport.top + viewport.height * 0.35f)
     assertTrue(title.center.y < viewport.top + viewport.height * 0.65f)
     assertEquals(viewport.center.x, title.center.x, 2f)
@@ -53,21 +60,18 @@ internal fun ComposeContentTestRule.sendTestMessageAndAssertPairingSuccess(
     assertTrue(testedPairings.isEmpty())
     captureUiEvidence("pairing-success.png")
     send.performClick()
-    val feedbackMatcher = hasText("测试消息已发送") and
+    val feedbackText = hasText("测试消息已发送")
+    val feedbackMatcher = feedbackText and
         SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
     waitUntil(5_000) { onAllNodes(feedbackMatcher).fetchSemanticsNodes().size == 1 }
     assertEquals(listOf(pairing.pairingId), testedPairings.toList())
     val feedback = onNode(feedbackMatcher).assertIsDisplayed()
-    heading.assertIsDisplayed()
-    assertEquals(sendBounds, send.assertIsEnabled().fetchSemanticsNode().boundsInRoot)
-    assertEquals(homeBounds, home.assertIsEnabled().fetchSemanticsNode().boundsInRoot)
+    assertCompletionUnchanged()
     assertTrue(feedback.fetchSemanticsNode().boundsInRoot.bottom < sendBounds.top)
     captureUiEvidence("pairing-success-feedback.png")
     assertPairingRetained(original, model, store)
-    waitUntil(10_000) { onAllNodes(feedbackMatcher).fetchSemanticsNodes().isEmpty() }
-    heading.assertIsDisplayed()
-    assertEquals(sendBounds, send.assertIsEnabled().fetchSemanticsNode().boundsInRoot)
-    assertEquals(homeBounds, home.assertIsEnabled().fetchSemanticsNode().boundsInRoot)
+    waitUntil(10_000) { onAllNodes(feedbackText).fetchSemanticsNodes().isEmpty() }
+    assertCompletionUnchanged()
     assertPairingRetained(original, model, store)
     assertEquals(listOf(pairing.pairingId), testedPairings.toList())
 }
