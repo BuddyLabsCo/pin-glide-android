@@ -1,7 +1,6 @@
 package com.buddylabs.pinglide.ui.pairing
 
 import android.content.res.Configuration
-import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
@@ -43,7 +42,6 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.domain.pairing.PairingAliasError
@@ -54,7 +52,8 @@ import com.buddylabs.pinglide.domain.pairing.PairingHost
 import com.buddylabs.pinglide.domain.pairing.pairingAliasError
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
-import java.io.File
+import com.buddylabs.pinglide.ui.components.captureUiEvidence
+import com.buddylabs.pinglide.ui.components.uiEvidenceEnabled
 import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -106,13 +105,13 @@ class PairingConsentScreenTest {
     @Test
     fun blankTargetNameShowsAccessibleErrorAndDisablesConfirmation() {
         verifyBlankName(Configuration.UI_MODE_NIGHT_NO, 0xFF9AC4C0.toInt(), 0xFFFBFDFB.toInt())
-        captureConsentEvidence("consent-blank.png")
+        captureUiEvidence("consent-blank.png")
     }
 
     @Test
     fun darkBlankTargetNameShowsApprovedDisabledConfirmation() {
         verifyBlankName(Configuration.UI_MODE_NIGHT_YES, 0xFF346059.toInt(), 0xFF072320.toInt())
-        captureConsentEvidence("consent-blank-dark.png")
+        captureUiEvidence("consent-blank-dark.png")
     }
 
     private fun verifyBlankName(nightMode: Int, expectedFill: Int, expectedContent: Int) {
@@ -202,7 +201,7 @@ class PairingConsentScreenTest {
         compose.onNodeWithText(guidance).assertIsDisplayed()
         confirm.assertIsDisplayed().assertIsNotEnabled()
         compose.onNodeWithText("取消").assertIsEnabled()
-        captureConsentEvidence("duplicate-consent.png")
+        captureUiEvidence("duplicate-consent.png")
         val button = confirm.captureToImage().asAndroidBitmap()
         val context = compose.activity
         val expected = Color(ContextCompat.getColor(context, R.color.primary)).copy(alpha = .38f)
@@ -331,21 +330,11 @@ class PairingConsentScreenTest {
     }
 
     private fun captureEvidence() {
-        if (InstrumentationRegistry.getArguments().getString("consentEvidence") != "true") return
+        if (!uiEvidenceEnabled()) return
         repeat(20) { frame ->
             compose.mainClock.advanceTimeBy(90)
             compose.waitForIdle()
-            captureConsentEvidence("consent-%02d.png".format(frame))
+            captureUiEvidence("consent-%02d.png".format(frame))
         }
-    }
-}
-
-internal fun captureConsentEvidence(filename: String) {
-    if (InstrumentationRegistry.getArguments().getString("consentEvidence") != "true") return
-    val instrumentation = InstrumentationRegistry.getInstrumentation()
-    val directory = checkNotNull(instrumentation.targetContext.getExternalFilesDir(null))
-    val screenshot = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
-    File(directory, filename).outputStream().use {
-        check(screenshot.compress(Bitmap.CompressFormat.PNG, 100, it))
     }
 }

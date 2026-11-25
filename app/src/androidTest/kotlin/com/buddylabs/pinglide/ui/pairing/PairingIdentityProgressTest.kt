@@ -8,14 +8,12 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.viewModelScope
-import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.pairing.HomeState
@@ -40,6 +38,7 @@ import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
+import com.buddylabs.pinglide.ui.components.captureSettledUiEvidence
 import com.buddylabs.pinglide.ui.home.HomePairingStore
 import java.time.Instant
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -363,11 +362,8 @@ class PairingIdentityProgressTest {
     }
 
     private fun captureFailureEvidence(host: PairingHost) {
-        if (InstrumentationRegistry.getArguments().getString("consentEvidence") != "true") return
-        compose.onRoot().captureToImage()
-        InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5_000)
         val variant = if (host == PairingHost.Onboarding) "onboarding" else "home"
-        captureConsentEvidence("pairing-failure-$variant.png")
+        captureSettledUiEvidence("pairing-failure-$variant.png", compose.onRoot())
     }
 
     @Test

@@ -12,12 +12,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -34,6 +31,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -41,14 +39,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.settings.AppLanguage
-import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
 internal fun SettingsScreen(
@@ -66,7 +62,12 @@ internal fun SettingsScreen(
             .onFocusChanged { if (it.isFocused) focused = label }
     }
     LaunchedEffect(Unit) { if (focused != 0) controlFocus.requestFocus() }
-    SettingsRootLayout(onBack, focus(R.string.setup_back)) {
+    SettingsPage(
+        stringResource(R.string.settings_title),
+        onBack,
+        focus(R.string.setup_back),
+        rootLayout = true
+    ) {
         SettingsGroup(stringResource(R.string.settings_account_group), account = true) {
             SettingsAccountRow(focus(R.string.settings_account)) {
                 focused = R.string.settings_account
@@ -148,43 +149,6 @@ internal fun SettingsGroupTitle(title: String) {
 }
 
 @Composable
-private fun SettingsRootLayout(
-    onBack: () -> Unit,
-    backModifier: Modifier,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    val title = stringResource(R.string.settings_title)
-    ScreenLayout {
-        Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(top = 16.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 64.dp).semantics { paneTitle = title },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                IconButton(onClick = onBack, modifier = backModifier.size(48.dp)) {
-                    Icon(
-                        painterResource(R.drawable.ic_back_chevron),
-                        stringResource(R.string.setup_back),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Text(
-                    title,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.7).sp,
-                    modifier = Modifier.semantics { heading() }
-                )
-            }
-            content()
-        }
-    }
-}
-
-@Composable
 private fun SettingsGroup(
     title: String,
     account: Boolean = false,
@@ -201,7 +165,7 @@ private fun SettingsGroup(
             modifier = Modifier.padding(horizontal = 2.dp).semantics { heading() }
         )
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag("settings-group:$title"),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceContainer
         ) {
@@ -231,7 +195,7 @@ private fun SettingsAccountRow(modifier: Modifier, onClick: () -> Unit) {
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold
         )
-        Icon(painterResource(R.drawable.ic_chevron), null, Modifier.size(20.dp))
+        Icon(painterResource(R.drawable.ic_chevron), null, Modifier.size(20.dp), tint = Color.Black)
     }
 }
 
