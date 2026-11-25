@@ -34,6 +34,11 @@ fun PairingScreen(state: PairingEntryState, model: PairingEntryViewModel, onLeav
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
+    if (state.problem == PairingEntryProblem.Closed) {
+        BackHandler(onBack = model::close)
+        PairingExpiredScreen(state.host, model::freshScan, onLeave)
+        return
+    }
     if (state.page == PairingEntryPage.Progress || state.page == PairingEntryPage.Success) {
         PairingResultScreen(state, model, onLeave)
         return

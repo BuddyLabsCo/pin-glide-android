@@ -4,7 +4,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -17,6 +21,7 @@ import com.buddylabs.pinglide.domain.pairing.PairingActivation
 import com.buddylabs.pinglide.domain.pairing.PairingConnection
 import com.buddylabs.pinglide.domain.pairing.PairingEntry
 import com.buddylabs.pinglide.domain.pairing.PairingEntryPage
+import com.buddylabs.pinglide.domain.pairing.PairingEntryProblem
 import com.buddylabs.pinglide.domain.pairing.PairingEvent
 import com.buddylabs.pinglide.domain.pairing.PairingHandshake
 import com.buddylabs.pinglide.domain.pairing.PairingHost
@@ -32,6 +37,7 @@ import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import com.buddylabs.pinglide.ui.home.HomePairingStore
 import java.time.Instant
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -58,6 +64,10 @@ class PairingIdentityProgressTest {
     private val initSent = AtomicBoolean(false)
     private val inputIntact = AtomicBoolean(false)
     private val handshakeClosed = AtomicBoolean(false)
+    private val connectionClosed = AtomicBoolean(false)
+    private val authorizedSessions = ConcurrentLinkedQueue<String>()
+    private val cancelledSessions = ConcurrentLinkedQueue<String>()
+    private var expireDuringActivation = false
     private var successfulHandshakeEnabled = false
     private val completionRequested = CompletableDeferred<Unit>()
     private val finishCompletion = CompletableDeferred<Unit>()
@@ -97,13 +107,39 @@ class PairingIdentityProgressTest {
         }
     }
     private val sessions = object : PairingSessionService {
-        override suspend fun authorize(token: String, sessionId: String) = session
-        override suspend fun cancel(token: String, sessionId: String) = Unit
+        override suspend fun authorize(token: String, sessionId: String): PairingSession {
+            authorizedSessions.add(sessionId)
+            return when (sessionId) {
+                session.sessionId -> session
+
+                "fresh-session" -> PairingSession(
+                    sessionId, "receiver", "sender", "fresh-pairing", "new_receiver",
+                    "awaiting_confirmation", session.expiresAt, false, false
+                )
+
+                else -> error("Unexpected session")
+            }
+        }
+
+        override suspend fun cancel(token: String, sessionId: String) {
+            cancelledSessions.add(sessionId)
+        }
         override fun watch(token: String, sessionId: String) =
             if (finishCompletion.isCompleted) flowOf(active) else emptyFlow()
         override fun connect(token: String, sessionId: String) = object : PairingConnection {
             override val events = flow {
                 emit(PairingEvent.State(session))
+                if (expireDuringActivation) {
+                    emit(
+                        PairingEvent.State(
+                            PairingSession(
+                                session.sessionId, session.receiverId, session.senderId,
+                                session.pairingId, session.mode, "expired", session.expiresAt,
+                                false, false
+                            )
+                        )
+                    )
+                }
                 if (successfulHandshakeEnabled) emit(PairingEvent.Relay(byteArrayOf(1)))
                 awaitCancellation()
             }
@@ -112,7 +148,9 @@ class PairingIdentityProgressTest {
                 initSent.set(true)
             }
 
-            override fun close() = Unit
+            override fun close() {
+                connectionClosed.set(true)
+            }
         }
 
         override suspend fun complete(token: String, sessionId: String): PairingSession {
@@ -157,7 +195,9 @@ class PairingIdentityProgressTest {
                 pairingStore,
                 pairings,
                 sessions,
-                { PairingQr("session", "receiver", ByteArray(65), ByteArray(32) { 1 }) },
+                { sessionId ->
+                    PairingQr(sessionId, "receiver", ByteArray(65), ByteArray(32) { 1 })
+                },
                 renewal,
                 entryScope,
                 activation = activation
@@ -231,6 +271,55 @@ class PairingIdentityProgressTest {
         compose.onNodeWithText("正在确认配对信息").assertDoesNotExist()
     }
 
+    @Test
+    fun activationExpiryReleasesSessionAndRequiresDifferentQr() {
+        expireDuringActivation = true
+        beginGeneration()
+        finishGeneration.countDown()
+        compose.waitUntil(5_000) { model.state.value.problem == PairingEntryProblem.Closed }
+        assertEquals(PairingEntryPage.Progress, model.state.value.page)
+        assertExpiredResult()
+        compose.waitUntil(5_000) { cancelledSessions.isNotEmpty() }
+        assertTrue(initSent.get())
+        assertTrue(connectionClosed.get())
+        assertTrue(handshakeClosed.get())
+        val released = runBlocking { store.readPairings() }
+        assertTrue(released.items.isEmpty() && released.provisional.isEmpty())
+        assertEquals(listOf(session.sessionId), cancelledSessions.toList())
+        assertEquals(listOf(session.sessionId, session.sessionId), authorizedSessions.toList())
+
+        compose.onNodeWithText("Scan a new QR code").performClick()
+        compose.waitUntil(5_000) { model.state.value.page == PairingEntryPage.Scanner }
+        compose.runOnIdle { model.scan(session.sessionId, "My device") }
+        compose.waitUntil(5_000) { model.state.value.problem == PairingEntryProblem.Closed }
+        assertExpiredResult()
+        assertEquals(listOf(session.sessionId, session.sessionId), authorizedSessions.toList())
+        assertEquals(listOf(session.sessionId), cancelledSessions.toList())
+
+        compose.onNodeWithText("Scan a new QR code").performClick()
+        compose.waitUntil(5_000) { model.state.value.page == PairingEntryPage.Scanner }
+        compose.runOnIdle { model.scan("fresh-session", "New device") }
+        compose.waitUntil(5_000) { model.state.value.page == PairingEntryPage.Consent }
+        compose.onNodeWithText("Confirm Pairing").assertIsDisplayed()
+        compose.onNodeWithText("Confirm and establish key").assertIsDisplayed()
+        compose.onNodeWithText("QR code expired").assertDoesNotExist()
+        assertEquals(
+            listOf(session.sessionId, session.sessionId, "fresh-session"),
+            authorizedSessions.toList()
+        )
+    }
+
+    private fun assertExpiredResult() {
+        compose.onNode(
+            hasText("QR code expired") and
+                SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading) and
+                SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+        ).assertIsDisplayed()
+        compose.onNodeWithText("Pairing incomplete").assertDoesNotExist()
+        compose.onNodeWithText("Exchanging encryption keys").assertDoesNotExist()
+        compose.onNodeWithText("Pair later").assertIsDisplayed()
+    }
+
     private fun assertConfirmationVisible() {
         compose.onNodeWithText("正在确认配对信息").assertIsDisplayed()
         compose.onNodeWithText("正在打开配对通道").assertDoesNotExist()
@@ -257,7 +346,8 @@ class PairingIdentityProgressTest {
                 PinGlideTheme {
                     if (state.page == PairingEntryPage.Consent ||
                         state.page == PairingEntryPage.Progress ||
-                        state.page == PairingEntryPage.Success
+                        state.page == PairingEntryPage.Success ||
+                        state.problem == PairingEntryProblem.Closed
                     ) {
                         PairingScreen(state, model) {}
                     }
@@ -269,7 +359,7 @@ class PairingIdentityProgressTest {
             model.cameraGranted(model.requestCamera(PairingHost.Onboarding, home), home)
         }
         compose.waitUntil(5_000) { model.state.value.page == PairingEntryPage.Scanner }
-        compose.runOnIdle { model.scan("fixture", "My device") }
+        compose.runOnIdle { model.scan(session.sessionId, "My device") }
         compose.waitUntil(5_000) { model.state.value.page == PairingEntryPage.Consent }
         val chinese = language == AppLanguage.SimplifiedChinese
         compose.onNodeWithText(
