@@ -85,10 +85,10 @@ class SenderInventoryScreenTest {
             compose.onNode(isRoot() and hasAnyDescendant(hasText("小米 15")))
         )
         revoke.performClick()
-        compose.onNodeWithText("撤销“小米 15”？").assertIsDisplayed()
+        compose.onNodeWithText("撤销「小米 15」？").assertIsDisplayed()
         compose.onNodeWithText("取消").performClick()
         compose.onNodeWithContentDescription("撤销Pixel 9").performClick()
-        compose.onNodeWithText("撤销“Pixel 9”？").assertIsDisplayed()
+        compose.onNodeWithText("撤销「Pixel 9」？").assertIsDisplayed()
     }
 
     @Test
