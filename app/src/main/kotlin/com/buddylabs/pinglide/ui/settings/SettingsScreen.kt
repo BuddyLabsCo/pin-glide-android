@@ -195,7 +195,12 @@ private fun SettingsAccountRow(modifier: Modifier, onClick: () -> Unit) {
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold
         )
-        Icon(painterResource(R.drawable.ic_chevron), null, Modifier.size(20.dp), tint = Color.Black)
+        Icon(
+            painterResource(R.drawable.ic_chevron),
+            null,
+            Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

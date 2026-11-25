@@ -40,6 +40,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
 import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.app.LocalizedContent
@@ -122,6 +123,7 @@ class SettingsScreenTest {
         val container = ContextCompat.getColor(context, R.color.surface_container)
         val divider = ContextCompat.getColor(context, R.color.outline_variant)
         val iconTint = ContextCompat.getColor(context, R.color.on_surface_variant)
+        assertTrue("Chevron contrast", ColorUtils.calculateContrast(iconTint, container) >= 3.0)
         val surface = ContextCompat.getColor(context, R.color.surface)
         val groups = listOf("账户" to 76, "显示" to 121, "后台运行" to 60, "安全" to 60, "关于" to 121)
         groups.forEach { (title, height) ->
@@ -147,12 +149,12 @@ class SettingsScreenTest {
             if (height == 76) {
                 assertTrue("$title QQ badge", image.hasTint(15, 61, 38, 0xff0b7ac8.toInt()))
                 assertTrue(
-                    "$title approved chevron",
+                    "$title theme-matched chevron",
                     image.hasTint(
                         with(compose.density) { image.width.toDp().value.toInt() } - 35,
                         with(compose.density) { image.width.toDp().value.toInt() } - 15,
                         38,
-                        Color.BLACK
+                        iconTint
                     )
                 )
             } else {

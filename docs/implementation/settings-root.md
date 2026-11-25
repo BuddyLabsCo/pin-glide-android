@@ -15,9 +15,10 @@ the version comes from the installed package rather than the prototype's sample.
 The comparisons use Simplified Chinese at 366 × 820 dp on an API 37 emulator,
 with the approved prototype on the left and Android on the right. Android
 provides native font rendering and system bars, with theme-appropriate
-system bar icon contrast in the full-screen dialog. The comparison uses the
-approved Account chevron in both themes, rather than the unapproved
-contrast change from the first implementation. The actual installed version
+system bar icon contrast in the full-screen dialog. The Account chevron
+matches the other chevrons in both themes, as confirmed by the operator in
+the [second review design clarification](https://github.com/BuddyLabsCo/pin-glide-android/issues/119#issuecomment-7162893031).
+The actual installed version
 is `0.1.0`; the prototype illustrates `1.0`. The shared `SettingsPage` keeps
 the header and Back control fixed while the groups scroll, preserving the
 original Android scrolling behavior.
@@ -64,3 +65,17 @@ Settings tests passed in both themes, and the reference-layout test also
 passed with the emulator's system font scale set to 150%. The six masks
 reject each of the other five glyphs in the existing light capture.
 `qualityCheck` and debug and instrumentation APK assembly passed.
+
+After the operator confirmed the original black chevron was a prototype
+mistake, the prototype SVG and Android row were updated to use the same
+theme-specific color as the other chevrons. The updated reference was
+rendered in the browser; before/after captures in the same browser differ
+in exactly 44 pixels, all within the two Account chevrons. The refreshed
+reference has minor font rasterization differences from the older capture.
+Both Android comparisons were visually inspected. Account chevron contrast
+is 5.78:1 in light and 8.19:1 in dark; the reference-layout test checks
+both the expected tint and a minimum 3:1 contrast. All three Settings tests
+passed in each theme on API 37. All 46 JVM tests, `qualityCheck`, debug and
+release Kotlin compilation, debug and instrumentation APK assembly, and
+`node docs/ui-prototype/check-pairing.cjs` passed. The full instrumentation
+suite was not repeated for the second review fix.
