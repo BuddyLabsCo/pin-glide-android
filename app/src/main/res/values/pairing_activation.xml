@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="pairing_expired_eyebrow">会话已结束</string>
+    <string name="pairing_expired_title">二维码已失效</string>
+    <string name="pairing_expired_instruction">配对会话已过期、被占用或已被取消。请让接收端重新显示二维码。</string>
+    <string name="pairing_expired_return">返回首页</string>
     <string name="pairing_success">配对完成</string>
     <string name="pairing_progress_title">正在配对</string>
     <string name="pairing_failed_title">配对未完成</string>

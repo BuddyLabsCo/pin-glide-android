@@ -5,8 +5,9 @@ The shared Pairing result screen now uses the approved
 for a failed connection or confirmation. It centers the warning illustration,
 status label, heading and assurance that existing Pairings are unaffected.
 The bottom actions rescan or return to Home; onboarding uses its own approved
-assurance and “Pair later” label. Unconfirmed and expired-session results keep
-their existing behavior and presentation.
+assurance and “Pair later” label. Unconfirmed results keep their existing
+behavior and presentation. Expired-session results use the separate
+[approved expired QR screen](pairing-expired.md).
 
 The onboarding variant follows its own approved
 [failure reference](../ui-prototype/shots/01-25-pairing-failed.png).
