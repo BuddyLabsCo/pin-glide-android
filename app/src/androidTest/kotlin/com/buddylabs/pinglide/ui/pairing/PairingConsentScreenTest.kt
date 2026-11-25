@@ -1,6 +1,8 @@
 package com.buddylabs.pinglide.ui.pairing
 
+import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.graphics.Color as AndroidColor
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -16,6 +18,7 @@ import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -99,6 +102,56 @@ class PairingConsentScreenTest {
         cancel.performClick()
         compose.runOnIdle { assertEquals(listOf("confirm", "back", "cancel"), actions) }
     }
+
+    @Test
+    fun blankTargetNameShowsAccessibleErrorAndDisablesConfirmation() {
+        verifyBlankName(Configuration.UI_MODE_NIGHT_NO, 0xFF9AC4C0.toInt(), 0xFFFBFDFB.toInt())
+        captureConsentEvidence("consent-blank.png")
+    }
+
+    @Test
+    fun darkBlankTargetNameShowsApprovedDisabledConfirmation() {
+        verifyBlankName(Configuration.UI_MODE_NIGHT_YES, 0xFF346059.toInt(), 0xFF072320.toInt())
+        captureConsentEvidence("consent-blank-dark.png")
+    }
+
+    private fun verifyBlankName(nightMode: Int, expectedFill: Int, expectedContent: Int) {
+        state.value = state.value.copy(
+            host = PairingHost.Home,
+            alias = "",
+            aliasError = PairingAliasError.Blank
+        )
+        render(AppLanguage.SimplifiedChinese, nightMode = nightMode)
+        val alias = compose.onNodeWithContentDescription("设备名称")
+        val error = compose.onNodeWithText("请输入设备名称")
+        alias.assertIsDisplayed().assertIsEnabled().assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.Error, "请输入设备名称")
+        )
+        error.assertIsDisplayed()
+        assertTrue(alias.getUnclippedBoundsInRoot().bottom < error.getUnclippedBoundsInRoot().top)
+        val confirm = compose.onNodeWithText("确认添加设备").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithText("取消").assertIsDisplayed().assertIsEnabled()
+        val button = confirm.captureToImage().asAndroidBitmap()
+        val fill = button.getPixel(button.width / 4, button.height / 2)
+        assertTrue(
+            "Disabled fill: expected ${expectedFill.toUInt().toString(16)}, " +
+                "got ${fill.toUInt().toString(16)}",
+            matchesColor(expectedFill, fill)
+        )
+        val width = button.width / 2
+        val height = button.height / 2
+        val pixels = IntArray(width * height)
+        button.getPixels(pixels, 0, width, button.width / 4, button.height / 4, width, height)
+        assertTrue(
+            "Disabled content should retain the muted on-primary color",
+            pixels.count { matchesColor(expectedContent, it) } >= 4
+        )
+    }
+
+    private fun matchesColor(expected: Int, actual: Int): Boolean =
+        abs(AndroidColor.red(expected) - AndroidColor.red(actual)) <= 2 &&
+            abs(AndroidColor.green(expected) - AndroidColor.green(actual)) <= 2 &&
+            abs(AndroidColor.blue(expected) - AndroidColor.blue(actual)) <= 2
 
     @Test
     fun aliasErrorsAndPendingPreventConfirmationAndHomeKeepsItsLabel() {
@@ -228,15 +281,24 @@ class PairingConsentScreenTest {
         language: AppLanguage,
         usableHeight: Dp? = null,
         fontScale: Float = 1f,
+        nightMode: Int? = null,
         otherAliases: List<String> = emptyList()
     ) {
+        val configuration = Configuration(compose.activity.resources.configuration).apply {
+            if (nightMode != null) {
+                uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or nightMode
+            }
+        }
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         compose.mainClock.autoAdvance = false
         compose.setContent {
-            LocalizedContent(language) {
-                PinGlideTheme {
-                    val density = LocalDensity.current.density
-                    CompositionLocalProvider(LocalDensity provides Density(density, fontScale)) {
+            val density = LocalDensity.current.density
+            CompositionLocalProvider(
+                LocalConfiguration provides configuration,
+                LocalDensity provides Density(density, fontScale)
+            ) {
+                LocalizedContent(language) {
+                    PinGlideTheme {
                         val insets = WindowInsets.safeDrawing.asPaddingValues()
                         val viewport = if (usableHeight == null) {
                             Modifier

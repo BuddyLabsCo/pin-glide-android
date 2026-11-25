@@ -349,24 +349,24 @@ private fun ConsentCountdown(seconds: Long) {
 
 @Composable
 private fun ConsentActions(state: PairingEntryState, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val confirmEnabled =
+        !state.pending && !state.confirmed && state.aliasError == null && state.problem == null
     val navigationInset =
         with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() }
-    val enabled = !state.pending && !state.confirmed && state.aliasError == null &&
-        state.problem == null
-    val colors = MaterialTheme.colorScheme
     Column(
         Modifier.fillMaxWidth().padding(bottom = (22.dp - navigationInset).coerceAtLeast(0.dp)),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Button(
             onClick = onConfirm,
-            enabled = enabled,
+            enabled = confirmEnabled,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .alpha(if (confirmEnabled) 1f else 0.38f),
             colors = ButtonDefaults.buttonColors(
                 disabledContainerColor = colors.primary,
                 disabledContentColor = colors.onPrimary
-            ),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                .alpha(if (enabled) 1f else .38f)
+            )
         ) {
             Icon(painterResource(R.drawable.ic_key), null, Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))

@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -161,6 +162,12 @@ class PairingConsentNavigationTest {
             SystemClock.sleep(500)
             captureConsentEvidence("home-consent.png")
         }
+        compose.runOnIdle { pairing.editAlias("") }
+        compose.onNodeWithText("请输入设备名称").performScrollTo().assertIsDisplayed()
+        confirm.assertIsNotEnabled()
+        compose.runOnIdle { pairing.editAlias("我的设备") }
+        compose.onNodeWithText("请输入设备名称").assertDoesNotExist()
+        confirm.assertIsEnabled()
         compose.onNodeWithContentDescription("返回").performClick()
         assertReturnedToHome()
 
