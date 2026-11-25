@@ -1,19 +1,22 @@
 package com.buddylabs.pinglide.ui.settings
 
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,18 +35,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.identity.AccountSession
-import com.buddylabs.pinglide.ui.components.QqEmblem
+import com.buddylabs.pinglide.domain.identity.AccountState
 
 @Composable
 internal fun AccountScreen(account: AccountSession, onLogout: () -> Unit) {
     val state by account.state.collectAsState()
-    var confirming by remember { mutableStateOf(false) }
-    val logoutFocus = remember { FocusRequester() }
     LaunchedEffect(account) { account.open() }
     val context = LocalContext.current
     DisposableEffect(state.failed, context) {
@@ -54,27 +58,17 @@ internal fun AccountScreen(account: AccountSession, onLogout: () -> Unit) {
         }
         onDispose { toast?.cancel() }
     }
-    Card(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            QqEmblem(size = 46.dp)
-            Column(Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite }) {
-                Text(
-                    when {
-                        state.loading -> stringResource(R.string.account_loading)
-                        state.failed -> stringResource(R.string.settings_account)
-                        else -> state.nickname ?: stringResource(R.string.settings_account)
-                    },
-                    style = MaterialTheme.typography.titleMedium
-                )
-                if (state.nickname != null) Text(stringResource(R.string.settings_account))
-            }
-        }
+    AccountScreenContent(state, onLogout)
+}
+
+@Composable
+internal fun AccountScreenContent(state: AccountState, onLogout: () -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
+    val logoutFocus = remember { FocusRequester() }
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        AccountProfileCard(state)
+        AccountLogoutAction(Modifier.focusRequester(logoutFocus)) { confirming = true }
     }
-    AccountLogoutAction(Modifier.focusRequester(logoutFocus)) { confirming = true }
     if (confirming) {
         val cancelFocus = remember { FocusRequester() }
         val dismiss: () -> Unit = {
@@ -112,22 +106,59 @@ internal fun AccountScreen(account: AccountSession, onLogout: () -> Unit) {
 }
 
 @Composable
-private fun AccountLogoutAction(modifier: Modifier, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = modifier.fillMaxWidth()) {
+private fun AccountProfileCard(state: AccountState) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer
+    ) {
         Row(
-            Modifier.heightIn(min = 56.dp).padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.padding(15.dp),
+            horizontalArrangement = Arrangement.spacedBy(13.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val color = MaterialTheme.colorScheme.error
-            Icon(painterResource(R.drawable.ic_logout), contentDescription = null, tint = color)
-            Text(
-                stringResource(R.string.account_logout),
-                Modifier.weight(1f),
-                color = color,
-                style = MaterialTheme.typography.bodyLarge
-            )
-            Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = color)
+            SettingsQqBadge()
+            Column(
+                Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite },
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    when {
+                        state.loading -> stringResource(R.string.account_loading)
+                        state.failed -> stringResource(R.string.settings_account)
+                        else -> state.nickname ?: stringResource(R.string.settings_account)
+                    },
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 18.sp,
+                    letterSpacing = 0.sp
+                )
+                if (!state.loading && !state.failed && state.nickname != null) {
+                    Text(
+                        stringResource(R.string.settings_account),
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun AccountLogoutAction(modifier: Modifier, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = MaterialTheme.colorScheme.error
+    ) {
+        SettingsListRow(
+            title = stringResource(R.string.account_logout),
+            modifier = modifier.clickable(role = Role.Button, onClick = onClick),
+            leading = { Icon(painterResource(R.drawable.ic_logout), null, Modifier.size(20.dp)) },
+            trailing = { Icon(painterResource(R.drawable.ic_chevron), null, Modifier.size(20.dp)) }
+        )
     }
 }

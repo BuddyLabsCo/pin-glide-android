@@ -174,13 +174,7 @@ private fun SettingsAccountRow(modifier: Modifier, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(13.dp)
     ) {
-        Box(
-            Modifier.size(46.dp).background(Color(0xFF0B7AC8), RoundedCornerShape(15.dp))
-                .clearAndSetSemantics {},
-            contentAlignment = Alignment.Center
-        ) {
-            Text("QQ", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
-        }
+        SettingsQqBadge()
         Text(
             stringResource(R.string.settings_account),
             Modifier.weight(1f),
@@ -193,6 +187,17 @@ private fun SettingsAccountRow(modifier: Modifier, onClick: () -> Unit) {
             Modifier.size(20.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+internal fun SettingsQqBadge() {
+    Box(
+        Modifier.size(46.dp).background(Color(0xFF0B7AC8), RoundedCornerShape(15.dp))
+            .clearAndSetSemantics {},
+        contentAlignment = Alignment.Center
+    ) {
+        Text("QQ", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
     }
 }
 

@@ -164,16 +164,16 @@ private fun SettingsDestinationContent(
         return
     }
     val title = when (destination) {
-        SettingsDestination.Language -> R.string.settings_title
-        SettingsDestination.Account -> R.string.settings_account
+        SettingsDestination.Language, SettingsDestination.Account -> R.string.settings_title
         SettingsDestination.DeviceAccess -> R.string.settings_device_access
     }
-    val languagePicker = destination == SettingsDestination.Language
+    val settingsHeader = destination == SettingsDestination.Language ||
+        destination == SettingsDestination.Account
     SettingsPage(
         stringResource(title),
         onBack,
-        rootLayout = languagePicker,
-        contentTopPadding = if (languagePicker) 10.dp else 16.dp
+        rootLayout = settingsHeader,
+        contentTopPadding = if (settingsHeader) 10.dp else 16.dp
     ) {
         when (destination) {
             SettingsDestination.Language -> LanguageScreen(language, onLanguage)
