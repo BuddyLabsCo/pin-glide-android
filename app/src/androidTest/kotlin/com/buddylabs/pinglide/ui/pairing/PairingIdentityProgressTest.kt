@@ -8,11 +8,14 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.viewModelScope
+import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.pairing.HomeState
@@ -23,9 +26,11 @@ import com.buddylabs.pinglide.domain.pairing.PairingEntry
 import com.buddylabs.pinglide.domain.pairing.PairingEntryPage
 import com.buddylabs.pinglide.domain.pairing.PairingEntryProblem
 import com.buddylabs.pinglide.domain.pairing.PairingEvent
+import com.buddylabs.pinglide.domain.pairing.PairingFailure
 import com.buddylabs.pinglide.domain.pairing.PairingHandshake
 import com.buddylabs.pinglide.domain.pairing.PairingHost
 import com.buddylabs.pinglide.domain.pairing.PairingQr
+import com.buddylabs.pinglide.domain.pairing.PairingServiceException
 import com.buddylabs.pinglide.domain.pairing.PairingSession
 import com.buddylabs.pinglide.domain.pairing.PairingSessionService
 import com.buddylabs.pinglide.domain.pairing.PairingSnapshot
@@ -69,6 +74,7 @@ class PairingIdentityProgressTest {
     private val cancelledSessions = ConcurrentLinkedQueue<String>()
     private var expireDuringActivation = false
     private var successfulHandshakeEnabled = false
+    private var connectionFails = false
     private val completionRequested = CompletableDeferred<Unit>()
     private val finishCompletion = CompletableDeferred<Unit>()
     private val inventoryRequested = CompletableDeferred<Unit>()
@@ -126,30 +132,33 @@ class PairingIdentityProgressTest {
         }
         override fun watch(token: String, sessionId: String) =
             if (finishCompletion.isCompleted) flowOf(active) else emptyFlow()
-        override fun connect(token: String, sessionId: String) = object : PairingConnection {
-            override val events = flow {
-                emit(PairingEvent.State(session))
-                if (expireDuringActivation) {
-                    emit(
-                        PairingEvent.State(
-                            PairingSession(
-                                session.sessionId, session.receiverId, session.senderId,
-                                session.pairingId, session.mode, "expired", session.expiresAt,
-                                false, false
+        override fun connect(token: String, sessionId: String): PairingConnection {
+            if (connectionFails) throw PairingServiceException(PairingFailure.Unavailable)
+            return object : PairingConnection {
+                override val events = flow {
+                    emit(PairingEvent.State(session))
+                    if (expireDuringActivation) {
+                        emit(
+                            PairingEvent.State(
+                                PairingSession(
+                                    session.sessionId, session.receiverId, session.senderId,
+                                    session.pairingId, session.mode, "expired", session.expiresAt,
+                                    false, false
+                                )
                             )
                         )
-                    )
+                    }
+                    if (successfulHandshakeEnabled) emit(PairingEvent.Relay(byteArrayOf(1)))
+                    awaitCancellation()
                 }
-                if (successfulHandshakeEnabled) emit(PairingEvent.Relay(byteArrayOf(1)))
-                awaitCancellation()
-            }
 
-            override fun send(payload: ByteArray) {
-                initSent.set(true)
-            }
+                override fun send(payload: ByteArray) {
+                    initSent.set(true)
+                }
 
-            override fun close() {
-                connectionClosed.set(true)
+                override fun close() {
+                    connectionClosed.set(true)
+                }
             }
         }
 
@@ -272,6 +281,96 @@ class PairingIdentityProgressTest {
     }
 
     @Test
+    fun homeFailureCanRetry() {
+        assertFailedHostActions(PairingHost.Home, retry = true)
+    }
+
+    @Test
+    fun homeFailureCanReturn() {
+        assertFailedHostActions(PairingHost.Home, retry = false)
+    }
+
+    @Test
+    fun englishHomeCanConfirmAndReachFailure() {
+        connectionFails = true
+        renderPairing(AppLanguage.English)
+        startPairing(PairingHost.Home, AppLanguage.English)
+        compose.waitUntil(5_000) {
+            model.state.value.page == PairingEntryPage.Progress &&
+                model.state.value.problem == PairingEntryProblem.Unavailable
+        }
+        compose.onNodeWithText("Pairing incomplete").assertIsDisplayed()
+        compose.onNodeWithText("Scan again").assertIsDisplayed()
+        compose.onNodeWithText("Return to Home").assertIsDisplayed()
+    }
+
+    @Test
+    fun onboardingFailureCanRetry() {
+        assertFailedHostActions(PairingHost.Onboarding, retry = true)
+    }
+
+    @Test
+    fun onboardingFailureCanPairLater() {
+        assertFailedHostActions(PairingHost.Onboarding, retry = false)
+    }
+
+    private fun assertFailedHostActions(host: PairingHost, retry: Boolean) {
+        connectionFails = true
+        var left = false
+        renderPairing(AppLanguage.SimplifiedChinese) {
+            left = true
+            model.close()
+        }
+        startPairing(host, AppLanguage.SimplifiedChinese)
+        compose.waitUntil(5_000) {
+            model.state.value.page == PairingEntryPage.Progress &&
+                model.state.value.problem == PairingEntryProblem.Unavailable
+        }
+        assertEquals(host, model.state.value.host)
+        assertFalse(model.state.value.pending)
+        val onboarding = host == PairingHost.Onboarding
+        val status = if (onboarding) "未提交新配对" else "配对尚未生效"
+        val assurance = if (onboarding) {
+            "连接中断或确认超时。原来的配对与密钥仍然有效，不会留下半完成的关联。"
+        } else {
+            "连接中断或确认超时，未能添加这台设备。已有设备的配对不受影响，请重新扫描后再试。"
+        }
+        val returnLabel = if (onboarding) "稍后配对" else "返回首页"
+        compose.onNode(
+            hasText("配对未完成") and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)
+        ).assertIsDisplayed()
+        compose.onNodeWithText(status).assertIsDisplayed()
+        compose.onNodeWithText(assurance).assertIsDisplayed()
+        compose.onNodeWithText("重新扫描").assertIsDisplayed()
+        compose.onNodeWithText(returnLabel).assertIsDisplayed()
+        if (retry) {
+            captureFailureEvidence(host)
+            compose.onNodeWithText("重新扫描").performClick()
+            compose.runOnIdle {
+                assertEquals(PairingEntryPage.Scanner, model.state.value.page)
+                assertEquals(host, model.state.value.host)
+                assertEquals(null, model.state.value.problem)
+                assertFalse(model.state.value.pending)
+                assertFalse(left)
+            }
+        } else {
+            compose.onNodeWithText(returnLabel).performClick()
+            compose.runOnIdle {
+                assertTrue(left)
+                assertEquals(PairingEntryPage.Idle, model.state.value.page)
+            }
+        }
+    }
+
+    private fun captureFailureEvidence(host: PairingHost) {
+        if (InstrumentationRegistry.getArguments().getString("consentEvidence") != "true") return
+        compose.onRoot().captureToImage()
+        InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5_000)
+        val variant = if (host == PairingHost.Onboarding) "onboarding" else "home"
+        captureConsentEvidence("pairing-failure-$variant.png")
+    }
+
+    @Test
     fun activationExpiryReleasesSessionAndRequiresDifferentQr() {
         expireDuringActivation = true
         beginGeneration()
@@ -339,6 +438,20 @@ class PairingIdentityProgressTest {
     }
 
     private fun beginGeneration(language: AppLanguage = AppLanguage.English) {
+        renderPairing(language)
+        startPairing(PairingHost.Onboarding, language)
+        val chinese = language == AppLanguage.SimplifiedChinese
+        assertTrue(generationStarted.await(5, TimeUnit.SECONDS))
+        compose.onNodeWithText(
+            if (chinese) "正在生成设备身份" else "Generating device identity"
+        ).assertIsDisplayed()
+        compose.onNodeWithText(
+            if (chinese) "正在交换加密密钥" else "Exchanging encryption keys"
+        ).assertDoesNotExist()
+        assertFalse(initSent.get())
+    }
+
+    private fun renderPairing(language: AppLanguage, onLeave: () -> Unit = {}) {
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         compose.setContent {
             val state by model.state.collectAsState()
@@ -349,30 +462,28 @@ class PairingIdentityProgressTest {
                         state.page == PairingEntryPage.Success ||
                         state.problem == PairingEntryProblem.Closed
                     ) {
-                        PairingScreen(state, model) {}
+                        PairingScreen(state, model, onLeave)
                     }
                 }
             }
         }
+    }
+
+    private fun startPairing(host: PairingHost, language: AppLanguage) {
         compose.runOnIdle {
             val home = HomeState()
-            model.cameraGranted(model.requestCamera(PairingHost.Onboarding, home), home)
+            model.cameraGranted(model.requestCamera(host, home), home)
         }
         compose.waitUntil(5_000) { model.state.value.page == PairingEntryPage.Scanner }
         compose.runOnIdle { model.scan(session.sessionId, "My device") }
         compose.waitUntil(5_000) { model.state.value.page == PairingEntryPage.Consent }
-        val chinese = language == AppLanguage.SimplifiedChinese
         compose.onNodeWithText(
-            if (chinese) "确认并建立密钥" else "Confirm and establish key"
+            when {
+                language == AppLanguage.English && host == PairingHost.Home -> "Confirm target"
+                language == AppLanguage.English -> "Confirm and establish key"
+                host == PairingHost.Onboarding -> "确认并建立密钥"
+                else -> "确认添加设备"
+            }
         ).performClick()
-
-        assertTrue(generationStarted.await(5, TimeUnit.SECONDS))
-        compose.onNodeWithText(
-            if (chinese) "正在生成设备身份" else "Generating device identity"
-        ).assertIsDisplayed()
-        compose.onNodeWithText(
-            if (chinese) "正在交换加密密钥" else "Exchanging encryption keys"
-        ).assertDoesNotExist()
-        assertFalse(initSent.get())
     }
 }
