@@ -4,13 +4,11 @@ import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +42,9 @@ import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.identity.AccountSession
 import com.buddylabs.pinglide.domain.identity.AccountState
+import com.buddylabs.pinglide.ui.components.ConfirmationDialog
+import com.buddylabs.pinglide.ui.components.ConfirmationDialogEmblem
+import com.buddylabs.pinglide.ui.components.ConfirmationDialogHeading
 
 @Composable
 internal fun AccountScreen(account: AccountSession, onLogout: () -> Unit) {
@@ -70,39 +71,60 @@ private fun AccountScreenContent(state: AccountState, onLogout: () -> Unit) {
         AccountLogoutAction(Modifier.focusRequester(logoutFocus)) { confirming = true }
     }
     if (confirming) {
-        val cancelFocus = remember { FocusRequester() }
-        val dismiss: () -> Unit = {
-            confirming = false
-            logoutFocus.requestFocus()
-        }
-        AlertDialog(
-            onDismissRequest = dismiss,
-            title = { Text(stringResource(R.string.account_logout_title)) },
-            text = {
-                Text(
-                    stringResource(R.string.account_logout_description),
-                    Modifier.verticalScroll(rememberScrollState())
-                )
+        LogoutConfirmationDialog(
+            onCancel = {
+                confirming = false
+                logoutFocus.requestFocus()
             },
-            confirmButton = {
-                Button(onClick = {
-                    confirming = false
-                    onLogout()
-                }, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(stringResource(R.string.account_logout))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = dismiss,
-                    modifier = Modifier.heightIn(min = 48.dp).focusRequester(cancelFocus)
-                ) {
-                    Text(stringResource(R.string.setup_cancel))
-                }
-                LaunchedEffect(Unit) { cancelFocus.requestFocus() }
+            onLogout = {
+                confirming = false
+                onLogout()
             }
         )
     }
+}
+
+@Composable
+private fun LogoutConfirmationDialog(onCancel: () -> Unit, onLogout: () -> Unit) {
+    val title = stringResource(R.string.account_logout_title)
+    val colors = MaterialTheme.colorScheme
+    ConfirmationDialog(
+        pane = title,
+        description = stringResource(R.string.account_logout_description),
+        onDismiss = onCancel,
+        emblem = {
+            ConfirmationDialogEmblem(
+                painterResource(R.drawable.ic_logout),
+                colors.primaryContainer,
+                colors.primary,
+                24.dp
+            )
+        },
+        heading = { ConfirmationDialogHeading(title) }
+    ) {
+        LogoutConfirmationActions(onCancel, onLogout)
+    }
+}
+
+@Composable
+private fun LogoutConfirmationActions(onCancel: () -> Unit, onLogout: () -> Unit) {
+    val cancelFocus = remember { FocusRequester() }
+    val padding = PaddingValues(horizontal = 22.dp)
+    TextButton(
+        onClick = onCancel,
+        modifier = Modifier.heightIn(min = 48.dp).focusRequester(cancelFocus),
+        contentPadding = padding
+    ) {
+        Text(stringResource(R.string.setup_cancel), fontWeight = FontWeight.Bold)
+    }
+    Button(
+        onClick = onLogout,
+        modifier = Modifier.heightIn(min = 48.dp),
+        contentPadding = padding
+    ) {
+        Text(stringResource(R.string.account_logout), fontWeight = FontWeight.Bold)
+    }
+    LaunchedEffect(Unit) { cancelFocus.requestFocus() }
 }
 
 @Composable
