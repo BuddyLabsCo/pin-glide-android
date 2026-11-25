@@ -1,7 +1,5 @@
 package com.buddylabs.pinglide.ui.settings
 
-import android.os.ParcelFileDescriptor
-import android.provider.Settings
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
@@ -41,6 +39,7 @@ import com.buddylabs.pinglide.domain.identity.UploadCredential
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import com.buddylabs.pinglide.ui.components.captureSettledUiEvidence
+import com.buddylabs.pinglide.ui.components.withSystemFontScale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -124,11 +123,8 @@ class LogoutConfirmationTest {
 
     @Test
     fun englishLogoutActionsRemainReachableAtDoubleFontScale() {
-        val resolver = compose.activity.contentResolver
-        val originalScale = Settings.System.getFloat(resolver, Settings.System.FONT_SCALE, 1f)
         var logouts = 0
-        try {
-            setFontScale(2f)
+        compose.withSystemFontScale(2f) {
             renderAccount(AppLanguage.English) { logouts++ }
             val logout = compose.onNodeWithText("Log out")
             logout.performScrollTo().performClick()
@@ -147,8 +143,6 @@ class LogoutConfirmationTest {
             confirm.performScrollTo().assertIsDisplayed().performClick()
             compose.onNode(pane).assertDoesNotExist()
             compose.runOnIdle { assertEquals(1, logouts) }
-        } finally {
-            setFontScale(originalScale)
         }
     }
 
@@ -160,17 +154,6 @@ class LogoutConfirmationTest {
 
     private fun pressKey(keyCode: Int) =
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(keyCode)
-
-    private fun setFontScale(scale: Float) {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val descriptor = instrumentation.uiAutomation.executeShellCommand(
-            "settings put system font_scale $scale"
-        )
-        ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes() }
-        compose.waitUntil(5_000) {
-            compose.runOnUiThread { compose.activity.resources.configuration.fontScale == scale }
-        }
-    }
 
     private fun renderAccount(language: AppLanguage, onLogout: () -> Unit) {
         val app = compose.activity.application as PinGlideApplication

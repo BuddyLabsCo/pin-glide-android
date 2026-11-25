@@ -1,8 +1,6 @@
 package com.buddylabs.pinglide.ui.home
 
 import android.accessibilityservice.AccessibilityServiceInfo
-import android.os.ParcelFileDescriptor
-import android.provider.Settings
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityWindowInfo
 import androidx.activity.ComponentActivity
@@ -35,6 +33,7 @@ import com.buddylabs.pinglide.domain.pairing.PairingFailure
 import com.buddylabs.pinglide.domain.pairing.PairingServiceException
 import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.RemotePairing
+import com.buddylabs.pinglide.ui.components.withSystemFontScale
 import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -205,26 +204,8 @@ class HomeRenameSheetTest {
 
     @Test
     fun confirmedRenameKeepsLargeTextActionsVisibleAndUpdatesAccessibilityHeading() {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val context = instrumentation.targetContext
-        val resolver = context.contentResolver
-        val original = Settings.System.getFloat(resolver, Settings.System.FONT_SCALE, 1f)
-        try {
-            setFontScale(2f)
+        compose.withSystemFontScale(2f) {
             verifyConfirmedRename()
-        } finally {
-            setFontScale(original)
-        }
-    }
-
-    private fun setFontScale(scale: Float) {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val descriptor = instrumentation.uiAutomation.executeShellCommand(
-            "settings put system font_scale $scale"
-        )
-        ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes() }
-        compose.waitUntil(5_000) {
-            compose.runOnUiThread { compose.activity.resources.configuration.fontScale == scale }
         }
     }
 

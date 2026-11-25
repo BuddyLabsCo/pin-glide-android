@@ -63,3 +63,13 @@ the logout modal was pixel-identical to the original Android evidence.
 Debug/release and instrumentation Kotlin compilation, APK assembly,
 `qualityCheck` and all 46 JVM tests passed again. The full instrumentation
 suite was not repeated for this review-only change.
+
+The next review follow-up shares the system font-scale fixture between Logout
+and Home rename. It waits for both the stored setting and Activity
+configuration, restores the exact previous setting in `finally`, and for an
+originally absent setting first restores the effective font scale before
+deleting the setting. This avoids API 37 recreating the default setting when
+deleting a non-default scale. On the dedicated emulator, both test classes
+passed all eight tests with the setting initially absent, and it remained
+absent afterward. Both large-font tests also passed with an explicitly set
+scale of 1.25, which was restored exactly.
