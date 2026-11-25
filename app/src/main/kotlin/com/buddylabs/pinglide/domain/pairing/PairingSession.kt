@@ -56,7 +56,7 @@ fun interface PairingQrDecoder {
 
 class InvalidPairingQrException : Exception("Invalid Pairing QR")
 
-class PairingSession(
+data class PairingSession(
     val sessionId: String,
     val receiverId: String,
     val senderId: String?,

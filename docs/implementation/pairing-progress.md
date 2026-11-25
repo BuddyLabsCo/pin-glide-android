@@ -81,11 +81,14 @@ for the small differences. Existing motion evidence is recorded under #111.
 The screenshots were captured during the actual Pairing entry and activation
 workflow using simulated service, handshake and storage collaborators.
 `PairingIdentityProgressTest.confirmationRemainsVisibleUntilActivationIsReconciled`
-holds the service completion response, then separately holds the authoritative
-Pairing inventory. At both boundaries it verifies the final localized heading,
+holds the service completion response, the authoritative Pairing inventory,
+and then the local reconciliation operation independently. At all three
+boundaries it verifies the final localized heading,
 absence of previous stages and actions, the instruction, and accessible
-indeterminate progress. Only after the inventory confirms activation does the
-screen transition to Pairing complete. No live Receiver or QQ sign-in is used.
+indeterminate progress. It verifies the provisional Pairing is not active
+before reconciliation and the expected usable Pairing is active afterward,
+before accepting the transition to Pairing complete. No live Receiver or QQ
+sign-in is used.
 
 Verification: all nine focused Compose tests passed in light and dark themes.
 All 46 JVM tests, `qualityCheck`, debug and instrumentation APK assembly, and
@@ -97,3 +100,14 @@ skipped by its assumption. Ripwire reported test-fixture verbosity and recent
 change churn; there are no runtime source changes.
 The subsequent focused run of `PairingConsentNavigationTest`,
 `PairingConsentScreenTest` and `HomeCapacityScreenTest` passed all 13 tests.
+
+Review fix verification: the extracted `HomePairingStore` fixture rejects
+invalid provisional keys and duplicate Pairing identities, as well as
+mismatched receivers during reconciliation. The workflow test now holds
+local reconciliation separately from the inventory response. All 15 focused
+tests passed, including the two fixture invariant tests. The remaining Home
+fixture consumers passed 25 tests, with one camera test skipped by its
+assumption. All eight Pairing progress tests passed in dark mode. All 46 JVM
+tests, `qualityCheck`, debug and release Kotlin compilation, and debug and
+instrumentation APK assembly passed. The full instrumentation suite was not
+repeated for the review fixes.
