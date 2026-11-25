@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -29,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -57,38 +59,73 @@ internal fun PairingFailureScreen(
     val title = stringResource(R.string.pairing_failed_title)
     ScreenLayout {
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val compact = maxHeight < 360.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+            val scroll = Modifier.verticalScroll(rememberScrollState())
             Column(
-                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                    .heightIn(min = maxHeight).padding(top = 12.dp, bottom = 44.dp)
-                    .semantics { paneTitle = title },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                Modifier.fillMaxSize().then(if (compact) scroll else Modifier)
+                    .semantics { paneTitle = title }
             ) {
-                PairingFailureContent(title, onboarding)
+                PairingFailureBody(
+                    title,
+                    onboarding,
+                    compact,
+                    scroll,
+                    if (compact) Modifier else Modifier.weight(1f)
+                )
+                PairingFailureActions(state.pending, onboarding, onRetry, onLeave)
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = onRetry,
-                enabled = !state.pending,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp)
-            ) {
-                Icon(painterResource(R.drawable.ic_refresh), null, Modifier.size(20.dp))
-                Spacer(Modifier.size(8.dp))
-                Text(stringResource(R.string.pairing_failure_retry), fontWeight = FontWeight.Bold)
-            }
-            TextButton(
-                onClick = onLeave,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            ) {
-                Text(
-                    stringResource(
-                        if (onboarding) R.string.pairing_later else R.string.pairing_home_return
-                    ),
-                    fontWeight = FontWeight.Bold
-                )
-            }
+    }
+}
+
+@Composable
+private fun PairingFailureBody(
+    title: String,
+    onboarding: Boolean,
+    compact: Boolean,
+    scroll: Modifier,
+    modifier: Modifier
+) {
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val body = if (compact) Modifier else scroll.heightIn(min = maxHeight)
+        Column(
+            modifier = Modifier.fillMaxWidth().then(body).padding(top = 12.dp, bottom = 44.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            PairingFailureContent(title, onboarding)
+        }
+    }
+}
+
+@Composable
+private fun PairingFailureActions(
+    pending: Boolean,
+    onboarding: Boolean,
+    onRetry: () -> Unit,
+    onLeave: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(
+            onClick = onRetry,
+            enabled = !pending,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp)
+        ) {
+            Icon(painterResource(R.drawable.ic_refresh), null, Modifier.size(20.dp))
+            Spacer(Modifier.size(8.dp))
+            Text(stringResource(R.string.pairing_failure_retry), fontWeight = FontWeight.Bold)
+        }
+        TextButton(
+            onClick = onLeave,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        ) {
+            Text(
+                stringResource(
+                    if (onboarding) R.string.pairing_later else R.string.pairing_home_return
+                ),
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
