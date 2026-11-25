@@ -55,3 +55,12 @@ instrumentation APK assembly passed. The full instrumentation suite was
 not repeated for this review fix. Some intermediate attempts were
 interrupted by other runner APK replacements or an isolated emulator's
 system UI ANR; the successful final runs used the shared API 37 emulator.
+
+Second review test verification: the reference-layout test explicitly uses
+100% font scale and compares six row glyphs against fixed shape masks from
+the reviewed visual evidence, allowing small rasterization differences.
+The independent compact 200% font-scale test remains in place. All three
+Settings tests passed in both themes, and the reference-layout test also
+passed with the emulator's system font scale set to 150%. The six masks
+reject each of the other five glyphs in the existing light capture.
+`qualityCheck` and debug and instrumentation APK assembly passed.

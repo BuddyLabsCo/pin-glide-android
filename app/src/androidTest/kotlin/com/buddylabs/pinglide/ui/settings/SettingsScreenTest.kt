@@ -3,6 +3,7 @@ package com.buddylabs.pinglide.ui.settings
 import android.app.Activity
 import android.app.Instrumentation.ActivityResult
 import android.content.IntentFilter
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.provider.Settings
@@ -12,8 +13,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertHasClickAction
@@ -64,18 +67,27 @@ class SettingsScreenTest {
         var batteryOpens = 0
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         compose.setContent {
-            LocalizedContent(AppLanguage.SimplifiedChinese) {
-                PinGlideTheme {
-                    SettingsScreen(
-                        language = AppLanguage.System,
-                        installedVersion = DeviceInfo(context).installedVersion(),
-                        onBatterySettings = {
-                            batteryOpens++
-                            false
-                        },
-                        onNavigate = { destinations.add(it) },
-                        onBack = {}
-                    )
+            val systemConfiguration = LocalConfiguration.current
+            val referenceConfiguration = remember(systemConfiguration) {
+                Configuration(systemConfiguration).apply { fontScale = 1f }
+            }
+            CompositionLocalProvider(
+                LocalConfiguration provides referenceConfiguration,
+                LocalDensity provides Density(LocalDensity.current.density, 1f)
+            ) {
+                LocalizedContent(AppLanguage.SimplifiedChinese) {
+                    PinGlideTheme {
+                        SettingsScreen(
+                            language = AppLanguage.System,
+                            installedVersion = DeviceInfo(context).installedVersion(),
+                            onBatterySettings = {
+                                batteryOpens++
+                                false
+                            },
+                            onNavigate = { destinations.add(it) },
+                            onBack = {}
+                        )
+                    }
                 }
             }
         }
@@ -144,12 +156,85 @@ class SettingsScreenTest {
                     )
                 )
             } else {
-                assertTrue("$title first row icon", image.hasTint(14, 34, 30, iconTint))
-                if (height == 121) {
-                    assertTrue("$title second row icon", image.hasTint(14, 34, 91, iconTint))
+                val glyphs = when (title) {
+                    "显示" -> listOf(SettingsGlyph.Language, SettingsGlyph.Appearance)
+                    "后台运行" -> listOf(SettingsGlyph.Battery)
+                    "安全" -> listOf(SettingsGlyph.Security)
+                    else -> listOf(SettingsGlyph.Info, SettingsGlyph.Privacy)
+                }
+                glyphs.forEachIndexed { index, glyph ->
+                    assertGlyph(image, 30 + index * 61, glyph, container, iconTint)
                 }
             }
         }
+    }
+
+    private fun assertGlyph(
+        image: Bitmap,
+        center: Int,
+        glyph: SettingsGlyph,
+        background: Int,
+        tint: Int
+    ) {
+        val mask = glyph.mask.split('/')
+        val distances = (-1..1).flatMap { offsetY ->
+            (-1..1).map { offsetX ->
+                mask.indices.sumOf { row ->
+                    mask[row].indices.count { column ->
+                        image.hasGlyphInk(
+                            14 + column * 2 + offsetX,
+                            center - 10 + row * 2 + offsetY,
+                            background,
+                            tint
+                        ) != (mask[row][column] == '#')
+                    }
+                }
+            }
+        }
+        assertTrue(
+            "${glyph.name} glyph mask: ${distances.min()}",
+            distances.min() <= glyph.tolerance
+        )
+    }
+
+    private fun Bitmap.hasGlyphInk(x: Int, y: Int, background: Int, tint: Int): Boolean =
+        with(compose.density) {
+            val columns = x.dp.roundToPx() until (x + 2).dp.roundToPx()
+            val rows = y.dp.roundToPx() until (y + 2).dp.roundToPx()
+            val ink = rows.sumOf { row ->
+                columns.count { column ->
+                    val pixel = Color.red(getPixel(column, row))
+                    abs(pixel - Color.red(tint)) < abs(pixel - Color.red(background))
+                }
+            }
+            ink * 2 >= columns.count() * rows.count()
+        }
+
+    private enum class SettingsGlyph(val mask: String, val tolerance: Int) {
+        Language(
+            "........../.######.../..#..#..../...##...../...##..#../..###.##../.##...#.#./.....####./.....#..../..........",
+            12
+        ),
+        Appearance(
+            "........../...####.../..#..###../.#...####./.#...####./.#...####./.#...####./..#..###../...####.../..........",
+            9
+        ),
+        Battery(
+            "........../....##..../...####.../...####.../...####.../...####.../...#..#.../...####.../...####.../..........",
+            12
+        ),
+        Security(
+            "........../...####.../..##...#../..#....#../..#..#.#../..#.#..#../..#....#../...#..#.../....##..../..........",
+            10
+        ),
+        Info(
+            "........../..#####.../.##....#../.#......#./.#......#./.#..#...#./.#..#...#./..#....#../...####.../..........",
+            9
+        ),
+        Privacy(
+            "....##..../...#..#.../...#..#.../..######../.#######../.#######../.###..##../.#######../..######../..........",
+            10
+        )
     }
 
     private fun Bitmap.hasTint(left: Int, right: Int, center: Int, tint: Int): Boolean =
