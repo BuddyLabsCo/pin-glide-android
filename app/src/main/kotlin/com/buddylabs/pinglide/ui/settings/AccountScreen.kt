@@ -1,24 +1,36 @@
 package com.buddylabs.pinglide.ui.settings
 
 import android.widget.Toast
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,13 +40,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.identity.AccountSession
 import com.buddylabs.pinglide.ui.components.QqEmblem
@@ -76,39 +99,114 @@ internal fun AccountScreen(account: AccountSession, onLogout: () -> Unit) {
     }
     AccountLogoutAction(Modifier.focusRequester(logoutFocus)) { confirming = true }
     if (confirming) {
-        val cancelFocus = remember { FocusRequester() }
-        val dismiss: () -> Unit = {
-            confirming = false
-            logoutFocus.requestFocus()
-        }
-        AlertDialog(
-            onDismissRequest = dismiss,
-            title = { Text(stringResource(R.string.account_logout_title)) },
-            text = {
-                Text(
-                    stringResource(R.string.account_logout_description),
-                    Modifier.verticalScroll(rememberScrollState())
-                )
+        LogoutConfirmationDialog(
+            onCancel = {
+                confirming = false
+                logoutFocus.requestFocus()
             },
-            confirmButton = {
-                Button(onClick = {
-                    confirming = false
-                    onLogout()
-                }, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(stringResource(R.string.account_logout))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = dismiss,
-                    modifier = Modifier.heightIn(min = 48.dp).focusRequester(cancelFocus)
-                ) {
-                    Text(stringResource(R.string.setup_cancel))
-                }
-                LaunchedEffect(Unit) { cancelFocus.requestFocus() }
+            onLogout = {
+                confirming = false
+                onLogout()
             }
         )
     }
+}
+
+@Composable
+private fun LogoutConfirmationDialog(onCancel: () -> Unit, onLogout: () -> Unit) {
+    val title = stringResource(R.string.account_logout_title)
+    val colors = MaterialTheme.colorScheme
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val statusBarHeight = WindowInsets.statusBars.getTop(density)
+    val width = (configuration.screenWidthDp.dp - 48.dp).coerceIn(0.dp, 320.dp)
+    val height = with(density) {
+        (configuration.screenHeightDp.dp - statusBarHeight.toDp() - 48.dp).coerceAtLeast(0.dp)
+    }
+    val dimAmount = if (isSystemInDarkTheme()) 0.64f else 0.45f
+    Dialog(
+        onDismissRequest = onCancel,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        val window = (LocalView.current.parent as DialogWindowProvider).window
+        SideEffect {
+            window.setDimAmount(dimAmount)
+            val attributes = window.attributes
+            if (attributes.y != statusBarHeight / 2) {
+                attributes.y = statusBarHeight / 2
+                window.attributes = attributes
+            }
+        }
+        Surface(
+            modifier = Modifier.width(width).heightIn(max = height).semantics {
+                paneTitle = title
+                isTraversalGroup = true
+            },
+            shape = RoundedCornerShape(28.dp),
+            shadowElevation = 12.dp
+        ) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
+                Surface(shape = RoundedCornerShape(16.dp), color = colors.primaryContainer) {
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                        Icon(
+                            painterResource(R.drawable.ic_logout),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = colors.primary
+                        )
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    title,
+                    modifier = Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontSize = 22.sp,
+                        letterSpacing = (-0.77).sp
+                    ),
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(9.dp))
+                Text(
+                    stringResource(R.string.account_logout_description),
+                    color = colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        letterSpacing = 0.sp,
+                        lineHeight = 19.sp
+                    )
+                )
+                Spacer(Modifier.height(22.dp))
+                LogoutConfirmationActions(onCancel, onLogout)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LogoutConfirmationActions(onCancel: () -> Unit, onLogout: () -> Unit) {
+    val cancelFocus = remember { FocusRequester() }
+    val padding = PaddingValues(horizontal = 22.dp)
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        TextButton(
+            onClick = onCancel,
+            modifier = Modifier.heightIn(min = 48.dp).focusRequester(cancelFocus),
+            contentPadding = padding
+        ) {
+            Text(stringResource(R.string.setup_cancel), fontWeight = FontWeight.Bold)
+        }
+        Button(
+            onClick = onLogout,
+            modifier = Modifier.heightIn(min = 48.dp),
+            contentPadding = padding
+        ) {
+            Text(stringResource(R.string.account_logout), fontWeight = FontWeight.Bold)
+        }
+    }
+    LaunchedEffect(Unit) { cancelFocus.requestFocus() }
 }
 
 @Composable
