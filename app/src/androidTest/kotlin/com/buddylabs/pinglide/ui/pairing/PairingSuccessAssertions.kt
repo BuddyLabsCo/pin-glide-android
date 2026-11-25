@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import com.buddylabs.pinglide.ui.components.captureUiEvidence
 import java.util.concurrent.ConcurrentLinkedQueue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -40,7 +41,7 @@ internal fun ComposeContentTestRule.assertPairingSuccess(
     assertTrue(homeBounds.top >= sendBounds.bottom)
     assertSuccessCheck(title.center.x, title.top)
     assertTrue(testedPairings.isEmpty())
-    captureConsentEvidence("pairing-success.png")
+    captureUiEvidence("pairing-success.png")
     send.performClick()
     waitUntil(5_000) { testedPairings.isNotEmpty() }
     assertEquals(listOf(pairingId), testedPairings.toList())
@@ -48,7 +49,7 @@ internal fun ComposeContentTestRule.assertPairingSuccess(
     assertEquals(sendBounds, send.fetchSemanticsNode().boundsInRoot)
     assertEquals(homeBounds, home.fetchSemanticsNode().boundsInRoot)
     assertTrue(feedback.fetchSemanticsNode().boundsInRoot.bottom < sendBounds.top)
-    captureConsentEvidence("pairing-success-feedback.png")
+    captureUiEvidence("pairing-success-feedback.png")
     home.performClick()
     heading.assertDoesNotExist()
 }

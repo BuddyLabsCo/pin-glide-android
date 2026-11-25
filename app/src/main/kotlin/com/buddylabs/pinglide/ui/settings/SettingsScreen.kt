@@ -139,19 +139,10 @@ internal fun SettingsScreen(
 }
 
 @Composable
-internal fun SettingsGroupTitle(title: String) {
-    Text(
-        title,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.semantics { heading() }
-    )
-}
-
-@Composable
-private fun SettingsGroup(
+internal fun SettingsGroup(
     title: String,
     account: Boolean = false,
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(if (account) 10.dp else 14.dp)) {
@@ -169,7 +160,7 @@ private fun SettingsGroup(
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceContainer
         ) {
-            Column(content = content)
+            Column(modifier, content = content)
         }
     }
 }

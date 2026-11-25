@@ -38,6 +38,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -163,11 +164,17 @@ private fun SettingsDestinationContent(
         return
     }
     val title = when (destination) {
-        SettingsDestination.Language -> R.string.settings_language
+        SettingsDestination.Language -> R.string.settings_title
         SettingsDestination.Account -> R.string.settings_account
         SettingsDestination.DeviceAccess -> R.string.settings_device_access
     }
-    SettingsPage(stringResource(title), onBack) {
+    val languagePicker = destination == SettingsDestination.Language
+    SettingsPage(
+        stringResource(title),
+        onBack,
+        rootLayout = languagePicker,
+        contentTopPadding = if (languagePicker) 10.dp else 16.dp
+    ) {
         when (destination) {
             SettingsDestination.Language -> LanguageScreen(language, onLanguage)
             SettingsDestination.Account -> AccountScreen(account, onLogout)
@@ -183,6 +190,7 @@ internal fun SettingsPage(
     backModifier: Modifier = Modifier,
     backEnabled: Boolean = true,
     rootLayout: Boolean = false,
+    contentTopPadding: Dp = if (rootLayout) 20.dp else 16.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
     ScreenLayout {
@@ -229,7 +237,7 @@ internal fun SettingsPage(
         }
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(
-                top = if (rootLayout) 20.dp else 16.dp,
+                top = contentTopPadding,
                 bottom = if (rootLayout) 28.dp else 16.dp
             ),
             verticalArrangement = Arrangement.spacedBy(if (rootLayout) 20.dp else 16.dp),
