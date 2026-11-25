@@ -19,6 +19,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
@@ -72,6 +73,25 @@ class PairingProgressScreenTest {
                 ProgressBarRangeInfo.Indeterminate
             )
         ).assertIsDisplayed()
+        compose.onAllNodes(hasClickAction()).assertCountEquals(0)
+    }
+
+    @Test
+    fun keyExchangeDisplaysTheApprovedChineseHeadingAndInstruction() {
+        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        compose.setContent {
+            LocalizedContent(AppLanguage.SimplifiedChinese) {
+                PinGlideTheme { PairingProgressScreen(PairingStage.Key) }
+            }
+        }
+        compose.onNode(
+            hasText("正在交换加密密钥") and
+                SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)
+        ).assertIsDisplayed()
+        compose.onNodeWithText(INSTRUCTION).assertIsDisplayed()
+        compose.onNodeWithText(OPENING_HEADING).assertDoesNotExist()
+        compose.onNodeWithText("正在生成设备身份").assertDoesNotExist()
+        compose.onNodeWithText("正在确认配对信息").assertDoesNotExist()
         compose.onAllNodes(hasClickAction()).assertCountEquals(0)
     }
 
