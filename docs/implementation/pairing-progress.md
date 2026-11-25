@@ -20,3 +20,44 @@ remain unchanged.
 when the supplied stage changes, progress and live-region accessibility are
 exposed, and the presentation offers no actions. `QqLoadingEmblemTest` verifies
 the shared ring's motion and reduced-motion behavior.
+
+## Identity generation (#112)
+
+The shared presentation already matches the [identity-generation reference](../ui-prototype/shots/03-progress-identity.png).
+Identity generation now runs off the presentation thread so the Identity event
+can render the heading during generation. The Key event is emitted only after
+generation completes. Cancellation closes any resulting handshake without
+sending it. The exchange also rejects a replaced authorization session before
+sending, even for the same Account and Sender. No artificial delay or motion
+change is introduced.
+
+| Theme | Comparison |
+| --- | --- |
+| Light | [Approved and Android](pairing-progress-identity-evidence/light-comparison.png) |
+| Dark | [Approved and Android](pairing-progress-identity-evidence/dark-comparison.png) |
+
+These captures use the same API 37 viewport (366 × 820 dp) and Simplified Chinese,
+with the approved prototype on the left and Android on the right. System bars,
+safe-area centering and native font rendering account for the small positioning
+and text-wrapping differences. The progress arc is captured at a different phase.
+
+The Identity stage is simulated at the presentation boundary, without a live
+Receiver. A temporary Compose evidence test passed in both themes, verifying
+the transition from Opening to Identity, the localized accessible heading,
+the instruction, and absence of actions. `PairingIdentityProgressTest` additionally
+exercises the real entry workflow and shared screen with controllable generation:
+Identity stays visible while generation is pending, Key follows completion,
+and abandoning or replacing the authorization session during generation closes
+the handshake without sending.
+
+Verification: all six focused Compose tests (including the temporary Identity
+check) passed in light mode, and the Identity check passed in dark mode.
+All 46 JVM tests, `qualityCheck`, release Kotlin compilation and instrumentation
+test compilation passed. The full instrumentation run stopped with a process
+crash in `HomeDuplicateScanTest`; live Pairing was not exercised.
+
+Review fix verification: the workflow test failed before the dispatcher change
+because the Identity heading was not displayed. After the change, all 13
+Pairing and shared progress Compose tests passed, including the abandonment
+regression. All 46 JVM tests, `qualityCheck`, debug and instrumentation assembly,
+and release Kotlin compilation passed.

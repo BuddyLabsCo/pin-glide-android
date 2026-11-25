@@ -2,14 +2,17 @@ package com.buddylabs.pinglide.domain.pairing
 
 import com.buddylabs.pinglide.domain.identity.AccessExpiredException
 import com.buddylabs.pinglide.domain.identity.AuthorizationException
+import com.buddylabs.pinglide.domain.identity.AuthorizationState
 import com.buddylabs.pinglide.domain.identity.CredentialAccess
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.IdentityStorageException
 import com.buddylabs.pinglide.domain.identity.RefreshState
 import java.time.Clock
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 class PairingActivation(
@@ -27,8 +30,9 @@ class PairingActivation(
         alias: String,
         stage: (PairingStage) -> Unit
     ): String {
+        val authorizationSession = renewal.sessionGeneration
         val initial = store.readPairings()
-        val exchange = Exchange(initial, qr, session, alias, stage)
+        val exchange = Exchange(initial, qr, session, alias, stage, authorizationSession)
         try {
             exchange.run()
         } catch (_: TimeoutCancellationException) {
@@ -152,7 +156,8 @@ class PairingActivation(
         val qr: PairingQr,
         val session: PairingSession,
         val alias: String,
-        val stage: (PairingStage) -> Unit
+        val stage: (PairingStage) -> Unit,
+        private val authorizationSession: Long
     ) : AutoCloseable {
         var saved = false
         private var handshake: PairingHandshake? = null
@@ -160,6 +165,7 @@ class PairingActivation(
         suspend fun run() = withTimeout(remaining(session)) {
             renewal.withAccess(CredentialAccess.Management) { identity ->
                 requireOwner(initial)
+                requireAuthorizationSession()
                 try {
                     service.connect(
                         identity.management.token,
@@ -178,6 +184,7 @@ class PairingActivation(
 
         private suspend fun handle(event: PairingEvent, connection: PairingConnection): Boolean {
             requireOwner(initial)
+            requireAuthorizationSession()
             return when (event) {
                 is PairingEvent.State -> {
                     validate(event.session, session)
@@ -194,13 +201,32 @@ class PairingActivation(
             }
         }
 
-        private fun start(connection: PairingConnection) {
+        private suspend fun start(connection: PairingConnection) {
             if (handshake != null) return
             stage(PairingStage.Identity)
-            val exchange = crypto.start(qr)
-            handshake = exchange
+            val input = PairingQr(
+                qr.sessionId,
+                qr.receiverId,
+                qr.publicKey.copyOf(),
+                qr.psk.copyOf()
+            )
+            val exchange = try {
+                withContext(Dispatchers.Default) {
+                    crypto.start(input).also { handshake = it }
+                }
+            } finally {
+                input.clear()
+            }
+            requireOwner(initial)
+            requireAuthorizationSession()
             stage(PairingStage.Key)
             connection.send(exchange.init)
+        }
+
+        private fun requireAuthorizationSession() {
+            if (!renewal.isSessionCurrent(authorizationSession)) {
+                throw AuthorizationException(AuthorizationState.LoggedOut)
+            }
         }
 
         private suspend fun confirm(
