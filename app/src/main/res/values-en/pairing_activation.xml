@@ -3,6 +3,12 @@
     <string name="pairing_success">Pairing complete</string>
     <string name="pairing_progress_title">Pairing in progress</string>
     <string name="pairing_failed_title">Pairing incomplete</string>
+    <string name="pairing_failure_inactive">Pairing not yet active</string>
+    <string name="pairing_failure_uncommitted">New Pairing not committed</string>
+    <string name="pairing_failure_home_copy">The connection was interrupted or confirmation timed out, so this device could not be added. Existing Pairings are unaffected. Scan again to retry.</string>
+    <string name="pairing_failure_onboarding_copy">The connection was interrupted or confirmation timed out. Existing Pairings and keys remain valid, and no incomplete Pairing is left behind.</string>
+    <string name="pairing_failure_retry">Scan again</string>
+    <string name="pairing_home_return">Return to Home</string>
     <string name="pairing_progress_opening">Opening pairing channel</string>
     <string name="pairing_progress_identity">Generating device identity</string>
     <string name="pairing_progress_key">Exchanging encryption keys</string>

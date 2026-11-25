@@ -4,11 +4,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.viewModelScope
+import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.pairing.HomeState
@@ -17,6 +24,8 @@ import com.buddylabs.pinglide.domain.pairing.PairingActivation
 import com.buddylabs.pinglide.domain.pairing.PairingConnection
 import com.buddylabs.pinglide.domain.pairing.PairingEntry
 import com.buddylabs.pinglide.domain.pairing.PairingEntryPage
+import com.buddylabs.pinglide.domain.pairing.PairingEntryProblem
+import com.buddylabs.pinglide.domain.pairing.PairingEntryState
 import com.buddylabs.pinglide.domain.pairing.PairingEvent
 import com.buddylabs.pinglide.domain.pairing.PairingHandshake
 import com.buddylabs.pinglide.domain.pairing.PairingHost
@@ -229,6 +238,47 @@ class PairingIdentityProgressTest {
         assertEquals(session.pairingId, model.state.value.activatedPairingId)
         compose.onNodeWithText("配对完成").assertIsDisplayed()
         compose.onNodeWithText("正在确认配对信息").assertDoesNotExist()
+    }
+
+    @Test
+    fun failureResultDisplaysPreservationAssuranceAndHostActions() {
+        val state = mutableStateOf(
+            PairingEntryState(
+                page = PairingEntryPage.Progress,
+                problem = PairingEntryProblem.Unavailable
+            )
+        )
+        var left = false
+        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        compose.setContent {
+            LocalizedContent(AppLanguage.SimplifiedChinese) {
+                PinGlideTheme { PairingResultScreen(state.value, model) { left = true } }
+            }
+        }
+        compose.onNode(
+            hasText("配对未完成") and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)
+        ).assertIsDisplayed()
+        compose.onNodeWithText("配对尚未生效").assertIsDisplayed()
+        compose.onNodeWithText("连接中断或确认超时，未能添加这台设备。已有设备的配对不受影响，请重新扫描后再试。")
+            .assertIsDisplayed()
+        compose.onNodeWithText("重新扫描").assertIsDisplayed()
+        compose.onNodeWithText("返回首页").assertIsDisplayed()
+        if (InstrumentationRegistry.getArguments().getString("consentEvidence") == "true") {
+            compose.onRoot().captureToImage()
+            InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5_000)
+            captureConsentEvidence("pairing-failure.png")
+        }
+        compose.onNodeWithText("返回首页").performClick()
+        compose.runOnIdle {
+            assertTrue(left)
+            state.value = state.value.copy(host = PairingHost.Onboarding)
+        }
+        compose.onNodeWithText("未提交新配对").assertIsDisplayed()
+        compose.onNodeWithText("连接中断或确认超时。原来的配对与密钥仍然有效，不会留下半完成的关联。")
+            .assertIsDisplayed()
+        compose.onNodeWithText("稍后配对").assertIsDisplayed()
+        compose.onNodeWithText("重新扫描").performClick()
+        compose.runOnIdle { assertEquals(PairingEntryPage.Scanner, model.state.value.page) }
     }
 
     private fun assertConfirmationVisible() {

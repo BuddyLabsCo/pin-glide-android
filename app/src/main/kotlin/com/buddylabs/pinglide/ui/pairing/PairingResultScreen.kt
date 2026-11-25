@@ -63,6 +63,10 @@ internal fun PairingResultScreen(
         }
     )
     BackHandler(onBack = model::close)
+    if (!success && state.problem == PairingEntryProblem.Unavailable) {
+        PairingFailureScreen(state, model::freshScan, onLeave)
+        return
+    }
     if (!success && state.problem == null) {
         PairingProgressScreen(state.stage)
         return

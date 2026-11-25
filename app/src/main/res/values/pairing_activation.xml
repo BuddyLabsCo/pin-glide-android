@@ -3,6 +3,12 @@
     <string name="pairing_success">配对完成</string>
     <string name="pairing_progress_title">正在配对</string>
     <string name="pairing_failed_title">配对未完成</string>
+    <string name="pairing_failure_inactive">配对尚未生效</string>
+    <string name="pairing_failure_uncommitted">未提交新配对</string>
+    <string name="pairing_failure_home_copy">连接中断或确认超时，未能添加这台设备。已有设备的配对不受影响，请重新扫描后再试。</string>
+    <string name="pairing_failure_onboarding_copy">连接中断或确认超时。原来的配对与密钥仍然有效，不会留下半完成的关联。</string>
+    <string name="pairing_failure_retry">重新扫描</string>
+    <string name="pairing_home_return">返回首页</string>
     <string name="pairing_progress_opening">正在打开配对通道</string>
     <string name="pairing_progress_identity">正在生成设备身份</string>
     <string name="pairing_progress_key">正在交换加密密钥</string>

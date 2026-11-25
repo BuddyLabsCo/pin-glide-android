@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.colorResource
@@ -17,7 +18,12 @@ import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
 
 @Composable
-internal fun RingedEmblem(shape: Shape, error: Boolean = false, content: @Composable () -> Unit) {
+internal fun RingedEmblem(
+    shape: Shape,
+    error: Boolean = false,
+    containerColor: Color? = null,
+    content: @Composable () -> Unit
+) {
     val colors = MaterialTheme.colorScheme
     val ring = colors.primary.copy(alpha = 0.22f)
     Box(
@@ -27,7 +33,9 @@ internal fun RingedEmblem(shape: Shape, error: Boolean = false, content: @Compos
         Box(Modifier.size(186.dp).border(1.dp, ring, CircleShape))
         Box(
             modifier = Modifier.size(148.dp).background(
-                if (error) {
+                if (containerColor != null) {
+                    SolidColor(containerColor)
+                } else if (error) {
                     SolidColor(colorResource(R.color.error_emblem_container))
                 } else {
                     Brush.linearGradient(listOf(colors.primaryContainer, colors.secondaryContainer))
