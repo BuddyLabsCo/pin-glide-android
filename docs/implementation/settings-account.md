@@ -52,3 +52,25 @@ Language and Settings root. Both screenshots were recaptured through the
 production dialog. Debug and
 release Kotlin and instrumentation compilation, both debug APK assemblies,
 and `qualityCheck` passed.
+
+Second review follow-up: the compact Account test now changes the emulator's
+actual display to 244 × 546 dp and system font scale to 200% before opening
+the production Settings dialog. It asserts the effective nickname text layout
+font scale and 204 dp usable card width before checking Logout and Back.
+The test restores the original display and font settings in `finally`; both
+the test and the surrounding device checks confirmed restoration.
+
+Artwork assertions retain the exact color checks and compare 1 dp glyph
+masks for both Q letters, the Logout door/arrow and the chevron against the
+inspected reference rendering. The masks allow a one-cell alignment shift
+and the native raster differences observed at densities 2.0 and 2.625.
+Removing the Q tails or Logout arrow, or mirroring the chevron in the mask
+data, exceeds the corresponding tolerance. The first fractional-density
+run exposed an overly strict single-reference QQ mask; the revised
+two-reference checks passed at 2.625 together with the compact Account test.
+The Settings instrumentation run passed nine tests in light, and all four
+Account tests passed in dark before the final mask refinement. The final
+profile artwork test passed in both themes at density 2.0, and the two focused
+tests passed at density 2.625. Instrumentation compilation, debug APK
+assembly and `qualityCheck` passed. No production code or reference
+comparisons changed in this review round.

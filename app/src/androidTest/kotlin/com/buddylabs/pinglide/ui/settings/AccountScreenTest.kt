@@ -6,11 +6,7 @@ import android.graphics.Color
 import android.view.accessibility.AccessibilityEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -37,7 +33,6 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,8 +51,10 @@ import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import com.buddylabs.pinglide.ui.components.captureSettledUiEvidence
 import com.buddylabs.pinglide.ui.home.HomePairingStore
+import com.buddylabs.pinglide.ui.home.runHomeTestShell
 import java.time.Instant
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -89,11 +86,11 @@ class AccountScreenTest {
         respond("示例昵称")
         compose.onNodeWithText("示例昵称").assertIsDisplayed().assertHasNoClickAction()
         compose.onNodeWithText("QQ 账号").assertIsDisplayed()
-        assertApprovedLayout()
         captureSettledUiEvidence(
             "settings-account.png",
             compose.onNode(isRoot() and hasAnyDescendant(hasText("示例昵称")))
         )
+        assertApprovedLayout()
         compose.onNodeWithText("退出登录").assertHasClickAction().performClick()
         compose.onNodeWithText("退出登录？").assertIsDisplayed()
         compose.onNodeWithText("取消").performClick()
@@ -146,10 +143,13 @@ class AccountScreenTest {
     }
 
     @Test
-    fun compactEnglishAccountAtDoubleFontScaleKeepsLogoutAndBackReachable() {
-        openAccount(AppLanguage.English, compact = true)
+    fun compactEnglishAccountAtDoubleFontScaleKeepsLogoutAndBackReachable() = withCompactViewport {
+        openAccount(AppLanguage.English)
         respond("Example nickname")
         compose.onNodeWithText("Example nickname").assertIsDisplayed()
+        assertEquals(2f, textLayout("Example nickname").layoutInput.density.fontScale)
+        val card = compose.onNodeWithTag("settings-account-profile").getUnclippedBoundsInRoot()
+        assertDp("Actual dialog usable width", card.right - card.left, 204.dp)
         val back = compose.onNodeWithContentDescription("Back").assertIsDisplayed()
         val logout = compose.onNodeWithText("Log out").performScrollTo().assertIsDisplayed()
         logout.assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
@@ -161,10 +161,42 @@ class AccountScreenTest {
         compose.onNodeWithText("QQ account").assertIsDisplayed().assertHasClickAction()
     }
 
-    private fun openAccount(
-        language: AppLanguage = AppLanguage.SimplifiedChinese,
-        compact: Boolean = false
-    ) {
+    private fun withCompactViewport(check: () -> Unit) {
+        val originalSize = Regex("Override size: (\\d+x\\d+)")
+            .find(runHomeTestShell("wm size"))?.groupValues?.get(1)
+        val originalFont = runHomeTestShell("settings get system font_scale").trim()
+        val originalConfiguration = Configuration(compose.activity.resources.configuration)
+        val density = compose.activity.resources.displayMetrics.density
+        try {
+            runHomeTestShell("settings put system font_scale 2.0")
+            runHomeTestShell(
+                "wm size ${(244 * density).roundToInt()}x${(546 * density).roundToInt()}"
+            )
+            compose.waitUntil(5_000) {
+                compose.runOnUiThread {
+                    val configuration = compose.activity.resources.configuration
+                    configuration.screenWidthDp <= 244 && configuration.fontScale == 2f
+                }
+            }
+            check()
+        } finally {
+            runHomeTestShell("wm size ${originalSize ?: "reset"}")
+            if (originalFont == "null") {
+                runHomeTestShell("settings delete system font_scale")
+            } else {
+                runHomeTestShell("settings put system font_scale $originalFont")
+            }
+            compose.waitUntil(5_000) {
+                compose.runOnUiThread {
+                    val configuration = compose.activity.resources.configuration
+                    configuration.screenWidthDp == originalConfiguration.screenWidthDp &&
+                        configuration.fontScale == originalConfiguration.fontScale
+                }
+            }
+        }
+    }
+
+    private fun openAccount(language: AppLanguage = AppLanguage.SimplifiedChinese) {
         val app = compose.activity.application as PinGlideApplication
         val store = HomePairingStore(emptyList(), Instant.now().plusSeconds(3600).toString())
         val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)
@@ -183,30 +215,19 @@ class AccountScreenTest {
         )
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         compose.setContent {
-            val systemConfiguration = LocalConfiguration.current
-            val fontScale = if (compact) 2f else 1f
-            val configuration = remember(systemConfiguration) {
-                Configuration(systemConfiguration).apply { this.fontScale = fontScale }
-            }
-            val density = LocalDensity.current.density * if (compact) 1.5f else 1f
-            CompositionLocalProvider(
-                LocalConfiguration provides configuration,
-                LocalDensity provides Density(density, fontScale)
-            ) {
-                LocalizedContent(language) {
-                    PinGlideTheme {
-                        SettingsNavigation(
-                            language = language,
-                            onLanguage = {},
-                            onBatterySettings = { false },
-                            installedVersion = "0.1.0",
-                            account = account,
-                            senders = app.accountSenders,
-                            revocation = app.senderRevocation,
-                            onLogout = { logoutCount++ },
-                            onDismiss = {}
-                        )
-                    }
+            LocalizedContent(language) {
+                PinGlideTheme {
+                    SettingsNavigation(
+                        language = language,
+                        onLanguage = {},
+                        onBatterySettings = { false },
+                        installedVersion = "0.1.0",
+                        account = account,
+                        senders = app.accountSenders,
+                        revocation = app.senderRevocation,
+                        onLogout = { logoutCount++ },
+                        onDismiss = {}
+                    )
                 }
             }
         }
@@ -255,13 +276,205 @@ class AccountScreenTest {
             assertEquals(surface, image.getPixel(0, 0))
             assertEquals(container, image.getPixel(4, image.height / 2))
         }
-        assertTrue("Blue QQ badge", profile.hasColor(17, 24, 29, 47, 0xff0b7ac8.toInt()))
+        val blue = 0xff0b7ac8.toInt()
+        assertTrue("Blue QQ badge", profile.hasColor(17, 24, 29, 47, blue))
         assertTrue("First white Q", profile.hasColor(29, 38, 30, 46, Color.WHITE))
         assertTrue("Second white Q", profile.hasColor(38, 47, 30, 46, Color.WHITE))
+        assertGlyph(profile, 28, 29, blue, Color.WHITE, AccountGlyph.Qq)
         val width = with(compose.density) { logout.width.toDp().value.toInt() }
         assertTrue("Logout glyph", logout.hasColor(14, 34, 20, 40, danger))
         assertTrue("Logout label", logout.hasColor(58, 120, 20, 40, danger))
         assertTrue("Logout chevron", logout.hasColor(width - 34, width - 14, 20, 40, danger))
+        assertGlyph(logout, 14, 20, container, danger, AccountGlyph.Logout)
+        assertGlyph(logout, width - 34, 20, container, danger, AccountGlyph.Chevron)
+    }
+
+    private fun assertGlyph(
+        image: Bitmap,
+        left: Int,
+        top: Int,
+        background: Int,
+        tint: Int,
+        glyph: AccountGlyph
+    ) {
+        val shifts = (-1..1).flatMap { offsetY -> (-1..1).map { offsetX -> offsetX to offsetY } }
+        val distances = listOf(glyph.mask, glyph.alternateMask).flatMap { reference ->
+            val mask = reference.trimIndent().lines()
+            shifts.map { (offsetX, offsetY) ->
+                mask.indices.sumOf { row ->
+                    val weight = if (glyph == AccountGlyph.Qq && row in 13..14) 5 else 1
+                    mask[row].indices.count { column ->
+                        image.hasGlyphInk(
+                            left + column + offsetX,
+                            top + row + offsetY,
+                            background,
+                            tint
+                        ) != (mask[row][column] == '#')
+                    } * weight
+                }
+            }
+        }
+        assertTrue(
+            "${glyph.name} glyph mask: ${distances.min()}",
+            distances.min() <= glyph.tolerance
+        )
+    }
+
+    private fun Bitmap.hasGlyphInk(x: Int, y: Int, background: Int, tint: Int): Boolean =
+        with(compose.density) {
+            val columns = x.dp.roundToPx() until (x + 1).dp.roundToPx()
+            val rows = y.dp.roundToPx() until (y + 1).dp.roundToPx()
+            val ink = rows.sumOf { row ->
+                columns.count { column ->
+                    val pixel = Color.red(getPixel(column, row))
+                    abs(pixel - Color.red(tint)) < abs(pixel - Color.red(background))
+                }
+            }
+            ink * 2 >= columns.count() * rows.count()
+        }
+
+    private enum class AccountGlyph(
+        val mask: String,
+        val tolerance: Int,
+        val alternateMask: String
+    ) {
+        Qq(
+            """
+            ....................
+            ....................
+            ....................
+            ....................
+            ....###......###....
+            ..######...######...
+            ..##..###..##..###..
+            .###...##.###...##..
+            .###...##.###...##..
+            .###...##.###...##..
+            .###..###.###..###..
+            ..######...######...
+            ...#####....#####...
+            ......###......###..
+            .......#........#...
+            ....................
+            ....................
+            ....................
+            """,
+            18,
+            """
+            ....................
+            ....................
+            ....................
+            ....................
+            ....###.....####....
+            ...#####...######...
+            ..##...##.##...##...
+            ..##...##.##...###..
+            ..##...##.##....##..
+            ..##...##.##...###..
+            ..##...##.##...##...
+            ...#####...######...
+            ....####....####....
+            .......##......##...
+            ....................
+            ....................
+            ....................
+            ....................
+            """
+        ),
+        Logout(
+            """
+            ....................
+            ..########..........
+            .#########..........
+            .#########..........
+            .###....##..........
+            .###....##..........
+            .###........#.......
+            .###........##......
+            .###...########.....
+            .###..#########.....
+            .###........##......
+            .###........#.......
+            .###................
+            .###................
+            .###....##..........
+            .###....##..........
+            .#########..........
+            .#########..........
+            ..########..........
+            ....................
+            """,
+            15,
+            """
+            ....................
+            ....................
+            ..########..........
+            ..########..........
+            ..##....##..........
+            ..##....##..........
+            ..##................
+            ..##.........#......
+            ..##...########.....
+            ..##...#########....
+            ..##...########.....
+            ..##.........#......
+            ..##................
+            ..##................
+            ..##.....#..........
+            ..##....##..........
+            ..##....##..........
+            ..########..........
+            ..########..........
+            ....................
+            """
+        ),
+        Chevron(
+            """
+            ....................
+            ....................
+            ....................
+            ....................
+            ....................
+            .......##...........
+            .......###..........
+            ........###.........
+            .........###........
+            .........###........
+            ........###.........
+            .......###..........
+            .......##...........
+            ....................
+            ....................
+            ....................
+            ....................
+            ....................
+            ....................
+            ....................
+            """,
+            6,
+            """
+            ....................
+            ....................
+            ....................
+            ....................
+            ....................
+            ........#...........
+            ........##..........
+            ........###.........
+            .........###........
+            ..........###.......
+            .........###........
+            ........##..........
+            .......##...........
+            ....................
+            ....................
+            ....................
+            ....................
+            ....................
+            ....................
+            ....................
+            """
+        )
     }
 
     private fun Bitmap.hasColor(left: Int, right: Int, top: Int, bottom: Int, color: Int): Boolean =
