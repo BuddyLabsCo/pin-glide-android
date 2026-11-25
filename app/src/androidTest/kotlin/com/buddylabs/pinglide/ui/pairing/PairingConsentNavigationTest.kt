@@ -216,7 +216,12 @@ class PairingConsentNavigationTest {
     @Test
     fun expiredOnboardingSessionCanBeSkipped() {
         val progress = object : SetupProgress by FirstDeviceSetup {
-            override fun complete() = Unit
+            override var state = FirstDeviceSetup.state
+                private set
+
+            override fun complete() {
+                state = state.copy(completed = true)
+            }
         }
         render(progress, AppLanguage.SimplifiedChinese, 1f)
         compose.onNodeWithText("扫描二维码").performClick()
@@ -226,6 +231,7 @@ class PairingConsentNavigationTest {
         captureExpiredEvidence("expired-onboarding.png")
         compose.onNodeWithText("稍后配对").performClick()
         compose.onNodeWithText("添加第一台设备").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(true, progress.state.completed) }
     }
 
     @Test
@@ -237,9 +243,10 @@ class PairingConsentNavigationTest {
         compose.onNodeWithText("QR code expired").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText(
             "The Pairing session has expired, been claimed, or been cancelled. " +
-                "Ask the receiving device to display a new QR code."
+                "Ask the target device to display a new QR code."
         ).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Scan a new QR code").performScrollTo().assertIsEnabled()
+        compose.onNodeWithText("Scan a new QR code").performScrollTo().assertIsDisplayed()
+            .assertIsEnabled()
         compose.onNodeWithText("Pair later").performScrollTo().assertIsDisplayed()
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithText("Connect your first device").performScrollTo().assertIsDisplayed()

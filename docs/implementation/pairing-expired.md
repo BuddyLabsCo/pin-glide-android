@@ -42,3 +42,19 @@ Ripwire found no incompatible `RingedEmblem` callers. Its quality delta
 flags the similar Compose text layout in the progress and expired screens
 and the extended navigation fixture; the screens intentionally retain
 distinct presentation and the tests reuse the existing integration fixture.
+
+Review fix verification: the expired and progress screens share their
+focused, politely announced heading without changing either layout.
+The English copy uses “target device”. The onboarding test verifies the
+completed setup checkpoint and the visible, enabled fresh-scan action at
+200% font scale. `PairingIdentityProgressTest` now exercises an expiry
+event during activation: it verifies the expired screen supersedes the
+generic failure, the connection and handshake close, the session is
+cancelled once without retaining a Pairing, and the released QR is rejected
+without another authorization request. A different session reaches consent.
+
+All 15 focused Compose tests passed in each theme. All 46 JVM tests,
+`qualityCheck`, debug and release Kotlin compilation, and both APK
+assemblies passed. The full instrumentation suite was not repeated for
+these review fixes. Ripwire reported recent test-fixture churn and verbosity;
+the progress screen's caller contract is unchanged.

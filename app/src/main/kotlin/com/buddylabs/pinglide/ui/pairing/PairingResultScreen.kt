@@ -141,8 +141,6 @@ internal fun PairingResultScreen(
 @Composable
 internal fun PairingProgressScreen(stage: PairingStage) {
     val title = stringResource(R.string.pairing_progress_title)
-    val titleFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { titleFocus.requestFocus() }
     ScreenLayout {
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             Column(
@@ -153,13 +151,9 @@ internal fun PairingProgressScreen(stage: PairingStage) {
                 verticalArrangement = Arrangement.Center
             ) {
                 LoadingEmblem { BrandIcon(Modifier.size(92.dp), RoundedCornerShape(28.dp)) }
-                Text(
+                PairingAnnouncedHeading(
                     stringResource(stage.label()),
-                    modifier = Modifier.padding(top = 44.dp).focusRequester(titleFocus)
-                        .focusable().semantics {
-                            heading()
-                            liveRegion = LiveRegionMode.Polite
-                        },
+                    modifier = Modifier.padding(top = 44.dp),
                     style = MaterialTheme.typography.headlineMedium.copy(
                         fontSize = 26.sp,
                         lineHeight = 32.sp,

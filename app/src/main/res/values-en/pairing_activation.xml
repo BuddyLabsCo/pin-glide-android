@@ -2,7 +2,7 @@
 <resources>
     <string name="pairing_expired_eyebrow">SESSION ENDED</string>
     <string name="pairing_expired_title">QR code expired</string>
-    <string name="pairing_expired_instruction">The Pairing session has expired, been claimed, or been cancelled. Ask the receiving device to display a new QR code.</string>
+    <string name="pairing_expired_instruction">The Pairing session has expired, been claimed, or been cancelled. Ask the target device to display a new QR code.</string>
     <string name="pairing_expired_return">Return to Home</string>
     <string name="pairing_success">Pairing complete</string>
     <string name="pairing_progress_title">Pairing in progress</string>
