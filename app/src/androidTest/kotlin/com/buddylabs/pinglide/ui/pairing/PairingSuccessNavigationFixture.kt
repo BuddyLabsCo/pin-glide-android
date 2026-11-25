@@ -17,6 +17,9 @@ import androidx.compose.ui.test.performClick
 import androidx.lifecycle.viewModelScope
 import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.app.LocalizedContent
+import com.buddylabs.pinglide.domain.forwarding.PairingTestMessage
+import com.buddylabs.pinglide.domain.forwarding.TestDeliveryService
+import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 import com.buddylabs.pinglide.domain.identity.AuthorizationState
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.identity.LoginState
@@ -24,16 +27,34 @@ import com.buddylabs.pinglide.domain.identity.SenderRestoration
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
 import com.buddylabs.pinglide.domain.pairing.PairingEntryPage
 import com.buddylabs.pinglide.domain.pairing.PairingHost
+import com.buddylabs.pinglide.domain.pairing.PairingStore
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.domain.settings.SetupProgress
 import com.buddylabs.pinglide.domain.settings.SetupState
+import com.buddylabs.pinglide.platform.crypto.encryptTestMessage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import com.buddylabs.pinglide.ui.home.HomePairingStore
 import com.buddylabs.pinglide.ui.home.HomeViewModel
 import com.buddylabs.pinglide.ui.navigation.AcceptedNavigation
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlinx.coroutines.cancel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+
+internal fun pairingTestMessageWithSimulatedReceipt(
+    store: PairingStore,
+    renewal: CredentialRenewal,
+    testedPairings: ConcurrentLinkedQueue<String>
+) = PairingTestMessage(
+    store,
+    renewal,
+    ::encryptTestMessage,
+    TestDeliveryService { _, _, selectItems ->
+        val items = selectItems()
+        testedPairings.addAll(items.map { it.target.pairingId })
+        items.map { TestMessageResult.Received }
+    }
+)
 
 internal fun AndroidComposeTestRule<*, ComponentActivity>.withPairingSuccessNavigation(
     model: PairingEntryViewModel,

@@ -14,8 +14,6 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.viewModelScope
 import com.buddylabs.pinglide.app.LocalizedContent
-import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
-import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.pairing.HomeState
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
@@ -200,7 +198,7 @@ class PairingIdentityProgressTest {
                 inputIntact.set(input.psk.all { it == 1.toByte() })
                 object : PairingHandshake {
                     override val init = byteArrayOf(1)
-                    override val messageKey = ByteArray(32)
+                    override val messageKey = ByteArray(32) { 1 }
                     override fun confirm(payload: ByteArray): ByteArray {
                         check(successfulHandshakeEnabled)
                         return byteArrayOf(2)
@@ -223,8 +221,7 @@ class PairingIdentityProgressTest {
             )
         },
         { pairingId ->
-            testedPairings.add(pairingId)
-            TestMessageOutcome("My device", TestMessageResult.Received)
+            pairingTestMessageWithSimulatedReceipt(store, renewal, testedPairings).send(pairingId)
         }
     )
 
@@ -306,12 +303,7 @@ class PairingIdentityProgressTest {
         assertEquals(session.pairingId, model.state.value.activatedPairingId)
         compose.onNodeWithText("配对完成").assertIsDisplayed()
         compose.onNodeWithText("正在确认配对信息").assertDoesNotExist()
-        compose.assertPairingSuccess(checkNotNull(session.pairingId), testedPairings)
-        assertEquals(PairingEntryPage.Success, model.state.value.page)
-        assertEquals(session.pairingId, model.state.value.activatedPairingId)
-        val retained = runBlocking { store.readPairings() }
-        assertEquals(committed.items, retained.items)
-        assertTrue(retained.provisional.isEmpty())
+        compose.sendTestMessageAndAssertPairingSuccess(pairing, model, store, testedPairings)
         compose.onNodeWithText("进入首页").performClick()
         compose.onNodeWithText("配对完成").assertDoesNotExist()
     }

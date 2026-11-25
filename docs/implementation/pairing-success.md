@@ -103,14 +103,36 @@ fresh API 37 captures at 366 × 820 dp in Simplified Chinese match the
 existing app-owned layout, with the native success Toast retained as required.
 No UI or motion changes are needed.
 
+The Android-owned Toast is intentionally retained even though the prototype
+only draws the in-app pill. The [product requirement](https://github.com/BuddyLabsCo/pin-glide-android/blob/d149aa8659c7b8d583a8641e04f702b58b39ce52/PRODUCT.md#L44)
+requires it. The [final #117 evidence](https://github.com/BuddyLabsCo/pin-glide-android/issues/117#issuecomment-7161020417)
+explicitly identifies the lower Toast in both comparisons, and maintainer
+`xiakeng`, who posted that evidence, subsequently merged
+[PR #189](https://github.com/BuddyLabsCo/pin-glide-android/pull/189) with it
+intact. This is the existing accepted system-UI difference, not a new design
+deviation. The documented evidence and subsequent maintainer merge are the
+acceptance record; no separate approval review was recorded.
+
 The navigation regression now checks the polite live-region acknowledgment,
 visible completion heading, unchanged and enabled actions, and the same
 activated Pairing and stored Pairing contents before the user selects Enter
-Home. Both onboarding and Home entry paths passed in light and dark themes.
-The test uses simulated activation and receipt, not a live Receiver.
+Home. It uses the production `PairingTestMessage` operation and encryption
+with simulated delivery, checks that the only uploaded target is the newly
+activated Pairing, and verifies its identity, independently copied key
+contents and receive preference during acknowledgment and after feedback
+expires. One encryption-counter reservation is expected. No live Receiver
+is used.
 The renamed shared screenshot helper is used so the instrumentation suite
 compiles and can capture this state.
 
-Verification: debug and release Kotlin compilation, both APK assemblies,
+Initial #118 verification: debug and release Kotlin compilation, both APK assemblies,
 `qualityCheck`, and all 46 JVM tests passed. The full API 37 suite completed
 with 127 passing tests, one camera-feed assumption skipped, and no failures.
+
+Review fix verification: debug/release and instrumentation Kotlin
+compilation, both APK assemblies, `qualityCheck`, and all 46 JVM tests
+passed. All 11 focused navigation/progress tests passed in light theme; both
+success paths passed in dark theme with fresh captures. The 33-test Pairing
+suite had 32 passes and one timeout in the unchanged consent keyboard-resize
+test, which passed on isolated retry. The complete emulator suite was not
+repeated for these test-only fixes.
