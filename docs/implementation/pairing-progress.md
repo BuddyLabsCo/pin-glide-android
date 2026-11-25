@@ -61,3 +61,39 @@ because the Identity heading was not displayed. After the change, all 13
 Pairing and shared progress Compose tests passed, including the abandonment
 regression. All 46 JVM tests, `qualityCheck`, debug and instrumentation assembly,
 and release Kotlin compilation passed.
+
+## Final confirmation (#114)
+
+The shared presentation corrected by #111 already matches the
+[confirmation reference](../ui-prototype/shots/03-progress-confirm.png).
+No runtime layout, motion or workflow change is needed.
+
+| Theme | Comparison |
+| --- | --- |
+| Light | [Approved and Android](pairing-progress-confirmation-evidence/light-comparison.png) |
+| Dark | [Approved and Android](pairing-progress-confirmation-evidence/dark-comparison.png) |
+
+Both comparisons use Simplified Chinese on API 37 at 366 × 820 dp, with the
+approved prototype on the left and Android on the right. The Android system
+bars, safe-area centering, native font rendering and progress arc phase account
+for the small differences. Existing motion evidence is recorded under #111.
+
+The screenshots were captured during the actual Pairing entry and activation
+workflow using simulated service, handshake and storage collaborators.
+`PairingIdentityProgressTest.confirmationRemainsVisibleUntilActivationIsReconciled`
+holds the service completion response, then separately holds the authoritative
+Pairing inventory. At both boundaries it verifies the final localized heading,
+absence of previous stages and actions, the instruction, and accessible
+indeterminate progress. Only after the inventory confirms activation does the
+screen transition to Pairing complete. No live Receiver or QQ sign-in is used.
+
+Verification: all nine focused Compose tests passed in light and dark themes.
+All 46 JVM tests, `qualityCheck`, debug and instrumentation APK assembly, and
+debug and release Kotlin compilation passed.
+The full 108-test instrumentation run was stopped after test 16,
+`HomeLoginExpiredScreenTest.expiredListStillScrollsButHidesRefreshControlsAndFeedback`,
+stalled for over five minutes; 14 tests had passed and one camera test was
+skipped by its assumption. Ripwire reported test-fixture verbosity and recent
+change churn; there are no runtime source changes.
+The subsequent focused run of `PairingConsentNavigationTest`,
+`PairingConsentScreenTest` and `HomeCapacityScreenTest` passed all 13 tests.

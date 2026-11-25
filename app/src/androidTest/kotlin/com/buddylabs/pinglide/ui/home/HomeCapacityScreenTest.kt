@@ -161,6 +161,7 @@ internal class HomePairingStore(
         )
     )
     private var revision = 0L
+    private val provisional = mutableMapOf<String, OwnPairing>()
     private val pairings = targets.associate { target ->
         target.pairingId to OwnPairing(
             target.pairingId,
@@ -172,8 +173,20 @@ internal class HomePairingStore(
 
     override suspend fun read() = authority
 
-    override suspend fun readPairings() =
-        PairingSnapshot(authority, revision, listed, pairings.values.toList())
+    override suspend fun readPairings() = PairingSnapshot(
+        authority,
+        revision,
+        listed,
+        pairings.values.toList(),
+        provisional.values.toList()
+    )
+
+    override suspend fun saveProvisional(expected: PairingSnapshot, pairing: OwnPairing): Boolean {
+        if (expected.revision != revision) return false
+        provisional[pairing.pairingId] = pairing
+        revision++
+        return true
+    }
 
     override suspend fun reconcile(expected: PairingSnapshot, items: List<RemotePairing>): Boolean {
         if (revision != expected.revision || items.any { item ->
@@ -186,6 +199,14 @@ internal class HomePairingStore(
         pairings.keys.retainAll(remote.keys)
         pairings.replaceAll { pairingId, pairing ->
             pairing.copy(alias = remote.getValue(pairingId).alias)
+        }
+        for (item in items) {
+            val pending = provisional[item.pairingId] ?: continue
+            if (pending.receiverId == item.receiverId) {
+                pairings[item.pairingId] =
+                    pending.copy(alias = item.alias, provisionalSessionId = null)
+                provisional.remove(item.pairingId)
+            }
         }
         listed = true
         revision++
