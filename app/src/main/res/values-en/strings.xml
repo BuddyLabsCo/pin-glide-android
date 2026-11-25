@@ -201,6 +201,7 @@
     <string name="settings_device_access">Device access management</string>
     <string name="settings_device_access_explanation">Revocation requires verification with the current QQ account. The selected Sender’s registration and Pairings will be permanently removed. Other Senders are unaffected.</string>
     <string name="settings_about">About</string>
+    <string name="settings_privacy">Privacy and data</string>
     <string name="account_loading">Loading account information…</string>
     <string name="account_error">Network error. Try again later.</string>
     <string name="account_logout">Log out</string>
