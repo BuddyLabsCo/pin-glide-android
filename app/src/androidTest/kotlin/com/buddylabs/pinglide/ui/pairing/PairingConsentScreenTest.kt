@@ -16,7 +16,10 @@ import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -88,6 +91,26 @@ class PairingConsentScreenTest {
         compose.onNodeWithContentDescription("返回").performClick()
         cancel.performClick()
         compose.runOnIdle { assertEquals(listOf("confirm", "back", "cancel"), actions) }
+    }
+
+    @Test
+    fun blankTargetNameShowsAccessibleErrorAndDisablesConfirmation() {
+        state.value = state.value.copy(
+            host = PairingHost.Home,
+            alias = "",
+            aliasError = PairingAliasError.Blank
+        )
+        render(AppLanguage.SimplifiedChinese)
+        val alias = compose.onNodeWithContentDescription("设备名称")
+        val error = compose.onNodeWithText("请输入设备名称")
+        alias.assertIsDisplayed().assertIsEnabled().assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.Error, "请输入设备名称")
+        )
+        error.assertIsDisplayed()
+        assertTrue(alias.getUnclippedBoundsInRoot().bottom < error.getUnclippedBoundsInRoot().top)
+        compose.onNodeWithText("确认添加设备").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithText("取消").assertIsDisplayed().assertIsEnabled()
+        captureConsentEvidence("consent-blank.png")
     }
 
     @Test

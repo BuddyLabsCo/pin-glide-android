@@ -30,6 +30,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +46,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Offset
@@ -347,6 +349,9 @@ private fun ConsentCountdown(seconds: Long) {
 
 @Composable
 private fun ConsentActions(state: PairingEntryState, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val confirmEnabled =
+        !state.pending && !state.confirmed && state.aliasError == null && state.problem == null
     val navigationInset =
         with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() }
     Column(
@@ -355,10 +360,13 @@ private fun ConsentActions(state: PairingEntryState, onConfirm: () -> Unit, onCa
     ) {
         Button(
             onClick = onConfirm,
-            enabled =
-                !state.pending && !state.confirmed && state.aliasError == null &&
-                    state.problem == null,
+            enabled = confirmEnabled,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .alpha(if (confirmEnabled) 1f else 0.38f),
+            colors = ButtonDefaults.buttonColors(
+                disabledContainerColor = colors.primary,
+                disabledContentColor = colors.onPrimary
+            )
         ) {
             Icon(painterResource(R.drawable.ic_key), null, Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
