@@ -6,6 +6,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasText
@@ -15,15 +16,24 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import com.buddylabs.pinglide.domain.pairing.OwnPairing
+import com.buddylabs.pinglide.domain.pairing.PairingEntryPage
+import com.buddylabs.pinglide.domain.pairing.PairingStore
 import com.buddylabs.pinglide.ui.components.captureUiEvidence
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 
-internal fun ComposeContentTestRule.assertPairingSuccess(
-    pairingId: String,
+internal fun ComposeContentTestRule.sendTestMessageAndAssertPairingSuccess(
+    pairing: OwnPairing,
+    model: PairingEntryViewModel,
+    store: PairingStore,
     testedPairings: ConcurrentLinkedQueue<String>
 ) {
+    val original = pairing.copy(key = checkNotNull(pairing.key).copyOf())
     val heading = onNode(
         hasText("配对完成") and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading) and
             SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
@@ -34,6 +44,13 @@ internal fun ComposeContentTestRule.assertPairingSuccess(
     val title = heading.fetchSemanticsNode().boundsInRoot
     val sendBounds = send.fetchSemanticsNode().boundsInRoot
     val homeBounds = home.fetchSemanticsNode().boundsInRoot
+
+    fun assertCompletionUnchanged() {
+        heading.assertIsDisplayed()
+        assertEquals(sendBounds, send.assertIsEnabled().fetchSemanticsNode().boundsInRoot)
+        assertEquals(homeBounds, home.assertIsEnabled().fetchSemanticsNode().boundsInRoot)
+    }
+
     assertTrue(title.center.y > viewport.top + viewport.height * 0.35f)
     assertTrue(title.center.y < viewport.top + viewport.height * 0.65f)
     assertEquals(viewport.center.x, title.center.x, 2f)
@@ -43,15 +60,40 @@ internal fun ComposeContentTestRule.assertPairingSuccess(
     assertTrue(testedPairings.isEmpty())
     captureUiEvidence("pairing-success.png")
     send.performClick()
-    waitUntil(5_000) { testedPairings.isNotEmpty() }
-    assertEquals(listOf(pairingId), testedPairings.toList())
-    val feedback = onNodeWithText("测试消息已发送").assertIsDisplayed()
-    assertEquals(sendBounds, send.fetchSemanticsNode().boundsInRoot)
-    assertEquals(homeBounds, home.fetchSemanticsNode().boundsInRoot)
+    val feedbackText = hasText("测试消息已发送")
+    val feedbackMatcher = feedbackText and
+        SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+    waitUntil(5_000) { onAllNodes(feedbackMatcher).fetchSemanticsNodes().size == 1 }
+    assertEquals(listOf(pairing.pairingId), testedPairings.toList())
+    val feedback = onNode(feedbackMatcher).assertIsDisplayed()
+    assertCompletionUnchanged()
     assertTrue(feedback.fetchSemanticsNode().boundsInRoot.bottom < sendBounds.top)
     captureUiEvidence("pairing-success-feedback.png")
-    home.performClick()
-    heading.assertDoesNotExist()
+    assertPairingRetained(original, model, store)
+    waitUntil(10_000) { onAllNodes(feedbackText).fetchSemanticsNodes().isEmpty() }
+    assertCompletionUnchanged()
+    assertPairingRetained(original, model, store)
+    assertEquals(listOf(pairing.pairingId), testedPairings.toList())
+}
+
+private fun assertPairingRetained(
+    original: OwnPairing,
+    model: PairingEntryViewModel,
+    store: PairingStore
+) {
+    assertEquals(PairingEntryPage.Success, model.state.value.page)
+    assertEquals(original.pairingId, model.state.value.activatedPairingId)
+    val snapshot = runBlocking { store.readPairings() }
+    assertTrue(snapshot.provisional.isEmpty())
+    val retained = snapshot.items.single()
+    assertEquals(original.pairingId, retained.pairingId)
+    assertEquals(original.receiverId, retained.receiverId)
+    assertEquals(original.alias, retained.alias)
+    assertEquals(original.enabled, retained.enabled)
+    assertTrue(retained.keyUsable)
+    assertNull(retained.provisionalSessionId)
+    assertArrayEquals(original.key, retained.key)
+    assertEquals(original.encryptions + 1, retained.encryptions)
 }
 
 private fun ComposeContentTestRule.assertSuccessCheck(titleCenter: Float, titleTop: Float) {
