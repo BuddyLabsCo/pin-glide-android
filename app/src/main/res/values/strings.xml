@@ -120,7 +120,7 @@
     <string name="home_alias_blank">请输入设备名称</string>
     <string name="home_alias_too_long">设备名称最多 40 个字符。</string>
     <string name="home_alias_invalid_characters">名称包含无效字符，请重新输入。</string>
-    <string name="home_alias_duplicate">已有一台同名设备，请换一个名称。</string>
+    <string name="home_alias_duplicate">已有一台同名设备，请换一个名称</string>
     <string name="home_rename_help">不能为空，也不能与本机已配对的设备重名。</string>
     <string name="home_rename_blank">请输入设备名称</string>
     <string name="home_rename_too_long">设备名称不能超过 40 字</string>
