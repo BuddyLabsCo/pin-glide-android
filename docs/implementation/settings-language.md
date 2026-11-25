@@ -41,3 +41,24 @@ was skipped, and the existing
 stalled. The isolated single-test retry also stalled despite a configured
 60-second test timeout and was terminated. No change to the unrelated Home
 test or implementation was made.
+
+Review follow-up: the root and language rows now share their presentation
+geometry and label typography, with the language-specific selectable modifier
+and compact separator spacing unchanged. `LanguageScreenTest` holds the
+picker's existing navigation assertions and checks the rendered ring centers,
+stroke thicknesses, circular outlines and both separators. The group height
+tolerance is in physical pixels so the test accepts independent dp rounding.
+The compact 240 dp viewport test uses 200% font scale and activates all three
+radio options by touch, checking the radio role and selected state. The
+`MainActivityLanguageTest` is an opt-in production-activity test requiring a
+dedicated device with completed setup and a signed-in test Account; it checks
+the persisted preference, immediate root return and the localized Home UI
+after closing Settings.
+
+The five focused tests passed in light and dark on API 37, and both picker
+tests passed at density 2.625. Debug/instrumentation assembly, debug/release
+compilation, `qualityCheck` and the 46 JVM tests passed. The opt-in production
+test timed out waiting for Home because the isolated device was at Welcome
+(confirmed by the UI hierarchy); it has not yet demonstrated the signed-in
+flow. The radio outline remains the approved prototype color pending
+maintainer approval of the accessibility contrast correction.

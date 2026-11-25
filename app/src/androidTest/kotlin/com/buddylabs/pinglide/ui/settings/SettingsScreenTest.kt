@@ -6,7 +6,6 @@ import android.content.IntentFilter
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.os.LocaleList
 import android.provider.Settings
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
@@ -14,10 +13,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalConfiguration
@@ -27,8 +23,6 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
-import androidx.compose.ui.test.assertIsNotSelected
-import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -65,69 +59,6 @@ import org.junit.Test
 class SettingsScreenTest {
     @get:Rule
     val compose = createAndroidComposeRule<ComponentActivity>()
-
-    @Test
-    fun languagePickerMatchesApprovedGroupAndImmediatelyAppliesSelection() {
-        val activity = compose.activity
-        val app = activity.application as PinGlideApplication
-        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
-        compose.setContent {
-            var language by remember { mutableStateOf(AppLanguage.System) }
-            val systemConfiguration = LocalConfiguration.current
-            val referenceConfiguration = remember(systemConfiguration) {
-                Configuration(systemConfiguration).apply {
-                    fontScale = 1f
-                    setLocales(LocaleList.forLanguageTags("zh-Hans"))
-                }
-            }
-            CompositionLocalProvider(
-                LocalConfiguration provides referenceConfiguration,
-                LocalDensity provides Density(LocalDensity.current.density, 1f)
-            ) {
-                LocalizedContent(language) {
-                    PinGlideTheme {
-                        SettingsNavigation(
-                            language = language,
-                            onLanguage = { language = it },
-                            onBatterySettings = { false },
-                            installedVersion = "0.1.0",
-                            account = app.accountSession,
-                            senders = app.accountSenders,
-                            revocation = app.senderRevocation,
-                            onLogout = {},
-                            onDismiss = {}
-                        )
-                    }
-                }
-            }
-        }
-        compose.onNodeWithText("语言").performClick()
-        compose.onNodeWithText("设置").assertIsDisplayed()
-        val group = compose.onNodeWithTag("settings-group:应用语言").assertIsDisplayed()
-        val bounds = group.getUnclippedBoundsInRoot()
-        assertEquals(180.dp, bounds.bottom - bounds.top)
-        compose.onNodeWithText("跟随系统").assertIsSelected().assertHasClickAction()
-        compose.onNodeWithText("简体中文").assertIsNotSelected().assertHasClickAction()
-        compose.onNodeWithText("English").assertIsNotSelected().assertHasClickAction()
-        captureSettledUiEvidence(
-            "settings-language.png",
-            compose.onNode(isRoot() and hasAnyDescendant(hasText("应用语言")))
-        )
-        compose.onNodeWithText("简体中文").performClick()
-        compose.onNodeWithText("应用语言").assertDoesNotExist()
-        compose.onNodeWithText("简体中文").assertIsDisplayed()
-        compose.onNodeWithText("语言").performClick()
-        compose.onNodeWithText("简体中文").assertIsSelected()
-        compose.onNodeWithText("English").performClick()
-        compose.onNodeWithText("Language").assertIsDisplayed()
-        compose.onNodeWithText("English").assertIsDisplayed()
-        compose.onNodeWithText("Language").performClick()
-        compose.onNodeWithText("English").assertIsSelected()
-        compose.onNodeWithText("Follow system").performClick()
-        compose.onNodeWithText("语言").assertIsDisplayed()
-        compose.onNodeWithText("语言").performClick()
-        compose.onNodeWithText("跟随系统").assertIsSelected()
-    }
 
     @Test
     fun approvedSettingsRowsDisplayInstalledVersionAndKeepTheirActions() {

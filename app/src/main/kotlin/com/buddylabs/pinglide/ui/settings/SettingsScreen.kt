@@ -41,6 +41,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
@@ -210,27 +211,14 @@ private fun SettingsRow(
     } else {
         Modifier
     }
-    Row(
-        modifier.fillMaxWidth().then(action)
-            .heightIn(min = 60.dp).padding(horizontal = 14.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Box(Modifier.size(width = 34.dp, height = 20.dp)) {
+    SettingsListRow(
+        title = title,
+        modifier = modifier.then(action),
+        description = description,
+        leading = {
             Icon(painterResource(icon), null, Modifier.size(20.dp), tint = secondaryColor)
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                title,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                lineHeight = 18.sp,
-                letterSpacing = 0.sp
-            )
-            if (description != null) {
-                Text(description, fontSize = 11.sp, lineHeight = 15.sp, color = secondaryColor)
-            }
-        }
+    ) {
         if (value != null) {
             Text(
                 value,
@@ -247,5 +235,44 @@ private fun SettingsRow(
                 tint = secondaryColor
             )
         }
+    }
+}
+
+@Composable
+internal fun SettingsListRow(
+    title: String,
+    modifier: Modifier = Modifier,
+    minHeight: Dp = 60.dp,
+    description: String? = null,
+    leading: @Composable () -> Unit,
+    trailing: @Composable () -> Unit = {}
+) {
+    Row(
+        modifier.fillMaxWidth().heightIn(min = minHeight)
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(Modifier.size(width = 34.dp, height = 20.dp)) {
+            leading()
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 18.sp,
+                letterSpacing = 0.sp
+            )
+            if (description != null) {
+                Text(
+                    description,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        trailing()
     }
 }
