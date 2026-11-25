@@ -63,7 +63,10 @@ private const val TEST_NOTICE_MILLIS = 4_000L
 @Composable
 internal fun PairingTestAction(
     action: TestMessageAction,
-    content: @Composable (button: @Composable () -> Unit, notice: @Composable () -> Unit) -> Unit
+    content: @Composable (
+        button: @Composable () -> Unit,
+        notice: @Composable (bottomOffset: Dp?) -> Unit
+    ) -> Unit
 ) {
     val state by action.state.collectAsState()
     val context = LocalContext.current
@@ -85,17 +88,24 @@ internal fun PairingTestAction(
                 )
             }
         },
-        {
+        { bottomOffset ->
             state.outcome?.let { delivery ->
-                PairingTestNotice(
-                    message = testMessageFeedbackText(delivery),
-                    anchor = null,
-                    headerBottom = 0f,
-                    alignBottom = false,
-                    bottomOffset = 140.dp,
-                    modifier = Modifier.fillMaxSize(),
-                    accessible = true
-                )
+                val message = testMessageFeedbackText(delivery)
+                if (bottomOffset == null) {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        PairingTestNoticePill(message, accessible = true, modifier = Modifier)
+                    }
+                } else {
+                    PairingTestNotice(
+                        message = message,
+                        anchor = null,
+                        headerBottom = 0f,
+                        alignBottom = false,
+                        bottomOffset = bottomOffset,
+                        modifier = Modifier.fillMaxSize(),
+                        accessible = true
+                    )
+                }
             }
         }
     )
@@ -234,36 +244,9 @@ private fun PairingTestNotice(
     modifier: Modifier,
     accessible: Boolean = false
 ) {
-    val colors = MaterialTheme.colorScheme
-    val shadowColor = if (isSystemInDarkTheme()) Color(0x61000000) else Color(0x260A1210)
     Layout(
         modifier = modifier,
-        content = {
-            Text(
-                message,
-                Modifier.padding(horizontal = 24.dp)
-                    .widthIn(max = 280.dp)
-                    .dropShadow(
-                        CircleShape,
-                        Shadow(24.dp, shadowColor, offset = DpOffset(0.dp, 8.dp))
-                    )
-                    .background(colors.onSurface.copy(alpha = 0.88f), CircleShape)
-                    .semantics {
-                        if (accessible) {
-                            liveRegion = LiveRegionMode.Polite
-                        } else {
-                            hideFromAccessibility()
-                        }
-                    }
-                    .padding(horizontal = 18.dp, vertical = 12.dp),
-                color = colors.surface,
-                style = TextStyle(
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight(650),
-                    textAlign = TextAlign.Center
-                )
-            )
-        }
+        content = { PairingTestNoticePill(message, accessible) }
     ) { measurables, constraints ->
         val notice = measurables.single().measure(constraints.copy(minWidth = 0, minHeight = 0))
         layout(constraints.maxWidth, constraints.maxHeight) {
@@ -279,6 +262,38 @@ private fun PairingTestNotice(
             notice.placeRelative((constraints.maxWidth - notice.width) / 2, visibleTop)
         }
     }
+}
+
+@Composable
+private fun PairingTestNoticePill(
+    message: String,
+    accessible: Boolean,
+    modifier: Modifier = Modifier.padding(horizontal = 24.dp).widthIn(max = 280.dp)
+) {
+    val colors = MaterialTheme.colorScheme
+    val shadowColor = if (isSystemInDarkTheme()) Color(0x61000000) else Color(0x260A1210)
+    Text(
+        message,
+        modifier.dropShadow(
+            CircleShape,
+            Shadow(24.dp, shadowColor, offset = DpOffset(0.dp, 8.dp))
+        )
+            .background(colors.onSurface.copy(alpha = 0.88f), CircleShape)
+            .semantics {
+                if (accessible) {
+                    liveRegion = LiveRegionMode.Polite
+                } else {
+                    hideFromAccessibility()
+                }
+            }
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        color = colors.surface,
+        style = TextStyle(
+            fontSize = 12.sp,
+            fontWeight = FontWeight(650),
+            textAlign = TextAlign.Center
+        )
+    )
 }
 
 private val testMessageLabels = mapOf(

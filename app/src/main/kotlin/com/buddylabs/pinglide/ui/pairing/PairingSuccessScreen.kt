@@ -64,7 +64,7 @@ internal fun PairingSuccessScreen(action: TestMessageAction, onHome: () -> Unit)
                     Text(stringResource(R.string.pairing_home), fontWeight = FontWeight.Bold)
                 }
             },
-            overlay = notice
+            feedback = notice
         )
     }
 }

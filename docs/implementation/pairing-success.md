@@ -43,15 +43,17 @@ stationary actions, with the existing native success Toast retained. The
 notice honors Android's recommended accessibility timeout; failure copy
 continues to identify the target and specific result.
 
-| Theme | Before and during simulated success feedback |
+| Theme | Approved feedback prototype and corrected Android |
 | --- | --- |
 | Light | [Comparison](pairing-success-evidence/light-feedback-comparison.png) |
 | Dark | [Comparison](pairing-success-evidence/dark-feedback-comparison.png) |
 
-These captures use the actual navigation host with simulated service
-responses at the same locale and viewport as the original comparisons.
+The left side is cropped from the approved
+[received feedback reference](../ui-prototype/shots/03-test-received.png);
+the right side shows the current Android navigation host with simulated
+service responses, in Simplified Chinese at 366 × 820 dp on API 37.
 The camera privacy indicator and the lower Toast are system-owned UI.
-The app's feedback pill does not shift either action.
+The app's feedback pill does not shift either action when content fits.
 
 `PairingIdentityProgressTest` now enters through real onboarding and Home
 navigation, verifies the newly activated target, and checks that Enter Home
@@ -68,3 +70,27 @@ onboarding navigation regression also passed with evidence capture in
 light and dark themes. Debug and release Kotlin compilation, debug and
 instrumentation APK assembly, `qualityCheck`, and all 46 JVM tests passed.
 The complete emulator suite was not repeated for this review fix.
+
+## Second review fixes
+
+Feedback now follows the measured result layout: when content fits,
+the pill is positioned above the actual action height, preserving the
+approved gap and stationary controls. When the result scrolls, the notice
+is part of that same scrollable content above the actions, with the
+available width for enlarged or multiline feedback. It cannot cover the
+heading or controls. The timeout and native success Toast are unchanged.
+
+The extended compact English regression completes a simulated rejection at
+200% font scale in a 120 dp usable viewport, scrolls the complete notice
+into view, verifies that it precedes both actions, and operates Send and
+Enter Home after completion. The regression failed on the old overlay
+because it had no scrollable parent. Both feedback comparisons above were
+refreshed from the approved prototype and the corrected Android screen.
+No motion behavior changed.
+
+Second review verification: all 74 selected emulator tests passed (33
+Pairing and 41 Home readiness/target test-message tests). The four focused
+success/failure layout tests and the onboarding evidence regression in
+both themes passed. Debug and release Kotlin compilation, both APK
+assemblies, `qualityCheck`, and all 46 JVM tests passed. The complete
+emulator suite was not repeated.

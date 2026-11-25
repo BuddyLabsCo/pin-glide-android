@@ -62,6 +62,16 @@ class PairingSuccessScreenTest {
         compose.onNodeWithText(
             "Sending…"
         ).performScrollTo().assertIsDisplayed().assertIsNotEnabled()
+        response.complete(TestMessageOutcome("My device", TestMessageResult.Rejected))
+        val notice = rejectionNotice().performScrollTo().assertIsDisplayed()
+        val noticeBounds = notice.getUnclippedBoundsInRoot()
+        assertTrue("Notice top: $noticeBounds", noticeBounds.top >= bottom - 120.dp - 1.dp)
+        assertTrue("Notice bottom: $noticeBounds", noticeBounds.bottom <= bottom + 1.dp)
+        val send = compose.onNodeWithText("Send test message")
+        assertTrue(noticeBounds.bottom <= send.getUnclippedBoundsInRoot().top)
+        send.performScrollTo().assertIsDisplayed().assertIsEnabled()
+            .performTouchInput { click() }
+        compose.runOnIdle { assertEquals(2, sends) }
         compose.onNodeWithText("Go to Home").performScrollTo().assertIsDisplayed()
             .performTouchInput { click() }
         compose.runOnIdle { assertEquals(1, leaves) }
@@ -80,11 +90,7 @@ class PairingSuccessScreenTest {
         send.performClick()
         compose.onNodeWithText("Sending…").assertIsNotEnabled()
         response.complete(TestMessageOutcome("My device", TestMessageResult.Rejected))
-        val message = "My device: Test message was not sent: delivery was rejected"
-        val notice = compose.onNode(
-            hasText(message) and
-                SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
-        ).assertIsDisplayed()
+        val notice = rejectionNotice().assertIsDisplayed()
         assertTrue(notice.getUnclippedBoundsInRoot().bottom < sendBounds.top)
         assertEquals(sendBounds, send.assertIsEnabled().getUnclippedBoundsInRoot())
         assertEquals(homeBounds, home.getUnclippedBoundsInRoot())
@@ -98,6 +104,11 @@ class PairingSuccessScreenTest {
         hasText(
             "Pairing complete"
         ) and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading) and
+            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+    )
+
+    private fun rejectionNotice() = compose.onNode(
+        hasText("My device: Test message was not sent: delivery was rejected") and
             SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
     )
 
