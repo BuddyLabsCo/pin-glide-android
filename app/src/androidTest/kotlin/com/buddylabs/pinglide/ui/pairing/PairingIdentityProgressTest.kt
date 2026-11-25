@@ -17,6 +17,8 @@ import androidx.compose.ui.test.performClick
 import androidx.lifecycle.viewModelScope
 import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.app.LocalizedContent
+import com.buddylabs.pinglide.domain.forwarding.TestMessageOutcome
+import com.buddylabs.pinglide.domain.forwarding.TestMessageResult
 import com.buddylabs.pinglide.domain.identity.CredentialRenewal
 import com.buddylabs.pinglide.domain.pairing.HomeState
 import com.buddylabs.pinglide.domain.pairing.OwnPairings
@@ -72,6 +74,7 @@ class PairingIdentityProgressTest {
     private val connectionClosed = AtomicBoolean(false)
     private val authorizedSessions = ConcurrentLinkedQueue<String>()
     private val cancelledSessions = ConcurrentLinkedQueue<String>()
+    private val testedPairings = ConcurrentLinkedQueue<String>()
     private var expireDuringActivation = false
     private var successfulHandshakeEnabled = false
     private var connectionFails = false
@@ -212,7 +215,10 @@ class PairingIdentityProgressTest {
                 activation = activation
             )
         },
-        { error("Unexpected test delivery") }
+        { pairingId ->
+            testedPairings.add(pairingId)
+            TestMessageOutcome("My device", TestMessageResult.Received)
+        }
     )
 
     @After
@@ -278,6 +284,7 @@ class PairingIdentityProgressTest {
         assertEquals(session.pairingId, model.state.value.activatedPairingId)
         compose.onNodeWithText("配对完成").assertIsDisplayed()
         compose.onNodeWithText("正在确认配对信息").assertDoesNotExist()
+        compose.assertPairingSuccess(checkNotNull(session.pairingId), testedPairings)
     }
 
     @Test

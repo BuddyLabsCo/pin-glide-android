@@ -6,6 +6,8 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,6 +37,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.AccessibilityManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.hideFromAccessibility
@@ -66,11 +70,14 @@ internal fun PairingTestAction(action: TestMessageAction) {
     Button(
         onClick = { action.send(null) },
         enabled = !state.pending,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics {
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics {
             liveRegion = LiveRegionMode.Polite
-        }
+        },
+        contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp)
     ) {
-        Text(testMessageButtonLabel(state.pending))
+        Icon(painterResource(R.drawable.ic_send), null, Modifier.size(22.dp))
+        Spacer(Modifier.size(8.dp))
+        Text(testMessageButtonLabel(state.pending), fontWeight = FontWeight.Bold)
     }
     PairingTestFeedback(state.outcome)
 }

@@ -30,6 +30,7 @@
     <color name="setup_on_warning">#765200</color>
     <color name="home_capacity">#B45309</color>
     <color name="home_online">#087F5B</color>
+    <color name="pairing_success_container">#D0F5E4</color>
     <color name="error_emblem">#A33B34</color>
     <color name="error_emblem_container">#FFDAD6</color>
     <color name="on_error_emblem_container">#410002</color>
