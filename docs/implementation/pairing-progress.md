@@ -92,3 +92,53 @@ focused Compose tests (shared progress, identity transition and ring motion),
 all 108 instrumentation tests, and all 46 JVM tests passed. `qualityCheck`,
 debug and release Kotlin compilation, and debug and instrumentation assembly
 also passed.
+
+## Final confirmation (#114)
+
+The shared presentation corrected by #111 already matches the
+[confirmation reference](../ui-prototype/shots/03-progress-confirm.png).
+No runtime layout, motion or workflow change is needed.
+
+| Theme | Comparison |
+| --- | --- |
+| Light | [Approved and Android](pairing-progress-confirmation-evidence/light-comparison.png) |
+| Dark | [Approved and Android](pairing-progress-confirmation-evidence/dark-comparison.png) |
+
+Both comparisons use Simplified Chinese on API 37 at 366 × 820 dp, with the
+approved prototype on the left and Android on the right. The Android system
+bars, safe-area centering, native font rendering and progress arc phase account
+for the small differences. Existing motion evidence is recorded under #111.
+
+The screenshots were captured during the actual Pairing entry and activation
+workflow using simulated service, handshake and storage collaborators.
+`PairingIdentityProgressTest.confirmationRemainsVisibleUntilActivationIsReconciled`
+holds the service completion response, the authoritative Pairing inventory,
+and then the local reconciliation operation independently. At all three
+boundaries it verifies the final localized heading,
+absence of previous stages and actions, the instruction, and accessible
+indeterminate progress. It verifies the provisional Pairing is not active
+before reconciliation and the expected usable Pairing is active afterward,
+before accepting the transition to Pairing complete. No live Receiver or QQ
+sign-in is used.
+
+Verification: all nine focused Compose tests passed in light and dark themes.
+All 46 JVM tests, `qualityCheck`, debug and instrumentation APK assembly, and
+debug and release Kotlin compilation passed.
+The full 108-test instrumentation run was stopped after test 16,
+`HomeLoginExpiredScreenTest.expiredListStillScrollsButHidesRefreshControlsAndFeedback`,
+stalled for over five minutes; 14 tests had passed and one camera test was
+skipped by its assumption. Ripwire reported test-fixture verbosity and recent
+change churn; there are no runtime source changes.
+The subsequent focused run of `PairingConsentNavigationTest`,
+`PairingConsentScreenTest` and `HomeCapacityScreenTest` passed all 13 tests.
+
+Review fix verification: the extracted `HomePairingStore` fixture rejects
+invalid provisional keys and duplicate Pairing identities, as well as
+mismatched receivers during reconciliation. The workflow test now holds
+local reconciliation separately from the inventory response. All 15 focused
+tests passed, including the two fixture invariant tests. The remaining Home
+fixture consumers passed 25 tests, with one camera test skipped by its
+assumption. All eight Pairing progress tests passed in dark mode. All 46 JVM
+tests, `qualityCheck`, debug and release Kotlin compilation, and debug and
+instrumentation APK assembly passed. The full instrumentation suite was not
+repeated for the review fixes.

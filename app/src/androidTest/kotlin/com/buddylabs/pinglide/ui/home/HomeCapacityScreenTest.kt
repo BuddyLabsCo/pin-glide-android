@@ -23,16 +23,6 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
-import com.buddylabs.pinglide.domain.identity.IdentitySnapshot
-import com.buddylabs.pinglide.domain.identity.IdentityStore
-import com.buddylabs.pinglide.domain.identity.LoginAttempt
-import com.buddylabs.pinglide.domain.identity.ManagementCredential
-import com.buddylabs.pinglide.domain.identity.RefreshCredential
-import com.buddylabs.pinglide.domain.identity.SenderIdentity
-import com.buddylabs.pinglide.domain.identity.UploadCredential
-import com.buddylabs.pinglide.domain.pairing.OwnPairing
-import com.buddylabs.pinglide.domain.pairing.PairingSnapshot
-import com.buddylabs.pinglide.domain.pairing.PairingStore
 import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import java.time.Instant
@@ -141,85 +131,4 @@ class HomeCapacityScreenTest {
             removedPairingIds += pairingId
         }
     }
-}
-
-internal class HomePairingStore(
-    targets: List<RemotePairing>,
-    expiresAt: String,
-    private var listed: Boolean = true,
-    missingKeyId: String? = null
-) : IdentityStore,
-    PairingStore {
-    private val authority = IdentitySnapshot(
-        generation = 1,
-        identity = SenderIdentity(
-            "account",
-            "sender",
-            ManagementCredential("management", expiresAt),
-            UploadCredential("upload", expiresAt),
-            RefreshCredential("refresh", expiresAt)
-        )
-    )
-    private var revision = 0L
-    private val pairings = targets.associate { target ->
-        target.pairingId to OwnPairing(
-            target.pairingId,
-            target.receiverId,
-            target.alias,
-            key = if (target.pairingId == missingKeyId) null else ByteArray(32)
-        )
-    }.toMutableMap()
-
-    override suspend fun read() = authority
-
-    override suspend fun readPairings() =
-        PairingSnapshot(authority, revision, listed, pairings.values.toList())
-
-    override suspend fun reconcile(expected: PairingSnapshot, items: List<RemotePairing>): Boolean {
-        if (revision != expected.revision || items.any { item ->
-                pairings[item.pairingId]?.let { it.receiverId != item.receiverId } == true
-            }
-        ) {
-            return false
-        }
-        val remote = items.associateBy { it.pairingId }
-        pairings.keys.retainAll(remote.keys)
-        pairings.replaceAll { pairingId, pairing ->
-            pairing.copy(alias = remote.getValue(pairingId).alias)
-        }
-        listed = true
-        revision++
-        return true
-    }
-
-    override suspend fun select(
-        expected: PairingSnapshot,
-        pairingId: String,
-        enabled: Boolean
-    ): Boolean {
-        val pairing = pairings.getValue(pairingId)
-        pairings[pairingId] = pairing.copy(enabled = enabled)
-        revision++
-        return true
-    }
-
-    override suspend fun reserveEncryption(expected: PairingSnapshot, pairingId: String): Boolean {
-        val pairing = pairings[pairingId] ?: return false
-        if (expected.revision != revision || !pairing.keyUsable) return false
-        pairings[pairingId] = pairing.copy(encryptions = pairing.encryptions + 1)
-        revision++
-        return true
-    }
-
-    override suspend fun accept(
-        expectedGeneration: Long,
-        identity: SenderIdentity,
-        attempt: LoginAttempt
-    ): Boolean = error("Unexpected login")
-
-    override suspend fun updateRenewal(
-        expected: IdentitySnapshot,
-        replacement: IdentitySnapshot,
-        attempt: LoginAttempt
-    ): Boolean = error("Unexpected renewal")
 }

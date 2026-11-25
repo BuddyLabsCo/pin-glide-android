@@ -20,6 +20,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
@@ -64,16 +65,7 @@ class PairingProgressScreenTest {
                 }
             }
         }
-        compose.onNode(
-            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
-        ).assertIsDisplayed()
-        compose.onNode(
-            SemanticsMatcher.expectValue(
-                SemanticsProperties.ProgressBarRangeInfo,
-                ProgressBarRangeInfo.Indeterminate
-            )
-        ).assertIsDisplayed()
-        compose.onAllNodes(hasClickAction()).assertCountEquals(0)
+        compose.assertAccessiblePairingProgress()
     }
 
     @Test
@@ -146,4 +138,17 @@ class PairingProgressScreenTest {
         const val OPENING_HEADING = "正在打开配对通道"
         const val INSTRUCTION = "保持接收端上的鹊信窗口打开。完成后会自动进入配对完成页面。"
     }
+}
+
+internal fun ComposeTestRule.assertAccessiblePairingProgress() {
+    onNode(
+        SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+    ).assertIsDisplayed()
+    onNode(
+        SemanticsMatcher.expectValue(
+            SemanticsProperties.ProgressBarRangeInfo,
+            ProgressBarRangeInfo.Indeterminate
+        )
+    ).assertIsDisplayed()
+    onAllNodes(hasClickAction()).assertCountEquals(0)
 }
