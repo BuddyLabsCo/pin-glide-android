@@ -1,5 +1,7 @@
 package com.buddylabs.pinglide.ui.settings
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -25,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -45,6 +48,7 @@ import com.buddylabs.pinglide.domain.identity.SenderRevocationState
 import com.buddylabs.pinglide.ui.components.ConfirmationDialog
 import com.buddylabs.pinglide.ui.components.ConfirmationDialogEmblem
 import com.buddylabs.pinglide.ui.components.ConfirmationDialogHeading
+import com.buddylabs.pinglide.ui.components.InfoCard
 import com.buddylabs.pinglide.ui.components.WarningInfoCard
 import kotlinx.coroutines.launch
 
@@ -54,8 +58,10 @@ internal fun SenderInventoryScreen(inventory: AccountSenders, revocation: Sender
     val operation by revocation.state.collectAsState()
     val scope = rememberCoroutineScope()
     LaunchedEffect(inventory) { inventory.open() }
-    WarningInfoCard(R.string.settings_device_access_explanation, icon = R.drawable.ic_warning)
-    SenderInventoryStatus(state, inventory::refresh)
+    Column(verticalArrangement = Arrangement.spacedBy(if (state.failed) 20.dp else 14.dp)) {
+        WarningInfoCard(R.string.settings_device_access_explanation, icon = R.drawable.ic_warning)
+        SenderInventoryStatus(state, inventory::refresh)
+    }
     state.senders?.let { senders ->
         val current = senders.filter { it.senderId == state.owner?.senderId }
         val others = senders.filterNot { it.senderId == state.owner?.senderId }
@@ -116,21 +122,24 @@ private fun SenderRevocationConfirmation(
 
 @Composable
 private fun SenderInventoryStatus(state: SenderInventoryState, onRetry: () -> Unit) {
-    if (state.loading || state.failed) {
-        Text(
-            stringResource(if (state.failed) R.string.senders_error else R.string.senders_loading),
-            Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            color = if (state.failed) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            }
-        )
-    }
     if (state.failed) {
+        Text(
+            stringResource(R.string.senders_error),
+            Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            color = MaterialTheme.colorScheme.error
+        )
         TextButton(onClick = onRetry, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text(stringResource(R.string.senders_retry))
         }
+    } else if (state.loading) {
+        InfoCard(
+            R.string.senders_loading,
+            Modifier.testTag("sender-inventory-loading").semantics {
+                liveRegion =
+                    LiveRegionMode.Polite
+            },
+            icon = R.drawable.ic_clock
+        )
     }
 }
 

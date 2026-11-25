@@ -27,10 +27,29 @@ internal fun WarningInfoCard(
     modifier: Modifier = Modifier,
     @DrawableRes icon: Int = R.drawable.ic_info
 ) {
+    InfoCard(message, modifier, icon, warning = true)
+}
+
+@Composable
+internal fun InfoCard(
+    @StringRes message: Int,
+    modifier: Modifier = Modifier,
+    @DrawableRes icon: Int = R.drawable.ic_info,
+    warning: Boolean = false
+) {
+    val contentColor = if (warning) {
+        colorResource(R.color.setup_on_warning)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = colorResource(R.color.setup_warning_container),
-        contentColor = colorResource(R.color.setup_on_warning),
+        color = if (warning) {
+            colorResource(R.color.setup_warning_container)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainer
+        },
+        contentColor = contentColor,
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(
@@ -40,7 +59,8 @@ internal fun WarningInfoCard(
             Icon(
                 painterResource(icon),
                 contentDescription = null,
-                modifier = Modifier.padding(top = 1.dp).size(18.dp)
+                modifier = Modifier.padding(top = 1.dp).size(18.dp),
+                tint = if (warning) contentColor else MaterialTheme.colorScheme.primary
             )
             Text(
                 stringResource(message),
