@@ -2,6 +2,7 @@ package com.buddylabs.pinglide.ui.settings
 
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
@@ -92,6 +93,57 @@ class SenderInventoryScreenTest {
     }
 
     @Test
+    fun emptyOtherSendersMatchApprovedLayoutAndKeepCurrentDeviceRevocationAvailable() {
+        openInventory(AppLanguage.SimplifiedChinese, listOf(AccountSender("sender", "小米 15")))
+        compose.onNodeWithText(
+            "撤销需要验证当前 QQ 账号。所选发送端设备的注册和配对将被永久移除，其他发送端设备不受影响。"
+        ).assertIsDisplayed()
+        val current = compose.onNodeWithTag("settings-group:本设备").getUnclippedBoundsInRoot()
+        val others = compose.onNodeWithTag("settings-group:其他发送端设备")
+            .assertIsDisplayed().getUnclippedBoundsInRoot()
+        val empty = compose.onNodeWithText("暂无其他发送端设备").assertIsDisplayed()
+        captureSettledUiEvidence(
+            "sender-inventory-empty.png",
+            compose.onNode(isRoot() and hasAnyDescendant(hasText("暂无其他发送端设备")))
+        )
+        assertEquals(60.dp, current.bottom - current.top)
+        assertEquals(54.dp, others.bottom - others.top)
+        assertEquals(current.left, others.left)
+        assertEquals(current.right, others.right)
+        assertTrue(others.top > current.bottom)
+        val textBounds = empty.getUnclippedBoundsInRoot()
+        assertEquals(18.dp, textBounds.left - others.left)
+        assertEquals(18.dp, textBounds.top - others.top)
+        val layouts = mutableListOf<TextLayoutResult>()
+        empty.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val style = layouts.single().layoutInput.style
+        assertEquals(12.sp, style.fontSize)
+        assertEquals(18.sp, style.lineHeight)
+        assertEquals(
+            Color(ContextCompat.getColor(compose.activity, R.color.on_surface_variant)),
+            style.color
+        )
+        compose.onNodeWithContentDescription("撤销小米 15")
+            .assertIsDisplayed().assertIsEnabled().performClick()
+        compose.onNodeWithText("撤销「小米 15」？").assertIsDisplayed()
+        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithContentDescription("撤销小米 15").assertIsEnabled()
+    }
+
+    @Test
+    fun englishEmptyInventoryAtDoubleFontScaleKeepsCurrentDeviceRevocationReachable() =
+        compose.withSystemFontScale(2f) {
+            openInventory(AppLanguage.English, listOf(AccountSender("sender", "小米 15")))
+            compose.onNodeWithText("No other Sender devices").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithContentDescription("Revoke 小米 15")
+                .performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
+            compose.onNodeWithText("Revoke “小米 15”?").assertIsDisplayed()
+            compose.onNodeWithText("Cancel").performClick()
+            compose.onNodeWithContentDescription("Back").performClick()
+            compose.onNodeWithText("Settings").assertIsDisplayed()
+        }
+
+    @Test
     fun englishInventoryAtDoubleFontScaleKeepsRevokeAndBackReachable() =
         compose.withSystemFontScale(2f) {
             openInventory(AppLanguage.English)
@@ -104,14 +156,20 @@ class SenderInventoryScreenTest {
             compose.onNodeWithText("Settings").assertIsDisplayed()
         }
 
-    private fun openInventory(language: AppLanguage) {
+    private fun openInventory(
+        language: AppLanguage,
+        senders: List<AccountSender> = listOf(
+            AccountSender("other", "Pixel 9"),
+            AccountSender("sender", "小米 15")
+        )
+    ) {
         val app = compose.activity.application as PinGlideApplication
         val store = HomePairingStore(emptyList(), Instant.now().plusSeconds(3600).toString())
         val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)
         val inventory = AccountSenders(
             store,
             renewal,
-            { listOf(AccountSender("other", "Pixel 9"), AccountSender("sender", "小米 15")) },
+            { senders },
             scope
         )
         val revocation = SenderRevocation(

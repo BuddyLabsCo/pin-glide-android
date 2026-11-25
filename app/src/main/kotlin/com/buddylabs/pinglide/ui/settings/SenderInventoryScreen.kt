@@ -143,7 +143,14 @@ private fun SenderGroup(
 ) {
     SettingsGroup(title) {
         if (senders.isEmpty()) {
-            Text(stringResource(R.string.senders_no_others), Modifier.padding(16.dp))
+            Text(
+                stringResource(R.string.senders_no_others),
+                Modifier.padding(18.dp),
+                fontSize = 12.sp,
+                lineHeight = 18.sp,
+                letterSpacing = 0.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         senders.forEachIndexed { index, sender ->
             key(sender.senderId) {
