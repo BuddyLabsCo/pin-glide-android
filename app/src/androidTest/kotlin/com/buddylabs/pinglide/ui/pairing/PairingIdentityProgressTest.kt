@@ -307,6 +307,13 @@ class PairingIdentityProgressTest {
         compose.onNodeWithText("配对完成").assertIsDisplayed()
         compose.onNodeWithText("正在确认配对信息").assertDoesNotExist()
         compose.assertPairingSuccess(checkNotNull(session.pairingId), testedPairings)
+        assertEquals(PairingEntryPage.Success, model.state.value.page)
+        assertEquals(session.pairingId, model.state.value.activatedPairingId)
+        val retained = runBlocking { store.readPairings() }
+        assertEquals(committed.items, retained.items)
+        assertTrue(retained.provisional.isEmpty())
+        compose.onNodeWithText("进入首页").performClick()
+        compose.onNodeWithText("配对完成").assertDoesNotExist()
     }
 
     @Test

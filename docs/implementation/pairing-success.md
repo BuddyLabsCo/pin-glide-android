@@ -94,3 +94,23 @@ success/failure layout tests and the onboarding evidence regression in
 both themes passed. Debug and release Kotlin compilation, both APK
 assemblies, `qualityCheck`, and all 46 JVM tests passed. The complete
 emulator suite was not repeated.
+
+## Test-message acknowledgment (#118)
+
+The received state uses the same approved feedback pill and bottom actions
+from #117. The light and dark feedback comparisons above remain applicable:
+fresh API 37 captures at 366 × 820 dp in Simplified Chinese match the
+existing app-owned layout, with the native success Toast retained as required.
+No UI or motion changes are needed.
+
+The navigation regression now checks the polite live-region acknowledgment,
+visible completion heading, unchanged and enabled actions, and the same
+activated Pairing and stored Pairing contents before the user selects Enter
+Home. Both onboarding and Home entry paths passed in light and dark themes.
+The test uses simulated activation and receipt, not a live Receiver.
+The renamed shared screenshot helper is used so the instrumentation suite
+compiles and can capture this state.
+
+Verification: debug and release Kotlin compilation, both APK assemblies,
+`qualityCheck`, and all 46 JVM tests passed. The full API 37 suite completed
+with 127 passing tests, one camera-feed assumption skipped, and no failures.

@@ -6,6 +6,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasText
@@ -15,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import com.buddylabs.pinglide.ui.components.captureUiEvidence
 import java.util.concurrent.ConcurrentLinkedQueue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -40,17 +42,19 @@ internal fun ComposeContentTestRule.assertPairingSuccess(
     assertTrue(homeBounds.top >= sendBounds.bottom)
     assertSuccessCheck(title.center.x, title.top)
     assertTrue(testedPairings.isEmpty())
-    captureConsentEvidence("pairing-success.png")
+    captureUiEvidence("pairing-success.png")
     send.performClick()
     waitUntil(5_000) { testedPairings.isNotEmpty() }
     assertEquals(listOf(pairingId), testedPairings.toList())
-    val feedback = onNodeWithText("测试消息已发送").assertIsDisplayed()
-    assertEquals(sendBounds, send.fetchSemanticsNode().boundsInRoot)
-    assertEquals(homeBounds, home.fetchSemanticsNode().boundsInRoot)
+    val feedback = onNode(
+        hasText("测试消息已发送") and
+            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+    ).assertIsDisplayed()
+    heading.assertIsDisplayed()
+    assertEquals(sendBounds, send.assertIsEnabled().fetchSemanticsNode().boundsInRoot)
+    assertEquals(homeBounds, home.assertIsEnabled().fetchSemanticsNode().boundsInRoot)
     assertTrue(feedback.fetchSemanticsNode().boundsInRoot.bottom < sendBounds.top)
-    captureConsentEvidence("pairing-success-feedback.png")
-    home.performClick()
-    heading.assertDoesNotExist()
+    captureUiEvidence("pairing-success-feedback.png")
 }
 
 private fun ComposeContentTestRule.assertSuccessCheck(titleCenter: Float, titleTop: Float) {
