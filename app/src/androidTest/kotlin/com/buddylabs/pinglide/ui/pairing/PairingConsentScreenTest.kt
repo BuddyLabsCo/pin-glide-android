@@ -13,13 +13,19 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -33,16 +39,20 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.test.platform.app.InstrumentationRegistry
+import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.domain.pairing.PairingAliasError
 import com.buddylabs.pinglide.domain.pairing.PairingEntryPage
 import com.buddylabs.pinglide.domain.pairing.PairingEntryProblem
 import com.buddylabs.pinglide.domain.pairing.PairingEntryState
 import com.buddylabs.pinglide.domain.pairing.PairingHost
+import com.buddylabs.pinglide.domain.pairing.pairingAliasError
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import java.io.File
+import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -92,15 +102,21 @@ class PairingConsentScreenTest {
 
     @Test
     fun aliasErrorsAndPendingPreventConfirmationAndHomeKeepsItsLabel() {
-        render(AppLanguage.English)
+        render(AppLanguage.English, otherAliases = listOf("Office PC"))
+        compose.mainClock.autoAdvance = true
         val alias = compose.onNodeWithContentDescription("Target name")
         val confirm = compose.onNodeWithText("Confirm and establish key")
         alias.performTextReplacement("")
         compose.runOnIdle {
             assertEquals("", state.value.alias)
-            state.value = state.value.copy(aliasError = PairingAliasError.Blank)
         }
         compose.mainClock.advanceTimeBy(100)
+        confirm.assertIsNotEnabled()
+        alias.performTextReplacement(" office pc ")
+        compose.mainClock.advanceTimeBy(100)
+        val guidance = "Another paired target already has this name. Choose a different name."
+        compose.onNodeWithText(guidance).assertExists()
+        alias.assert(SemanticsMatcher.expectValue(SemanticsProperties.Error, guidance))
         confirm.assertIsNotEnabled()
         compose.runOnIdle {
             state.value = state.value.copy(alias = "My device", aliasError = null, pending = true)
@@ -114,6 +130,44 @@ class PairingConsentScreenTest {
         compose.mainClock.advanceTimeBy(100)
         compose.onNodeWithText("Confirm target").assertIsEnabled()
         compose.runOnIdle { assertTrue(actions.isEmpty()) }
+    }
+
+    @Test
+    fun duplicateNameMarksEditableFieldAndDisablesConfirmUntilCorrected() {
+        val existing = "办公室电脑"
+        state.value = state.value.copy(
+            host = PairingHost.Home,
+            alias = existing,
+            aliasError = PairingAliasError.Duplicate
+        )
+        render(AppLanguage.SimplifiedChinese, otherAliases = listOf(existing))
+        val guidance = "已有一台同名设备，请换一个名称"
+        val alias = compose.onNodeWithContentDescription("设备名称")
+        val confirm = compose.onNodeWithText("确认添加设备")
+        alias.assertIsDisplayed().assertIsEnabled().assertTextContains(existing)
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Error, guidance))
+        compose.onNodeWithText(guidance).assertIsDisplayed()
+        confirm.assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithText("取消").assertIsEnabled()
+        captureConsentEvidence("duplicate-consent.png")
+        val button = confirm.captureToImage().asAndroidBitmap()
+        val context = compose.activity
+        val expected = Color(ContextCompat.getColor(context, R.color.primary)).copy(alpha = .38f)
+            .compositeOver(Color(ContextCompat.getColor(context, R.color.surface)))
+        val actual = Color(button.getPixel(button.width / 6, button.height / 2))
+        assertTrue(
+            "Expected faded primary $expected, got $actual",
+            listOf(
+                abs(expected.red - actual.red),
+                abs(expected.green - actual.green),
+                abs(expected.blue - actual.blue)
+            ).all { it <= 1f / 255f }
+        )
+        alias.performTextReplacement("书房设备")
+        compose.mainClock.advanceTimeBy(100)
+        compose.onNodeWithText(guidance).assertDoesNotExist()
+        confirm.assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(listOf("confirm"), actions) }
     }
 
     @Test
@@ -170,7 +224,12 @@ class PairingConsentScreenTest {
         assertTrue(still.sameAs(compose.onRoot().captureToImage().asAndroidBitmap()))
     }
 
-    private fun render(language: AppLanguage, usableHeight: Dp? = null, fontScale: Float = 1f) {
+    private fun render(
+        language: AppLanguage,
+        usableHeight: Dp? = null,
+        fontScale: Float = 1f,
+        otherAliases: List<String> = emptyList()
+    ) {
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         compose.mainClock.autoAdvance = false
         compose.setContent {
@@ -192,7 +251,12 @@ class PairingConsentScreenTest {
                                 state.value,
                                 onBack = { actions.add("back") },
                                 onCancel = { actions.add("cancel") },
-                                onAliasChange = { state.value = state.value.copy(alias = it) },
+                                onAliasChange = {
+                                    state.value = state.value.copy(
+                                        alias = it,
+                                        aliasError = pairingAliasError(it, otherAliases)
+                                    )
+                                },
                                 onConfirm = { actions.add("confirm") },
                                 onRescan = { actions.add("rescan") }
                             )
