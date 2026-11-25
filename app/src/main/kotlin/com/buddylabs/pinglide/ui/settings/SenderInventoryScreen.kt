@@ -1,13 +1,12 @@
 package com.buddylabs.pinglide.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -29,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.identity.AccountSender
@@ -43,6 +44,10 @@ import com.buddylabs.pinglide.domain.identity.AccountSenders
 import com.buddylabs.pinglide.domain.identity.RevocationStep
 import com.buddylabs.pinglide.domain.identity.SenderInventoryState
 import com.buddylabs.pinglide.domain.identity.SenderRevocation
+import com.buddylabs.pinglide.domain.identity.SenderRevocationState
+import com.buddylabs.pinglide.ui.components.ConfirmationDialog
+import com.buddylabs.pinglide.ui.components.ConfirmationDialogEmblem
+import com.buddylabs.pinglide.ui.components.ConfirmationDialogHeading
 import kotlinx.coroutines.launch
 
 @Composable
@@ -71,35 +76,51 @@ internal fun SenderInventoryScreen(inventory: AccountSenders, revocation: Sender
         }
     }
     operation?.takeIf { it.step == RevocationStep.Confirmation }?.let { confirmation ->
-        val selection = confirmation.selection
-        val cancelFocus = remember { FocusRequester() }
-        AlertDialog(
-            onDismissRequest = { revocation.dismiss(confirmation) },
-            title = { Text(stringResource(R.string.senders_revoke_title, selection.deviceName)) },
-            text = {
-                Text(
-                    stringResource(R.string.senders_revoke_consequences),
-                    Modifier.verticalScroll(rememberScrollState())
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { revocation.confirm(confirmation) },
-                    modifier = Modifier.heightIn(min = 48.dp),
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) { Text(stringResource(R.string.senders_confirm_proof)) }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { revocation.dismiss(confirmation) },
-                    modifier = Modifier.heightIn(min = 48.dp).focusRequester(cancelFocus)
-                ) { Text(stringResource(R.string.setup_cancel)) }
-            }
-        )
-        LaunchedEffect(selection) { cancelFocus.requestFocus() }
+        SenderRevocationConfirmation(confirmation, revocation)
     }
+}
+
+@Composable
+private fun SenderRevocationConfirmation(
+    confirmation: SenderRevocationState,
+    revocation: SenderRevocation
+) {
+    val selection = confirmation.selection
+    val cancelFocus = remember { FocusRequester() }
+    val title = stringResource(R.string.senders_revoke_title, selection.deviceName)
+    val padding = PaddingValues(horizontal = 22.dp)
+    ConfirmationDialog(
+        pane = title,
+        description = stringResource(R.string.senders_revoke_consequences),
+        onDismiss = { revocation.dismiss(confirmation) },
+        emblem = {
+            ConfirmationDialogEmblem(
+                painterResource(R.drawable.ic_revoke_lock),
+                colorResource(R.color.error_emblem_container),
+                colorResource(R.color.error_emblem),
+                22.dp
+            )
+        },
+        heading = { ConfirmationDialogHeading(title) }
+    ) {
+        TextButton(
+            onClick = { revocation.dismiss(confirmation) },
+            modifier = Modifier.heightIn(min = 48.dp).focusRequester(cancelFocus),
+            contentPadding = padding
+        ) { Text(stringResource(R.string.setup_cancel), fontWeight = FontWeight.Bold) }
+        Button(
+            onClick = { revocation.confirm(confirmation) },
+            modifier = Modifier.heightIn(min = 48.dp),
+            contentPadding = padding,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = colorResource(R.color.error_emblem_container),
+                contentColor = colorResource(R.color.on_error_emblem_container)
+            )
+        ) {
+            Text(stringResource(R.string.senders_confirm_proof), fontWeight = FontWeight.Bold)
+        }
+    }
+    LaunchedEffect(selection) { cancelFocus.requestFocus() }
 }
 
 @Composable
