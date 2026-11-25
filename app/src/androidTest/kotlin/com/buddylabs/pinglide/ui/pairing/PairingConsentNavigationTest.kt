@@ -58,7 +58,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
-class OnboardingConsentNavigationTest {
+class PairingConsentNavigationTest {
     @get:Rule
     val compose = createAndroidComposeRule<ComponentActivity>()
 
@@ -141,9 +141,7 @@ class OnboardingConsentNavigationTest {
         val cancel = compose.onNodeWithText("取消")
         add.assertIsDisplayed().performClick()
         compose.onNodeWithTag("pairing-scanner").assertIsDisplayed()
-        compose.runOnIdle { pairing.scan("fixture", "我的设备") }
-        compose.waitUntil(5_000) { pairing.state.value.page == PairingEntryPage.Consent }
-        title.assertIsDisplayed()
+        scan("fixture", "我的设备", "确认配对")
         compose.onNodeWithText("添加新设备").assertIsDisplayed()
         compose.onNodeWithText(
             "确认后，目标设备会开始接收你选中的短信，双方会建立一条独立的加密配对。"
@@ -164,10 +162,18 @@ class OnboardingConsentNavigationTest {
 
         add.performClick()
         compose.onNodeWithTag("pairing-scanner").assertIsDisplayed()
-        compose.runOnIdle { pairing.scan("second-fixture", "我的设备") }
-        compose.waitUntil(5_000) { pairing.state.value.page == PairingEntryPage.Consent }
+        scan("second-fixture", "我的设备", "确认配对")
         confirm.assertIsDisplayed()
         cancel.performClick()
+        add.assertIsDisplayed()
+        title.assertDoesNotExist()
+        compose.onNodeWithTag("pairing-scanner").assertDoesNotExist()
+
+        add.performClick()
+        compose.onNodeWithTag("pairing-scanner").assertIsDisplayed()
+        scan("third-fixture", "我的设备", "确认配对")
+        confirm.assertIsDisplayed()
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         add.assertIsDisplayed()
         title.assertDoesNotExist()
         compose.onNodeWithTag("pairing-scanner").assertDoesNotExist()
@@ -250,10 +256,14 @@ class OnboardingConsentNavigationTest {
         assertEquals(anchored, confirm.assertIsDisplayed().getUnclippedBoundsInRoot())
     }
 
-    private fun scan() {
-        compose.runOnIdle { pairing.scan("fixture", "My device") }
+    private fun scan(
+        fixture: String = "fixture",
+        alias: String = "My device",
+        title: String = "Confirm Pairing"
+    ) {
+        compose.runOnIdle { pairing.scan(fixture, alias) }
         compose.waitUntil(5_000) { pairing.state.value.page == PairingEntryPage.Consent }
-        compose.onNodeWithText("Confirm Pairing").assertIsDisplayed()
+        compose.onNodeWithText(title).assertIsDisplayed()
     }
 }
 
