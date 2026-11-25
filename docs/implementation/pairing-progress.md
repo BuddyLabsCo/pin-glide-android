@@ -62,6 +62,37 @@ Pairing and shared progress Compose tests passed, including the abandonment
 regression. All 46 JVM tests, `qualityCheck`, debug and instrumentation assembly,
 and release Kotlin compilation passed.
 
+## Key exchange (#113)
+
+The [key-exchange reference](../ui-prototype/shots/03-progress-key.png) uses
+the same single-stage composition corrected by #111. The existing Key event
+selects the localized heading and retains the shared instruction, emblem and
+indeterminate progress feedback. No production layout, motion or workflow
+change is needed.
+
+| Theme | Comparison |
+| --- | --- |
+| Light | [Approved and Android](pairing-progress-key-evidence/light-comparison.png) |
+| Dark | [Approved and Android](pairing-progress-key-evidence/dark-comparison.png) |
+
+Both comparisons use Simplified Chinese and a 366 × 820 dp API 37 emulator
+viewport, with the pinned prototype on the left and Android on the right.
+Native font rendering, safe-area centering and system bars account for the
+small visual differences. The screenshots show the stationary progress arc
+with system motion disabled; the unchanged motion recordings are linked above.
+
+`PairingProgressScreenTest` now also verifies the approved Chinese heading
+and instruction for Key, heading accessibility, the absence of other stage
+headings and the absence of actions. The existing `PairingIdentityProgressTest`
+checks the workflow transition into Key. The captures simulate the stage at the
+presentation boundary, without live sign-in or a Receiver.
+
+Verification: the key-exchange evidence check passed in both themes. All nine
+focused Compose tests (shared progress, identity transition and ring motion),
+all 108 instrumentation tests, and all 46 JVM tests passed. `qualityCheck`,
+debug and release Kotlin compilation, and debug and instrumentation assembly
+also passed.
+
 ## Final confirmation (#114)
 
 The shared presentation corrected by #111 already matches the
