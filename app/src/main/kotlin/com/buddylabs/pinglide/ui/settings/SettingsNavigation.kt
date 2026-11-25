@@ -167,13 +167,11 @@ private fun SettingsDestinationContent(
         SettingsDestination.Language, SettingsDestination.Account -> R.string.settings_title
         SettingsDestination.DeviceAccess -> R.string.settings_device_access
     }
-    val settingsHeader = destination == SettingsDestination.Language ||
-        destination == SettingsDestination.Account
     SettingsPage(
         stringResource(title),
         onBack,
-        rootLayout = settingsHeader,
-        contentTopPadding = if (settingsHeader) 10.dp else 16.dp
+        rootLayout = true,
+        contentTopPadding = if (destination == SettingsDestination.DeviceAccess) 14.dp else 10.dp
     ) {
         when (destination) {
             SettingsDestination.Language -> LanguageScreen(language, onLanguage)

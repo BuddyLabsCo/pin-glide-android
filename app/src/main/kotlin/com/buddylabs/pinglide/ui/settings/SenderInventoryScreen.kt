@@ -1,15 +1,13 @@
 package com.buddylabs.pinglide.ui.settings
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,7 +21,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -33,11 +30,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.identity.AccountSender
 import com.buddylabs.pinglide.domain.identity.AccountSenders
@@ -48,6 +45,7 @@ import com.buddylabs.pinglide.domain.identity.SenderRevocationState
 import com.buddylabs.pinglide.ui.components.ConfirmationDialog
 import com.buddylabs.pinglide.ui.components.ConfirmationDialogEmblem
 import com.buddylabs.pinglide.ui.components.ConfirmationDialogHeading
+import com.buddylabs.pinglide.ui.components.WarningInfoCard
 import kotlinx.coroutines.launch
 
 @Composable
@@ -56,14 +54,7 @@ internal fun SenderInventoryScreen(inventory: AccountSenders, revocation: Sender
     val operation by revocation.state.collectAsState()
     val scope = rememberCoroutineScope()
     LaunchedEffect(inventory) { inventory.open() }
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-    ) {
-        Text(
-            stringResource(R.string.settings_device_access_explanation),
-            Modifier.padding(16.dp)
-        )
-    }
+    WarningInfoCard(R.string.settings_device_access_explanation, icon = R.drawable.ic_warning)
     SenderInventoryStatus(state, inventory::refresh)
     state.senders?.let { senders ->
         val current = senders.filter { it.senderId == state.owner?.senderId }
@@ -150,55 +141,71 @@ private fun SenderGroup(
     state: SenderInventoryState,
     onSelect: (AccountSender) -> Unit
 ) {
-    Text(
-        title,
-        style = MaterialTheme.typography.titleSmall,
-        modifier = Modifier.semantics { heading() }
-    )
-    Card(Modifier.fillMaxWidth()) {
+    SettingsGroup(title) {
         if (senders.isEmpty()) {
             Text(stringResource(R.string.senders_no_others), Modifier.padding(16.dp))
         }
-        senders.forEach { sender ->
+        senders.forEachIndexed { index, sender ->
             key(sender.senderId) {
-                val actionFocus = remember(sender.senderId) { FocusRequester() }
-                var selected by remember { mutableStateOf(false) }
-                val windowFocused = LocalWindowInfo.current.isWindowFocused
-                val actionDescription =
-                    stringResource(R.string.senders_revoke_description, sender.deviceName)
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(painterResource(R.drawable.ic_devices), contentDescription = null)
-                    Text(
-                        sender.deviceName,
-                        Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    TextButton(
-                        onClick = { onSelect(sender) },
-                        enabled = state.canSelect,
-                        modifier = Modifier.heightIn(
-                            min = 48.dp
-                        ).focusRequester(actionFocus).semantics {
-                            contentDescription = actionDescription
-                        },
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) { Text(stringResource(R.string.senders_revoke)) }
-                }
-                LaunchedEffect(state.selection, windowFocused, state.canSelect) {
-                    if (state.selection?.senderId == sender.senderId) {
-                        selected = true
-                    } else if (selected && windowFocused && state.canSelect) {
-                        selected = false
-                        actionFocus.requestFocus()
-                    }
-                }
+                SenderRow(sender, state, onSelect)
             }
+            if (index < senders.lastIndex) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SenderRow(
+    sender: AccountSender,
+    state: SenderInventoryState,
+    onSelect: (AccountSender) -> Unit
+) {
+    val actionFocus = remember(sender.senderId) { FocusRequester() }
+    var selected by remember { mutableStateOf(false) }
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    val actionDescription =
+        stringResource(R.string.senders_revoke_description, sender.deviceName)
+    SettingsListRow(
+        title = sender.deviceName,
+        leading = {
+            Icon(
+                painterResource(R.drawable.ic_smartphone),
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    ) {
+        Button(
+            onClick = { onSelect(sender) },
+            enabled = state.canSelect,
+            modifier = Modifier.heightIn(
+                min = 48.dp
+            ).focusRequester(actionFocus).semantics {
+                contentDescription = actionDescription
+            },
+            contentPadding = PaddingValues(horizontal = 22.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = colorResource(R.color.error_emblem_container),
+                contentColor = colorResource(R.color.on_error_emblem_container)
+            )
+        ) {
+            Text(
+                stringResource(R.string.senders_revoke),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.14.sp
+            )
+        }
+    }
+    LaunchedEffect(state.selection, windowFocused, state.canSelect) {
+        if (state.selection?.senderId == sender.senderId) {
+            selected = true
+        } else if (selected && windowFocused && state.canSelect) {
+            selected = false
+            actionFocus.requestFocus()
         }
     }
 }
