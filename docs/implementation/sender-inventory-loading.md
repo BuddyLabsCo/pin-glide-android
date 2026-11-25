@@ -72,3 +72,35 @@ clock is static, so there is no motion recording. GitHub's available connector
 has no attachment-upload operation; issue evidence links to the committed
 comparisons and will resolve after the authorized publisher pushes the local
 commit. This assignment does not push code or create or modify a pull request.
+
+## Conflict repair with issue #127
+
+Merged target `4971358d4100292a155995c0e7fe71e1f4ee4747` into the issue #126
+branch. The runtime changes combine the initial loading card with the approved
+empty-group styling. The test fixture retains a reusable deferred response and
+accepts a configurable Sender list. All five inventory scenarios remain; the
+loading regression additionally verifies transition to the empty other-Senders
+group after a response containing only the current Sender.
+
+Verification on the merged tree:
+
+- All 46 host unit tests passed without failures, errors or skips.
+- Debug/release Kotlin compilation, debug and instrumentation APK assemblies,
+  and `qualityCheck` passed, including Lint, Spotless/ktlint, file-size and detekt.
+- All five `SenderInventoryScreenTest` cases and both
+  `SenderRevocationConfirmationTest` cases passed in light and dark themes on
+  API 37: 14 successful executions. The baseline was 366 x 820 dp at 100% font
+  scale; dedicated English accessibility cases set 200% scale themselves.
+- An initial light run inherited 200% system font scale and failed three
+  baseline geometry assertions. After resetting the documented baseline, all
+  seven cases passed. No production change was needed for those setup failures.
+- `git diff --check` passed. Ripwire confirmed unchanged production component
+  contracts and no incompatible callers of the extended private test fixture.
+  Its quality delta flags test-class growth and the imported repetition between
+  English loaded/empty scenarios; these readable scenarios are retained. Its
+  test gate still cannot resolve the JUnit/Compose entry points, so it is not
+  green; executed tests provide the focused coverage evidence.
+
+The full device suite, live QQ authorization, destructive service revocation
+and physical-device acceptance were not rerun for this conflict repair. The
+existing prototype comparisons from both changes are retained unchanged.
