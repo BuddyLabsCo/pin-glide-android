@@ -1,18 +1,26 @@
 package com.buddylabs.pinglide.ui.settings
 
+import android.os.ParcelFileDescriptor
+import android.provider.Settings
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.test.platform.app.InstrumentationRegistry
@@ -53,30 +61,8 @@ class LogoutConfirmationTest {
 
     @Test
     fun approvedLogoutDialogKeepsCancelAndImmediateConfirmationActions() {
-        val app = compose.activity.application as PinGlideApplication
-        val account = sampleAccount()
         var logouts = 0
-        InstrumentationRegistry.getInstrumentation().setInTouchMode(true)
-        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
-        compose.setContent {
-            LocalizedContent(AppLanguage.SimplifiedChinese) {
-                PinGlideTheme {
-                    SettingsNavigation(
-                        language = AppLanguage.SimplifiedChinese,
-                        onLanguage = {},
-                        onBatterySettings = { false },
-                        installedVersion = "0.1.0",
-                        account = account,
-                        senders = app.accountSenders,
-                        revocation = app.senderRevocation,
-                        onLogout = { logouts++ },
-                        onDismiss = {}
-                    )
-                }
-            }
-        }
-        compose.onNodeWithText("QQ 账号").performClick()
-        compose.onNodeWithText("示例昵称").assertIsDisplayed()
+        renderAccount(AppLanguage.SimplifiedChinese) { logouts++ }
         val logout = compose.onNodeWithText("退出登录")
         logout.performClick()
         val pane = SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "退出登录？")
@@ -107,6 +93,110 @@ class LogoutConfirmationTest {
         confirm.performClick()
         dialog.assertDoesNotExist()
         compose.runOnIdle { assertEquals(1, logouts) }
+    }
+
+    @Test
+    fun englishKeyboardFocusReturnsToLogoutActionAfterBackAndCancel() {
+        var logouts = 0
+        renderAccount(AppLanguage.English) { logouts++ }
+        val logout = compose.onNodeWithText("Log out")
+        pressKey(KeyEvent.KEYCODE_TAB)
+        logout.performSemanticsAction(SemanticsActions.RequestFocus)
+        logout.assertIsFocused()
+        pressKey(KeyEvent.KEYCODE_ENTER)
+        val pane = SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "Log out?")
+        val cancel = compose.onNode(hasText("Cancel") and hasAnyAncestor(pane))
+        val confirm = compose.onNode(hasText("Log out") and hasAnyAncestor(pane))
+        cancel.assertIsFocused()
+        pressKey(KeyEvent.KEYCODE_TAB)
+        confirm.assertIsFocused()
+        pressKey(KeyEvent.KEYCODE_BACK)
+        compose.onNode(pane).assertDoesNotExist()
+        awaitLogoutFocus()
+
+        pressKey(KeyEvent.KEYCODE_ENTER)
+        cancel.assertIsFocused()
+        pressKey(KeyEvent.KEYCODE_ENTER)
+        compose.onNode(pane).assertDoesNotExist()
+        awaitLogoutFocus()
+        compose.runOnIdle { assertEquals(0, logouts) }
+    }
+
+    @Test
+    fun englishLogoutActionsRemainReachableAtDoubleFontScale() {
+        val resolver = compose.activity.contentResolver
+        val originalScale = Settings.System.getFloat(resolver, Settings.System.FONT_SCALE, 1f)
+        var logouts = 0
+        try {
+            setFontScale(2f)
+            renderAccount(AppLanguage.English) { logouts++ }
+            val logout = compose.onNodeWithText("Log out")
+            logout.performScrollTo().performClick()
+            val pane = SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "Log out?")
+            val cancel = compose.onNode(hasText("Cancel") and hasAnyAncestor(pane))
+            val confirm = compose.onNode(hasText("Log out") and hasAnyAncestor(pane))
+            compose.onNodeWithText(
+                "Pin Glide will immediately stop forwarding on this device and try to revoke its " +
+                    "service credentials. Device Pairings and local Pairing keys will be kept."
+            ).performScrollTo().assertIsDisplayed()
+            confirm.performScrollTo().assertIsDisplayed()
+            cancel.performScrollTo().assertIsDisplayed().performClick()
+            compose.onNode(pane).assertDoesNotExist()
+            compose.runOnIdle { assertEquals(0, logouts) }
+            logout.performScrollTo().performClick()
+            confirm.performScrollTo().assertIsDisplayed().performClick()
+            compose.onNode(pane).assertDoesNotExist()
+            compose.runOnIdle { assertEquals(1, logouts) }
+        } finally {
+            setFontScale(originalScale)
+        }
+    }
+
+    private fun awaitLogoutFocus() {
+        compose.waitUntil(5_000) {
+            compose.onAllNodes(hasText("Log out") and isFocused()).fetchSemanticsNodes().size == 1
+        }
+    }
+
+    private fun pressKey(keyCode: Int) =
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(keyCode)
+
+    private fun setFontScale(scale: Float) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val descriptor = instrumentation.uiAutomation.executeShellCommand(
+            "settings put system font_scale $scale"
+        )
+        ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes() }
+        compose.waitUntil(5_000) {
+            compose.runOnUiThread { compose.activity.resources.configuration.fontScale == scale }
+        }
+    }
+
+    private fun renderAccount(language: AppLanguage, onLogout: () -> Unit) {
+        val app = compose.activity.application as PinGlideApplication
+        val account = sampleAccount()
+        InstrumentationRegistry.getInstrumentation().setInTouchMode(true)
+        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        compose.setContent {
+            LocalizedContent(language) {
+                PinGlideTheme {
+                    SettingsNavigation(
+                        language = language,
+                        onLanguage = {},
+                        onBatterySettings = { false },
+                        installedVersion = "0.1.0",
+                        account = account,
+                        senders = app.accountSenders,
+                        revocation = app.senderRevocation,
+                        onLogout = onLogout,
+                        onDismiss = {}
+                    )
+                }
+            }
+        }
+        val label = if (language == AppLanguage.English) "QQ account" else "QQ 账号"
+        compose.onNodeWithText(label).performScrollTo().performClick()
+        compose.onNodeWithText("示例昵称").assertIsDisplayed()
     }
 
     private fun sampleAccount(): AccountSession {

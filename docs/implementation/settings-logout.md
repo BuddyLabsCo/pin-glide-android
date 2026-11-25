@@ -42,3 +42,24 @@ passed on its isolated retry. The final coverage is 129 passed, one skipped,
 and one stalled. No unrelated test or runtime code was changed.
 The shared-emulator focused attempt was interrupted by APK replacement;
 both successful focused captures and the full run used a dedicated AVD.
+
+## Review follow-up
+
+Logout and Pairing removal now use the same `ConfirmationDialog` presentation
+in `ui/components/`: native window bounds and dimming, rounded surface,
+scrolling, emblem geometry, heading and body typography, and wrapping action
+row. Each caller still owns its focus, dismissal, feedback and action
+semantics; pending removal remains non-dismissible.
+
+The additional English tests exercise keyboard entry, Cancel and Logout focus,
+system Back, and focus restoration after both Back and keyboard Cancel. At
+200% system font scale they scroll to and activate both actions, preserving the
+existing callback assertions. All three logout tests passed before extraction.
+After extraction, all 17 focused tests passed in each theme on the dedicated
+API 37 emulator, covering Logout confirmation, Pairing removal, Home capacity,
+Settings and Language. In both themes the 732 × 590 pixel region surrounding
+the logout modal was pixel-identical to the original Android evidence.
+
+Debug/release and instrumentation Kotlin compilation, APK assembly,
+`qualityCheck` and all 46 JVM tests passed again. The full instrumentation
+suite was not repeated for this review-only change.
