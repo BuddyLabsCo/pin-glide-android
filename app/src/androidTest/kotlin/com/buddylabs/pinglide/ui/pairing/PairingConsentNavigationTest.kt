@@ -50,6 +50,8 @@ import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.domain.settings.SetupProgress
 import com.buddylabs.pinglide.domain.settings.SetupState
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
+import com.buddylabs.pinglide.ui.components.captureUiEvidence
+import com.buddylabs.pinglide.ui.components.uiEvidenceEnabled
 import com.buddylabs.pinglide.ui.home.HomePairingStore
 import com.buddylabs.pinglide.ui.home.HomeViewModel
 import com.buddylabs.pinglide.ui.navigation.AcceptedNavigation
@@ -162,10 +164,10 @@ class PairingConsentNavigationTest {
         confirm.assertIsDisplayed().assertIsEnabled()
         cancel.assertIsDisplayed()
         compose.onNodeWithText("确认并建立密钥").assertDoesNotExist()
-        if (InstrumentationRegistry.getArguments().getString("consentEvidence") == "true") {
+        if (uiEvidenceEnabled()) {
             compose.waitForIdle()
             SystemClock.sleep(500)
-            captureConsentEvidence("home-consent.png")
+            captureUiEvidence("home-consent.png")
         }
         compose.runOnIdle { pairing.editAlias("") }
         compose.onNodeWithText("请输入设备名称").performScrollTo().assertIsDisplayed()
@@ -268,10 +270,10 @@ class PairingConsentNavigationTest {
     }
 
     private fun captureExpiredEvidence(filename: String) {
-        if (InstrumentationRegistry.getArguments().getString("consentEvidence") != "true") return
+        if (!uiEvidenceEnabled()) return
         compose.waitForIdle()
         SystemClock.sleep(3500)
-        captureConsentEvidence(filename)
+        captureUiEvidence(filename)
     }
 
     private fun render(progress: SetupProgress, language: AppLanguage, fontScale: Float) {

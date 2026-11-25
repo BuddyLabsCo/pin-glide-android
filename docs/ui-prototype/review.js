@@ -1561,7 +1561,7 @@
       <button class="account-card" data-screen="account" style="width:100%;border:0;color:inherit;text-align:left;">
         <span class="qq-badge">QQ</span>
         <span style="min-width:0;flex:1"><span class="device-name">QQ 账号</span></span>
-        ${icon("chevron", "chevron")}
+        ${icon("chevron", "icon chevron")}
       </button>
       <div class="group-label">显示</div>
       <div class="list-group">

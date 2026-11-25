@@ -2,21 +2,27 @@ package com.buddylabs.pinglide.ui.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,14 +31,19 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.identity.AccountSenders
 import com.buddylabs.pinglide.domain.identity.AccountSession
@@ -92,6 +103,15 @@ fun SettingsNavigation(
             decorFitsSystemWindows = false
         )
     ) {
+        val view = LocalView.current
+        val window = (view.parent as DialogWindowProvider).window
+        val lightBars = !isSystemInDarkTheme()
+        SideEffect {
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = lightBars
+                isAppearanceLightNavigationBars = lightBars
+            }
+        }
         stateHolder.SaveableStateProvider(destination.name) {
             SettingsDestinationContent(
                 destination,
@@ -162,25 +182,57 @@ internal fun SettingsPage(
     onBack: () -> Unit,
     backModifier: Modifier = Modifier,
     backEnabled: Boolean = true,
+    rootLayout: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
     ScreenLayout {
+        val headerModifier = if (rootLayout) {
+            Modifier.padding(top = 16.dp).heightIn(min = 64.dp)
+        } else {
+            Modifier.padding(vertical = 8.dp)
+        }
         Row(
-            Modifier.fillMaxWidth().padding(vertical = 8.dp).semantics { paneTitle = title },
-            verticalAlignment = Alignment.CenterVertically
+            Modifier.fillMaxWidth().then(headerModifier).semantics { paneTitle = title },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(if (rootLayout) 12.dp else 0.dp)
         ) {
-            IconButton(onClick = onBack, modifier = backModifier, enabled = backEnabled) {
-                Icon(painterResource(R.drawable.ic_back), stringResource(R.string.setup_back))
+            IconButton(
+                onClick = onBack,
+                modifier = if (rootLayout) backModifier.size(48.dp) else backModifier,
+                enabled = backEnabled
+            ) {
+                Icon(
+                    painterResource(
+                        if (rootLayout) R.drawable.ic_back_chevron else R.drawable.ic_back
+                    ),
+                    stringResource(R.string.setup_back),
+                    tint = if (rootLayout) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        LocalContentColor.current
+                    }
+                )
             }
             Text(
                 title,
-                style = MaterialTheme.typography.titleLarge,
+                style = if (rootLayout) {
+                    LocalTextStyle.current.copy(
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.7).sp
+                    )
+                } else {
+                    MaterialTheme.typography.titleLarge
+                },
                 modifier = Modifier.semantics { heading() }
             )
         }
         Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(
+                top = if (rootLayout) 20.dp else 16.dp,
+                bottom = if (rootLayout) 28.dp else 16.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(if (rootLayout) 20.dp else 16.dp),
             content = content
         )
     }
