@@ -207,7 +207,15 @@ private fun ConsentIllustration() {
             Image(
                 painterResource(R.mipmap.ic_launcher),
                 null,
-                Modifier.size(70.dp).dropShadow(tileShape, shadow).clip(tileShape)
+                Modifier.size(70.dp).dropShadow(tileShape, shadow).dropShadow(
+                    tileShape,
+                    Shadow(
+                        radius = 12.dp,
+                        offset = DpOffset(0.dp, 5.dp),
+                        color = Color(0xFF0A1210),
+                        alpha = 0.12f
+                    )
+                ).clip(tileShape)
             )
             ConsentLink(Modifier.weight(1f).height(18.dp))
             Box(
