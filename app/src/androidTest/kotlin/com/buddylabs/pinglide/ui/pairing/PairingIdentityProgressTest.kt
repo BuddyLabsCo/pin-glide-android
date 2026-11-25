@@ -71,8 +71,14 @@ class PairingIdentityProgressTest {
         "session", "receiver", "sender", "pairing", "new_receiver", "awaiting_confirmation",
         Instant.now().plusSeconds(270), false, false
     )
-    private val active = session.copy(
+    private val active = PairingSession(
+        sessionId = session.sessionId,
+        receiverId = session.receiverId,
+        senderId = session.senderId,
+        pairingId = session.pairingId,
+        mode = session.mode,
         state = "credential_ready",
+        expiresAt = session.expiresAt,
         senderConfirmed = true,
         receiverConfirmed = true
     )
