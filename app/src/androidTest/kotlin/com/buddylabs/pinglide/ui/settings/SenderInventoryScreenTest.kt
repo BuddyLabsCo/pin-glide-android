@@ -4,6 +4,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -11,6 +13,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
@@ -57,7 +60,7 @@ class SenderInventoryScreenTest {
     val compose = createAndroidComposeRule<ComponentActivity>()
 
     private val scope = CoroutineScope(Dispatchers.Main)
-    private val response = CompletableDeferred<List<AccountSender>>()
+    private var response = CompletableDeferred<List<AccountSender>>()
 
     @After
     fun close() = scope.cancel()
@@ -94,6 +97,52 @@ class SenderInventoryScreenTest {
         compose.onNodeWithTag("settings-group:本设备").assertIsDisplayed()
         compose.onNodeWithTag("settings-group:其他发送端设备").assertIsDisplayed()
         compose.onNodeWithText("暂无其他发送端设备").assertIsDisplayed()
+    }
+
+    @Test
+    fun refreshingRetainsSenderRowsBelowStatusCardAndDisablesRevocation() {
+        val inventory = openInventory(AppLanguage.SimplifiedChinese)
+        val current = compose.onNodeWithContentDescription("撤销小米 15").assertIsEnabled()
+        val other = compose.onNodeWithContentDescription("撤销Pixel 9").assertIsEnabled()
+        compose.runOnIdle {
+            response = CompletableDeferred()
+            inventory.background()
+            inventory.foreground()
+        }
+
+        val card = compose.onNodeWithTag("sender-inventory-loading").assertIsDisplayed()
+            .assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+            )
+        compose.onNodeWithText("正在获取设备列表…").assertIsDisplayed()
+        val bounds = card.getUnclippedBoundsInRoot()
+        assertEquals(45.dp, bounds.bottom - bounds.top)
+        val currentGroup = compose.onNodeWithTag("settings-group:本设备").assertIsDisplayed()
+        assertTrue(currentGroup.getUnclippedBoundsInRoot().top > bounds.bottom)
+        compose.onNodeWithTag("settings-group:其他发送端设备").assertIsDisplayed()
+        current.assertIsDisplayed().assertIsNotEnabled()
+        other.assertIsDisplayed().assertIsNotEnabled()
+        val disabledImage = current.captureToImage().asAndroidBitmap()
+        val context = compose.activity
+        val expectedContainer = Color(
+            ContextCompat.getColor(context, R.color.surface_container_highest)
+        )
+            .copy(alpha = 0.38f)
+            .compositeOver(Color(ContextCompat.getColor(context, R.color.surface_container)))
+        assertEquals(
+            expectedContainer.toArgb(),
+            disabledImage.getPixel(disabledImage.width / 2, 2)
+        )
+        captureSettledUiEvidence(
+            "sender-inventory-refreshing.png",
+            compose.onNode(isRoot() and hasAnyDescendant(hasText("正在获取设备列表…")))
+        )
+
+        respond(listOf(AccountSender("other", "Pixel 9"), AccountSender("sender", "小米 15")))
+        compose.waitUntil(5_000) { !card.isDisplayed() }
+        card.assertDoesNotExist()
+        current.assertIsEnabled()
+        other.assertIsEnabled()
     }
 
     @Test
@@ -207,7 +256,7 @@ class SenderInventoryScreenTest {
             AccountSender("sender", "小米 15")
         ),
         load: Boolean = true
-    ) {
+    ): AccountSenders {
         if (load) respond(senders)
         val app = compose.activity.application as PinGlideApplication
         val store = HomePairingStore(emptyList(), Instant.now().plusSeconds(3600).toString())
@@ -240,5 +289,6 @@ class SenderInventoryScreenTest {
         val label = if (language == AppLanguage.English) "Device access management" else "设备访问管理"
         compose.onNodeWithText(label).performScrollTo().performClick()
         if (load) compose.waitUntil(5_000) { compose.onNodeWithText("小米 15").isDisplayed() }
+        return inventory
     }
 }

@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -199,13 +200,15 @@ private fun SenderRow(
             enabled = state.canSelect,
             modifier = Modifier.heightIn(
                 min = 48.dp
-            ).focusRequester(actionFocus).semantics {
+            ).alpha(if (state.canSelect) 1f else 0.38f).focusRequester(actionFocus).semantics {
                 contentDescription = actionDescription
             },
             contentPadding = PaddingValues(horizontal = 22.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = colorResource(R.color.error_emblem_container),
-                contentColor = colorResource(R.color.on_error_emblem_container)
+                contentColor = colorResource(R.color.on_error_emblem_container),
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
             )
         ) {
             Text(
