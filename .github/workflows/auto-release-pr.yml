@@ -1,0 +1,53 @@
+name: Auto-release proposal
+
+on:
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: [Production release]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-release-pr
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Generate repository-scoped GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - name: Open or refresh the release PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.event.after }}
+          PUBLICATION_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/release/auto-release-pr.mjs
