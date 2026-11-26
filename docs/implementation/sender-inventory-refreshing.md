@@ -1,5 +1,6 @@
 # Sender inventory refresh (#129)
 
+
 The shared loading card restored by #126 already shows the approved clock,
 localized status copy and polite live region above the retained Sender groups.
 The shared Sender row now uses the prototype's disabled button palette:
