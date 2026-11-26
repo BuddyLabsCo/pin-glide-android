@@ -5,6 +5,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,6 +38,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -76,13 +78,7 @@ internal fun SenderRevocationScreen(state: SenderRevocationState, revocation: Se
         RevocationStep.Submitting -> RevocationSubmittingScreen(state, focusModifier)
 
         RevocationStep.Unconfirmed, RevocationStep.Retrying ->
-            RevocationResultScreen(
-                state,
-                revocation,
-                headingModifier,
-                R.string.senders_unconfirmed,
-                R.string.senders_unconfirmed_description
-            )
+            RevocationUnconfirmedScreen(state, revocation, headingModifier)
 
         RevocationStep.Revoked ->
             RevocationResultScreen(
@@ -131,74 +127,141 @@ private fun RevocationResultScreen(
 }
 
 @Composable
+private fun RevocationUnconfirmedScreen(
+    state: SenderRevocationState,
+    revocation: SenderRevocation,
+    headingModifier: Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    val pending = state.step == RevocationStep.Retrying
+    CenteredRevocationLayout {
+        RingedEmblem(
+            RoundedCornerShape(44.dp),
+            containerColor = colorResource(R.color.setup_warning_container)
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_cloud_off),
+                contentDescription = null,
+                modifier = Modifier.size(54.dp),
+                tint = colorResource(R.color.setup_on_warning)
+            )
+        }
+        Text(
+            stringResource(R.string.senders_unconfirmed),
+            headingModifier.fillMaxWidth().padding(top = 7.dp),
+            style = MaterialTheme.typography.headlineSmall.copy(
+                fontSize = 26.sp,
+                lineHeight = 29.4.sp,
+                fontWeight = FontWeight(750),
+                letterSpacing = (-1.17).sp
+            ),
+            textAlign = TextAlign.Center
+        )
+        Text(
+            stringResource(R.string.senders_unconfirmed_description, state.selection.deviceName),
+            Modifier.padding(top = 10.dp).widthIn(max = 312.dp),
+            color = colors.onSurfaceVariant,
+            fontSize = 12.sp,
+            lineHeight = 18.sp,
+            letterSpacing = 0.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.size(26.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SenderRevocationAction(state, revocation)
+            TextButton(
+                onClick = { revocation.dismiss(state) },
+                enabled = !pending,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .alpha(if (pending) 0.38f else 1f),
+                colors = ButtonDefaults.textButtonColors(disabledContentColor = colors.primary)
+            ) {
+                Text(
+                    stringResource(R.string.senders_return),
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.14.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun RevocationSubmittingScreen(state: SenderRevocationState, focusModifier: Modifier) {
     val colors = MaterialTheme.colorScheme
+    CenteredRevocationLayout {
+        RingedEmblem(RoundedCornerShape(44.dp)) {
+            Icon(
+                painterResource(R.drawable.ic_revoke_lock),
+                contentDescription = null,
+                modifier = Modifier.size(54.dp),
+                tint = colors.onPrimaryContainer
+            )
+        }
+        Column(
+            focusModifier.semantics(mergeDescendants = true) {
+                heading()
+                liveRegion = LiveRegionMode.Polite
+            },
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                stringResource(R.string.senders_submitting),
+                Modifier.fillMaxWidth().padding(top = 7.dp),
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontSize = 26.sp,
+                    lineHeight = 29.4.sp,
+                    fontWeight = FontWeight(750),
+                    letterSpacing = (-1.17).sp
+                ),
+                textAlign = TextAlign.Center
+            )
+            Text(
+                stringResource(
+                    R.string.senders_submitting_description,
+                    state.selection.deviceName
+                ),
+                Modifier.fillMaxWidth().padding(top = 10.dp),
+                color = colors.onSurfaceVariant,
+                fontSize = 12.sp,
+                lineHeight = 18.sp,
+                letterSpacing = 0.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(Modifier.size(26.dp))
+        Button(
+            onClick = {},
+            enabled = false,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).alpha(0.38f),
+            colors = ButtonDefaults.buttonColors(
+                disabledContainerColor = colors.primary,
+                disabledContentColor = colors.onPrimary
+            )
+        ) {
+            Text(
+                stringResource(R.string.senders_submitting_wait),
+                Modifier.fillMaxWidth(),
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.14.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+private fun CenteredRevocationLayout(content: @Composable ColumnScope.() -> Unit) {
     ScreenLayout {
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             Column(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
                     .heightIn(min = maxHeight).padding(top = 8.dp, bottom = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                RingedEmblem(RoundedCornerShape(44.dp)) {
-                    Icon(
-                        painterResource(R.drawable.ic_revoke_lock),
-                        contentDescription = null,
-                        modifier = Modifier.size(54.dp),
-                        tint = colors.onPrimaryContainer
-                    )
-                }
-                Column(
-                    focusModifier.semantics(mergeDescendants = true) {
-                        heading()
-                        liveRegion = LiveRegionMode.Polite
-                    },
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        stringResource(R.string.senders_submitting),
-                        Modifier.fillMaxWidth().padding(top = 7.dp),
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontSize = 26.sp,
-                            lineHeight = 29.4.sp,
-                            fontWeight = FontWeight(750),
-                            letterSpacing = (-1.17).sp
-                        ),
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        stringResource(
-                            R.string.senders_submitting_description,
-                            state.selection.deviceName
-                        ),
-                        Modifier.fillMaxWidth().padding(top = 10.dp),
-                        color = colors.onSurfaceVariant,
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp,
-                        letterSpacing = 0.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
-                Spacer(Modifier.size(26.dp))
-                Button(
-                    onClick = {},
-                    enabled = false,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).alpha(0.38f),
-                    colors = ButtonDefaults.buttonColors(
-                        disabledContainerColor = colors.primary,
-                        disabledContentColor = colors.onPrimary
-                    )
-                ) {
-                    Text(
-                        stringResource(R.string.senders_submitting_wait),
-                        Modifier.fillMaxWidth(),
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.14.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
+                verticalArrangement = Arrangement.Center,
+                content = content
+            )
         }
     }
 }
@@ -307,6 +370,9 @@ private fun SenderRevocationAction(state: SenderRevocationState, revocation: Sen
         RevocationStep.Retrying -> R.string.senders_revoke_retrying
         else -> return
     }
+    val retrying = state.step == RevocationStep.Retrying
+    val proof = state.step == RevocationStep.Proof || state.step == RevocationStep.Verifying
+    val colors = MaterialTheme.colorScheme
     Button(
         onClick = {
             if (state.step == RevocationStep.Proof) {
@@ -317,15 +383,24 @@ private fun SenderRevocationAction(state: SenderRevocationState, revocation: Sen
         },
         enabled = state.step == RevocationStep.Proof || state.step == RevocationStep.Unconfirmed,
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            .semantics { liveRegion = LiveRegionMode.Polite }
-    ) {
-        if (state.step == RevocationStep.Proof || state.step == RevocationStep.Verifying) {
-            Icon(painterResource(R.drawable.ic_account_circle), null, Modifier.size(22.dp))
-            Spacer(Modifier.size(8.dp))
-            Text(stringResource(label), fontWeight = FontWeight.Bold, letterSpacing = 0.14.sp)
+            .alpha(if (retrying) 0.38f else 1f)
+            .semantics { liveRegion = LiveRegionMode.Polite },
+        colors = if (retrying) {
+            ButtonDefaults.buttonColors(
+                disabledContainerColor = colors.primary,
+                disabledContentColor = colors.onPrimary
+            )
         } else {
-            Text(stringResource(label))
+            ButtonDefaults.buttonColors()
         }
+    ) {
+        Icon(
+            painterResource(if (proof) R.drawable.ic_account_circle else R.drawable.ic_refresh),
+            null,
+            Modifier.size(if (proof) 22.dp else 20.dp)
+        )
+        Spacer(Modifier.size(8.dp))
+        Text(stringResource(label), fontWeight = FontWeight.Bold, letterSpacing = 0.14.sp)
     }
 }
 
