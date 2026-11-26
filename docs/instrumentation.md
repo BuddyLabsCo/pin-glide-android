@@ -16,7 +16,7 @@ write caches, with the Android job owning the shared npm cache.
 
 ## Local execution
 
-Install the SDK and toolchain pinned in [the workflow](../.github/workflows/instrumentation.yml), authenticate `gh`, and use a dedicated accelerated Google APIs (non-Play-Store) emulator.
+Install the SDK pinned in [the shared setup action](../.github/actions/setup-android-sdk/action.yml) and the emulator and toolchain pinned in [the workflow](../.github/workflows/instrumentation.yml), authenticate `gh`, and use a dedicated accelerated Google APIs (non-Play-Store) emulator.
 
 ```sh
 bash ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest

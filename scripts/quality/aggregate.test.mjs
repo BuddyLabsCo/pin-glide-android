@@ -25,11 +25,14 @@ test("only the exact classified selection passes the aggregate", () => {
 });
 
 test("classification must succeed and emit a valid selection", () => {
+  const baseline = needs(true, true);
   for (const result of ["failure", "cancelled", "skipped", undefined]) {
-    assert.equal(qualityPassed({ ...needs(false, false), classify: { result, outputs: {} } }), false);
+    assert.equal(qualityPassed({ ...baseline, classify: { ...baseline.classify, result } }), false);
   }
-  for (const outputs of [{}, { android: "false", instrumentation: "true" }, { android: "true", instrumentation: "" }]) {
-    assert.equal(qualityPassed({ ...needs(false, false), classify: { result: "success", outputs } }), false);
-  }
+  assert.equal(qualityPassed({ ...needs(false, false), classify: { result: "success", outputs: {} } }), false);
+  assert.equal(qualityPassed({
+    ...needs(true, false), classify: { result: "success", outputs: { android: "true", instrumentation: "" } },
+  }), false);
+  assert.equal(qualityPassed(needs(false, true)), false);
   assert.equal(qualityPassed({}), false);
 });

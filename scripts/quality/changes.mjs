@@ -23,8 +23,14 @@ export function classifyRange(event, base, head, cwd = process.cwd()) {
     const git = (...args) => execFileSync("git", args, {
       cwd, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"],
     });
-    git("merge-base", "--is-ancestor", base, head);
-    const paths = git("diff", "--name-only", "--no-renames", "-z", base, head, "--");
+    if (git("rev-parse", "--is-shallow-repository").trim() !== "false") {
+      throw new Error("Incomplete comparison history");
+    }
+    const mergeBases = git("merge-base", "--all", base, head).trim().split(/\s+/);
+    if (mergeBases.length !== 1 || !/^[0-9a-f]{40}$/.test(mergeBases[0])) {
+      throw new Error("No unique merge base");
+    }
+    const paths = git("diff", "--name-only", "--no-renames", "-z", mergeBases[0], head, "--");
     return classifyChanges(paths.split("\0").filter(Boolean));
   } catch (error) {
     console.error(`Cannot compare changed paths; running all checks: ${error.message}`);

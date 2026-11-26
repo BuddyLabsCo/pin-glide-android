@@ -37,16 +37,10 @@ jobs:
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
-      - uses: android-actions/setup-android@v4.0.4
-        with:
-          cmdline-tools-version: "15859902"
-          packages: "cmdline-tools;23.0"
-      - name: Install the pinned SDK and emulator
+      - uses: ./.github/actions/setup-android-sdk
+      - name: Install the pinned emulator
         run: |
-          android="$ANDROID_HOME/cmdline-tools/23.0/bin/android"
-          "$android" sdk install 'platforms/android-37.0@2.0.0' --force
-          "$android" sdk install 'build-tools/36.0.0@36.0.0' --force
-          "$android" sdk install 'platform-tools@37.0.3' --force
+          android="$ANDROID_CLI_BIN/android"
           "$android" sdk install 'emulator@37.3.10' --force
           "$android" sdk install 'system-images/android-37.0/google_apis/x86_64@8.0.0' --force
           "$ANDROID_HOME/emulator/emulator" -version
@@ -85,7 +79,7 @@ jobs:
         timeout-minutes: 8
         run: |
           mkdir -p build/instrumentation
-          echo no | "$ANDROID_HOME/cmdline-tools/23.0/bin/avdmanager" create avd \
+          echo no | "$ANDROID_CLI_BIN/avdmanager" create avd \
             -n pinglide-instrumentation -k 'system-images;android-37.0;google_apis;x86_64' -d pixel_2
           cores=$(nproc)
           if (( cores > 4 )); then cores=4; fi

@@ -78,13 +78,23 @@ test("full Git comparison includes deletions, both rename ends and paths beyond 
     renameSync(join(directory, "docs/guide.md"), join(directory, ui));
     const moved = commit();
     assert.deepEqual(compare(deleted, moved), full);
-    for (let index = 0; index < 301; index++) add(`docs/extra-${index}.md`);
+    for (let index = 0; index < 301; index++) add(`aaa-doc-${index}.md`);
     const docs = commit();
     assert.deepEqual(compare(moved, docs), docsOnly);
     assert.deepEqual(compare(docs, moved), full);
     assert.deepEqual(compare("0".repeat(40), docs), full);
-    add("app/src/main/res/values/strings.xml");
-    assert.deepEqual(compare(moved, commit()), full);
+    const resource = "app/src/main/res/values/strings.xml";
+    add(resource);
+    const headWithResource = commit();
+    assert.deepEqual(compare(moved, headWithResource), full);
+
+    git("read-tree", moved);
+    git("add", "--", resource);
+    const baseWithResource = git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.com",
+      "-c", "commit.gpgsign=false", "commit-tree", git("write-tree"), "-p", moved, "-m", "diverged base");
+    assert.deepEqual(classifyChanges(git("diff", "--name-only", baseWithResource, headWithResource).split("\n")), docsOnly);
+    assert.deepEqual(compare(baseWithResource, headWithResource), full);
+    assert.deepEqual(compare(baseWithResource, docs), docsOnly);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

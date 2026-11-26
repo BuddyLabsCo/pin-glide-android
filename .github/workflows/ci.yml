@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v6
         with:
@@ -32,7 +32,8 @@ jobs:
         id: changes
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
-        run: node scripts/quality/changes.mjs "$GITHUB_EVENT_NAME" "$BASE" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/quality/changes.mjs "$GITHUB_EVENT_NAME" "$BASE" "$HEAD" >> "$GITHUB_OUTPUT"
       - name: Test quality selection
         run: node --test scripts/quality/*.test.mjs
 
@@ -82,16 +83,7 @@ jobs:
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
-      - uses: android-actions/setup-android@v4.0.4
-        with:
-          cmdline-tools-version: "15859902"
-          packages: "cmdline-tools;23.0"
-      - name: Install the pinned Android SDK
-        run: |
-          android="$ANDROID_HOME/cmdline-tools/23.0/bin/android"
-          "$android" sdk install 'platforms/android-37.0@2.0.0' --force
-          "$android" sdk install 'build-tools/36.0.0@36.0.0' --force
-          "$android" sdk install 'platform-tools@37.0.3' --force
+      - uses: ./.github/actions/setup-android-sdk
       - name: Read the service repository
         id: contracts
         run: |
