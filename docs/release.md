@@ -135,8 +135,11 @@ at the prompt). Do not derive the expected fingerprint from the APK being verifi
 Register Dev QQ Connect with this package and certificate. Protect the Environment
 with appropriate branch restrictions and reviewer approval: selected branch code
 will execute with the Dev signing inputs. Do not grant untrusted branches access.
-Remove `PINGLIDE_SERVICE_URL` from repository and organization variables; packaging
-rejects that fallback before accessing the Environment.
+Remove all three distribution variables and all four signing secrets listed above
+from repository and organization configuration accessible to this repository.
+Packaging rejects public-variable names (including blank values) and nonempty
+signing-secret fallback before accessing the Environment. The preflight receives
+only a boolean for the presence of those secrets, never their contents.
 
 In GitHub Actions, choose **Package development APK**, select **Run workflow**,
 choose the source branch and start the run. It checks out the dispatch commit,
@@ -196,7 +199,9 @@ the intended fixed signing identity, never build caches or signing material.
 
 Verify either distribution APK using the shared verifier and the independently
 approved certificate fingerprint for that variant, supplied as the public
-`PINGLIDE_SIGNING_CERT_SHA256` environment variable:
+`PINGLIDE_SIGNING_CERT_SHA256` environment variable. Keep the intended variant's
+numeric QQ App ID (`PINGLIDE_DEV_QQ_APP_ID` or `PINGLIDE_QQ_APP_ID`) configured
+when invoking the verifier:
 
 ```powershell
 node scripts/distribution/verify-apk.mjs debug app/build/outputs/apk/debug/app-debug.apk
@@ -204,7 +209,8 @@ node scripts/distribution/verify-apk.mjs release app/build/outputs/apk/release/a
 ```
 
 The verifier compares the APK with the source version, expected variant package,
-launcher, debuggability, min/target SDK and manifest cleartext policy, requires
+English and Chinese launcher names, debuggability, min/target SDK, manifest
+cleartext policy and QQ callback scheme, requires
 exactly one approved signer and checks page alignment. For manual diagnostics,
 the corresponding Android SDK tools are:
 
