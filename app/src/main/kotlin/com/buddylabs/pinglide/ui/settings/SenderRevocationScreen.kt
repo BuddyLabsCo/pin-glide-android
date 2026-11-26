@@ -81,44 +81,29 @@ internal fun SenderRevocationScreen(state: SenderRevocationState, revocation: Se
             RevocationUnconfirmedScreen(state, revocation, headingModifier)
 
         RevocationStep.Revoked ->
-            RevocationResultScreen(
-                state,
-                revocation,
-                headingModifier,
-                R.string.senders_revoked,
-                R.string.senders_revoked_description
-            )
+            RevocationSuccessScreen(state, revocation, headingModifier)
 
         RevocationStep.Confirmation -> error("Confirmation belongs to inventory")
     }
 }
 
 @Composable
-private fun RevocationResultScreen(
+private fun RevocationSuccessScreen(
     state: SenderRevocationState,
     revocation: SenderRevocation,
-    headingModifier: Modifier,
-    title: Int,
-    description: Int
+    headingModifier: Modifier
 ) {
-    val pending = state.step == RevocationStep.Retrying
-    SettingsPage(
-        stringResource(R.string.settings_device_access),
-        { revocation.dismiss(state) },
-        backEnabled = !pending
-    ) {
+    SettingsPage(stringResource(R.string.settings_device_access), { revocation.dismiss(state) }) {
         Icon(painterResource(R.drawable.ic_devices), contentDescription = null)
         Text(
-            stringResource(title, state.selection.deviceName),
+            stringResource(R.string.senders_revoked, state.selection.deviceName),
             headingModifier,
             style = MaterialTheme.typography.headlineSmall
         )
-        Text(stringResource(description, state.selection.deviceName))
+        Text(stringResource(R.string.senders_revoked_description, state.selection.deviceName))
         OwnerProofFeedback(state.notice)
-        SenderRevocationAction(state, revocation)
         TextButton(
             onClick = { revocation.dismiss(state) },
-            enabled = !pending,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) {
             Text(stringResource(R.string.senders_return))
@@ -146,16 +131,9 @@ private fun RevocationUnconfirmedScreen(
                 tint = colorResource(R.color.setup_on_warning)
             )
         }
-        Text(
+        CenteredRevocationHeading(
             stringResource(R.string.senders_unconfirmed),
-            headingModifier.fillMaxWidth().padding(top = 7.dp),
-            style = MaterialTheme.typography.headlineSmall.copy(
-                fontSize = 26.sp,
-                lineHeight = 29.4.sp,
-                fontWeight = FontWeight(750),
-                letterSpacing = (-1.17).sp
-            ),
-            textAlign = TextAlign.Center
+            headingModifier
         )
         Text(
             stringResource(R.string.senders_unconfirmed_description, state.selection.deviceName),
@@ -206,17 +184,7 @@ private fun RevocationSubmittingScreen(state: SenderRevocationState, focusModifi
             },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                stringResource(R.string.senders_submitting),
-                Modifier.fillMaxWidth().padding(top = 7.dp),
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontSize = 26.sp,
-                    lineHeight = 29.4.sp,
-                    fontWeight = FontWeight(750),
-                    letterSpacing = (-1.17).sp
-                ),
-                textAlign = TextAlign.Center
-            )
+            CenteredRevocationHeading(stringResource(R.string.senders_submitting))
             Text(
                 stringResource(
                     R.string.senders_submitting_description,
@@ -249,6 +217,21 @@ private fun RevocationSubmittingScreen(state: SenderRevocationState, focusModifi
             )
         }
     }
+}
+
+@Composable
+private fun CenteredRevocationHeading(title: String, modifier: Modifier = Modifier) {
+    Text(
+        title,
+        modifier.fillMaxWidth().padding(top = 7.dp),
+        style = MaterialTheme.typography.headlineSmall.copy(
+            fontSize = 26.sp,
+            lineHeight = 29.4.sp,
+            fontWeight = FontWeight(750),
+            letterSpacing = (-1.17).sp
+        ),
+        textAlign = TextAlign.Center
+    )
 }
 
 @Composable

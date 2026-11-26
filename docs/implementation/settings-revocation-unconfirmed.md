@@ -39,3 +39,25 @@ due to prolonged analyzer execution under memory pressure.
 
 No live QQ verification or real device revocation was performed; the captures
 and tests use simulated service replies.
+
+## Review follow-up
+
+The regression now measures the rendered heading and explanation against the
+actual scroll viewport, verifies the full-width actions and centered group,
+and samples the warning tile, rings, cloud-off glyph, and refresh glyph.
+Temporary substitutions of the cloud-off and refresh icons with the devices
+and account icons respectively each failed their corresponding artwork
+assertion. Temporarily shifting the group down by 20 dp failed the centering
+assertion. All three mutations were reverted.
+
+The English 200% font-scale case now verifies both disabled actions and the
+retrying label before a simulated successful reply, then verifies the existing
+success screen and return to the inventory. The submitting and unconfirmed
+headings share their typography without changing their accessibility semantics;
+the success screen no longer contains unreachable retry presentation.
+
+All eight focused revocation tests passed in both themes on API 37 at
+366 × 820 dp, and the visual test also passed at 700 × 820 dp. All 46 JVM
+tests, `qualityCheck`, Kotlin compilation, and both debug APK assemblies
+passed. The full instrumentation suite was not repeated for this review fix.
+The approved layout and existing screenshot evidence are unchanged.
