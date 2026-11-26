@@ -87,13 +87,14 @@ fun PrivacyContent() {
         style = MaterialTheme.typography.headlineSmall.copy(
             fontSize = 26.sp,
             lineHeight = 30.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight(750),
+            letterSpacing = (-1.17).sp
         ),
         modifier = Modifier.semantics { heading() }
     )
     Text(
         stringResource(R.string.privacy_intro),
-        modifier = Modifier.padding(top = 8.dp),
+        modifier = Modifier.padding(top = 2.dp),
         style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp, letterSpacing = 0.sp),
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -108,7 +109,7 @@ fun PrivacyContent() {
         )
         PrivacySection(R.drawable.ic_key, R.string.privacy_keys_title, R.string.privacy_keys_body)
         PrivacySection(
-            R.drawable.ic_devices,
+            R.drawable.ic_computer,
             R.string.privacy_routing_title,
             R.string.privacy_routing_body
         )
@@ -128,12 +129,15 @@ fun PrivacyContent() {
         Icon(
             painterResource(R.drawable.ic_shield),
             contentDescription = null,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.padding(top = 1.dp).size(18.dp),
             tint = MaterialTheme.colorScheme.primary
         )
         Text(
             stringResource(R.string.privacy_backup_body),
-            style = MaterialTheme.typography.bodySmall.copy(letterSpacing = 0.sp),
+            style = MaterialTheme.typography.bodySmall.copy(
+                lineHeight = 18.sp,
+                letterSpacing = 0.sp
+            ),
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }

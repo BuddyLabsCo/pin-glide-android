@@ -51,7 +51,7 @@ import com.buddylabs.pinglide.domain.identity.AccountSession
 import com.buddylabs.pinglide.domain.identity.RevocationStep
 import com.buddylabs.pinglide.domain.identity.SenderRevocation
 import com.buddylabs.pinglide.domain.settings.AppLanguage
-import com.buddylabs.pinglide.ui.components.PrivacyScreen
+import com.buddylabs.pinglide.ui.components.PrivacyContent
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 internal enum class SettingsDestination { Root, Language, Privacy, Account, DeviceAccess }
@@ -159,7 +159,14 @@ private fun SettingsDestinationContent(
         SettingsDestination.Root ->
             SettingsScreen(language, installedVersion, onBatterySettings, onNavigate, onBack)
 
-        SettingsDestination.Privacy -> PrivacyScreen(onDismiss = onBack)
+        SettingsDestination.Privacy -> SettingsPage(
+            stringResource(R.string.settings_title),
+            onBack,
+            rootLayout = true,
+            contentTopPadding = 4.dp
+        ) {
+            Column { PrivacyContent() }
+        }
 
         SettingsDestination.Account -> AccountScreen(account, onBack, onLogout)
 
