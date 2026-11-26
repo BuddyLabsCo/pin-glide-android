@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -25,6 +26,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -93,20 +95,53 @@ private fun RevocationSuccessScreen(
     revocation: SenderRevocation,
     headingModifier: Modifier
 ) {
-    SettingsPage(stringResource(R.string.settings_device_access), { revocation.dismiss(state) }) {
-        Icon(painterResource(R.drawable.ic_devices), contentDescription = null)
+    CenteredRevocationLayout(PaddingValues(horizontal = 8.dp, vertical = 28.dp)) {
+        Surface(
+            modifier = Modifier.padding(bottom = 18.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = colorResource(R.color.error_emblem_container)
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_registration_revoked_lock),
+                contentDescription = null,
+                tint = colorResource(R.color.error_emblem),
+                modifier = Modifier.padding(21.dp).size(30.dp)
+            )
+        }
         Text(
             stringResource(R.string.senders_revoked, state.selection.deviceName),
             headingModifier,
-            style = MaterialTheme.typography.headlineSmall
+            style = MaterialTheme.typography.headlineSmall.copy(
+                fontSize = 26.sp,
+                lineHeight = 32.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-1.04).sp
+            ),
+            textAlign = TextAlign.Center
         )
-        Text(stringResource(R.string.senders_revoked_description, state.selection.deviceName))
+        Text(
+            stringResource(R.string.senders_revoked_description),
+            Modifier.padding(top = 10.dp).widthIn(max = 300.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontSize = 13.sp,
+                lineHeight = 20.sp,
+                letterSpacing = 0.sp
+            ),
+            textAlign = TextAlign.Center
+        )
         OwnerProofFeedback(state.notice)
-        TextButton(
+        Spacer(Modifier.size(22.dp))
+        Button(
             onClick = { revocation.dismiss(state) },
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) {
-            Text(stringResource(R.string.senders_return))
+            Text(
+                stringResource(R.string.senders_return),
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.14.sp,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
@@ -235,12 +270,15 @@ private fun CenteredRevocationHeading(title: String, modifier: Modifier = Modifi
 }
 
 @Composable
-private fun CenteredRevocationLayout(content: @Composable ColumnScope.() -> Unit) {
+private fun CenteredRevocationLayout(
+    contentPadding: PaddingValues = PaddingValues(top = 8.dp, bottom = 28.dp),
+    content: @Composable ColumnScope.() -> Unit
+) {
     ScreenLayout {
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             Column(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                    .heightIn(min = maxHeight).padding(top = 8.dp, bottom = 28.dp),
+                    .heightIn(min = maxHeight).padding(contentPadding),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
                 content = content

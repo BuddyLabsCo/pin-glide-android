@@ -140,7 +140,8 @@ class SenderRevocationUnconfirmedTest {
             compose.onNodeWithText("“Pixel 9” revoked").performScrollTo().assertIsDisplayed()
             compose.onNodeWithText("Retrying…").assertDoesNotExist()
             compose.onNodeWithText(returnLabel).performScrollTo().assertIsEnabled().performClick()
-            compose.onNodeWithText("Pixel 9").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Galaxy S25").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Pixel 9").assertDoesNotExist()
         }
     }
 
