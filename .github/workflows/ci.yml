@@ -34,8 +34,8 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node scripts/quality/changes.mjs "$GITHUB_EVENT_NAME" "$BASE" "$HEAD" >> "$GITHUB_OUTPUT"
-      - name: Test quality selection
-        run: node --test scripts/quality/changes.test.mjs scripts/quality/aggregate.test.mjs
+      - name: Test quality selection and distribution preflight
+        run: node --test scripts/quality/changes.test.mjs scripts/quality/aggregate.test.mjs scripts/quality/distribution-preflight.test.mjs
       - name: Test and check release version policy
         run: |
           node --test scripts/release/*.test.mjs
@@ -88,28 +88,10 @@ jobs:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
       - uses: ./.github/actions/setup-android-sdk
-      - name: Read the service repository
-        id: contracts
-        run: |
-          node --input-type=module <<'NODE'
-          import { appendFileSync, readFileSync } from "node:fs";
-          const { repository } = JSON.parse(readFileSync("config/codegen/service-contracts.json", "utf8"));
-          const [owner, name] = repository.split("/");
-          appendFileSync(process.env.GITHUB_OUTPUT, `owner=${owner}\nrepository=${name}\n`);
-          NODE
-      - name: Create a read-only service repository token
-        uses: actions/create-github-app-token@v3
-        id: service-token
+      - uses: ./.github/actions/download-service-contracts
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          owner: ${{ steps.contracts.outputs.owner }}
-          repositories: ${{ steps.contracts.outputs.repository }}
-          permission-contents: read
-      - name: Download the pinned service contracts
-        env:
-          GH_TOKEN: ${{ steps.service-token.outputs.token }}
-        run: bash ./gradlew downloadServiceContracts --console=plain
       - name: Run Android static checks, compilation and JVM tests
         run: |
           bash ./gradlew detekt :app:lintDebug :app:lintRelease \

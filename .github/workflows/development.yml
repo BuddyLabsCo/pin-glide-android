@@ -1,0 +1,90 @@
+name: Package development APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - name: Require a branch and Environment-only distribution inputs
+        env:
+          PUBLIC_VARIABLES: ${{ toJSON(vars) }}
+          SIGNING_FALLBACK: ${{ secrets.PINGLIDE_SIGNING_KEYSTORE_BASE64 != '' || secrets.PINGLIDE_SIGNING_STORE_PASSWORD != '' || secrets.PINGLIDE_SIGNING_KEY_ALIAS != '' || secrets.PINGLIDE_SIGNING_KEY_PASSWORD != '' }}
+        run: node scripts/distribution/preflight.mjs
+
+  package:
+    needs: preflight
+    environment: development
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25.0.3"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - uses: ./.github/actions/setup-android-sdk
+      - uses: ./.github/actions/download-service-contracts
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          uncached: "true"
+      - name: Package fixed-key Debug APK
+        shell: bash
+        env:
+          PINGLIDE_DEV_SERVICE_URL: ${{ vars.PINGLIDE_SERVICE_URL }}
+          PINGLIDE_DEV_QQ_APP_ID: ${{ vars.PINGLIDE_QQ_APP_ID }}
+          KEYSTORE_BASE64: ${{ secrets.PINGLIDE_SIGNING_KEYSTORE_BASE64 }}
+          PINGLIDE_DEV_SIGNING_STORE_PASSWORD: ${{ secrets.PINGLIDE_SIGNING_STORE_PASSWORD }}
+          PINGLIDE_DEV_SIGNING_KEY_ALIAS: ${{ secrets.PINGLIDE_SIGNING_KEY_ALIAS }}
+          PINGLIDE_DEV_SIGNING_KEY_PASSWORD: ${{ secrets.PINGLIDE_SIGNING_KEY_PASSWORD }}
+        run: |
+          : "${KEYSTORE_BASE64:?Missing signing keystore}"
+          : "${PINGLIDE_DEV_SERVICE_URL:?Missing Service URL}"
+          : "${PINGLIDE_DEV_QQ_APP_ID:?Missing QQ App ID}"
+          : "${PINGLIDE_DEV_SIGNING_STORE_PASSWORD:?Missing store password}"
+          : "${PINGLIDE_DEV_SIGNING_KEY_ALIAS:?Missing key alias}"
+          : "${PINGLIDE_DEV_SIGNING_KEY_PASSWORD:?Missing key password}"
+          umask 077
+          signing_dir=$(mktemp -d "$RUNNER_TEMP/pinglide-signing.XXXXXXXX")
+          trap 'rm -f -- "$signing_dir/dev.keystore"; rmdir -- "$signing_dir"' EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          export PINGLIDE_DEV_SIGNING_STORE_FILE="$signing_dir/dev.keystore"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$PINGLIDE_DEV_SIGNING_STORE_FILE"
+          unset KEYSTORE_BASE64
+          bash ./gradlew :app:assembleDebug -Ppinglide.devDistribution=true \
+            --no-build-cache --no-configuration-cache --no-daemon --console=plain
+      - name: Verify distribution APK
+        id: verify
+        env:
+          PINGLIDE_SIGNING_CERT_SHA256: ${{ vars.PINGLIDE_SIGNING_CERT_SHA256 }}
+          PINGLIDE_DEV_QQ_APP_ID: ${{ vars.PINGLIDE_QQ_APP_ID }}
+        run: |
+          version=$(node scripts/distribution/verify-apk.mjs debug app/build/outputs/apk/debug/app-debug.apk)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pin-glide-${{ steps.verify.outputs.version }}-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes, X509Certificate } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, rmdirSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { verifyApk } from "../distribution/verify-apk.mjs";
 import { checkVersion } from "../release/version-policy.mjs";
 
 const environment = Object.fromEntries(
@@ -229,6 +230,7 @@ function testSigning(directory, variant, prefix) {
 
 test("APK and bundle packaging use the intended independent signing identities", () => {
   const directory = mkdtempSync(join(tmpdir(), "pinglide-build-test-"));
+  const fixtureNames = ["fixture-a.bin", "fixture-b.bin", "fixture-c.bin"];
   try {
     const debug = testSigning(directory, "debug", "PINGLIDE_DEV_");
     const release = testSigning(directory, "release", "PINGLIDE_");
@@ -260,15 +262,49 @@ test("APK and bundle packaging use the intended independent signing identities",
       ...prodInputs, PINGLIDE_PUBLISHED_RELEASE: fixtureBaseline,
     });
     assert.equal(prodResult.status, 0, prodResult.output);
-    for (const [variant, signing] of [["debug", debug], ["release", release]]) {
-      const apk = apkSigner(variant);
-      assert.match(apk, new RegExp(`certificate SHA-256 digest: ${signing.fingerprint}\\b`));
+    for (const [variant, signing, qqAppId] of [["debug", debug, "123"], ["release", release, "456"]]) {
+      const apkPath = `app/build/outputs/apk/${variant}/app-${variant}.apk`;
+      const observations = new Map();
+      const toolKey = args => args[0] === "dump" ? args[1] : args[0];
+      const capture = (command, args) => {
+        const output = execFileSync(command, args, { encoding: "utf8" });
+        observations.set(toolKey(args), output);
+        return output;
+      };
       const suffix = variant === "debug" ? "-dev" : "";
+      assert.equal(verifyApk(variant, apkPath, signing.fingerprint, qqAppId, capture),
+        `${branchVersion.versionName}${suffix}`);
       assert.deepEqual(apkVersion(variant), {
         packageName: `com.buddylabs.pinglide${variant === "debug" ? ".dev" : ""}`,
         versionCode: branchVersion.versionCode,
         versionName: `${branchVersion.versionName}${suffix}`,
       });
+      const other = variant === "debug" ? release : debug;
+      assert.throws(() => verifyApk(variant, apkPath, other.fingerprint, qqAppId), /signer/);
+      assert.throws(() => verifyApk(variant, apkPath, "", qqAppId), /SHA-256/);
+      assert.throws(() => verifyApk(variant, apkPath, signing.fingerprint, ""), /QQ App ID/);
+      assert.throws(() => verifyApk(variant, apkPath, signing.fingerprint, "999"), /callback scheme/);
+      assert.throws(() => verifyApk(variant === "debug" ? "release" : "debug", apkPath,
+        signing.fingerprint, qqAppId), /package/);
+
+      for (const [tool, change, expected] of [
+        ["badging", value => value.replace(/versionCode='\d+'/, "versionCode='0'"), /version code/],
+        ["badging", value => value.replace(/versionName='[^']+'/, "versionName='wrong'"), /version name/],
+        ["badging", value => variant === "debug" ? value.replace(/^application-debuggable\r?\n/m, "")
+          : `${value}\napplication-debuggable\n`, /debuggability/],
+        ["badging", value => value.replace(/^application-label-en:.*$/m, "application-label-en:'wrong'"), /English/],
+        ["badging", value => value.replace(/^application-label-zh-CN:.*$/m, "application-label-zh-CN:'wrong'"), /Chinese/],
+        ["xmltree", value => value.replace(/(android:usesCleartextTraffic\([^)]*\)=\(type 0x12\))0x[0-9a-f]+/,
+          (_, prefix) => `${prefix}${variant === "debug" ? "0x0" : "0xffffffff"}`), /cleartext policy/],
+      ]) {
+        const replay = (_command, args) => {
+          const key = toolKey(args);
+          assert.ok(observations.has(key), `Unexpected SDK tool invocation: ${key}`);
+          const output = observations.get(key);
+          return key === tool ? change(output) : output;
+        };
+        assert.throws(() => verifyApk(variant, apkPath, signing.fingerprint, qqAppId, replay), expected);
+      }
       const bundle = `app/build/outputs/bundle/${variant}/app-${variant}.aab`;
       assert.match(javaTool("jarsigner", ["-J-Duser.language=en", "-verify", bundle]), /jar verified\./);
       const certs = javaTool("keytool", ["-printcert", "-rfc", "-jarfile", bundle]);
@@ -277,7 +313,41 @@ test("APK and bundle packaging use the intended independent signing identities",
       assert.equal(new X509Certificate(certificates[0]).fingerprint256.replaceAll(":", "").toLowerCase(),
         signing.fingerprint);
     }
+
+    const alteredApk = join(directory, "altered.apk");
+    copyFileSync("app/build/outputs/apk/debug/app-debug.apk", alteredApk);
+    for (const [index, name] of fixtureNames.entries()) {
+      writeFileSync(join(directory, name), Buffer.alloc(index + 1));
+    }
+    javaTool("jar", ["--update", "--file", alteredApk, "--no-compress",
+      ...fixtureNames.flatMap(name => ["-C", directory, name])]);
+    assert.throws(() => verifyApk("debug", alteredApk, debug.fingerprint, "123"), error => {
+      assert.equal(error.status, 1);
+      assert.match(error.stderr, /^DOES NOT VERIFY\r?$/m);
+      assert.match(error.stderr, /^ERROR: Missing META-INF\/MANIFEST\.MF\r?$/m);
+      return true;
+    });
+
+    javaTool("java", [
+      "-jar", join(environment.ANDROID_HOME, "build-tools", "36.0.0", "lib", "apksigner.jar"),
+      "sign", "--ks", debug.inputs.PINGLIDE_DEV_SIGNING_STORE_FILE,
+      "--ks-key-alias", debug.inputs.PINGLIDE_DEV_SIGNING_KEY_ALIAS,
+      "--ks-pass", "env:PINGLIDE_DEV_SIGNING_STORE_PASSWORD",
+      "--key-pass", "env:PINGLIDE_DEV_SIGNING_KEY_PASSWORD",
+      "--alignment-preserved", "true",
+      "--v4-signing-enabled", "false", alteredApk,
+    ], debug.inputs);
+    assert.throws(() => verifyApk("debug", alteredApk, debug.fingerprint, "123"), error => {
+      assert.equal(error.status, 1);
+      assert.match(error.stdout, /^\s*\d+ fixture-[abc]\.bin \(BAD - [123]\)\r?$/m);
+      assert.match(error.stdout, /^Verification FAILED\r?$/m);
+      return true;
+    });
   } finally {
+    rmSync(join(directory, "altered.apk"), { force: true });
+    for (const name of fixtureNames) {
+      rmSync(join(directory, name), { force: true });
+    }
     for (const variant of ["debug", "release"]) {
       rmSync(join(directory, `${variant}.p12`), { force: true });
     }
