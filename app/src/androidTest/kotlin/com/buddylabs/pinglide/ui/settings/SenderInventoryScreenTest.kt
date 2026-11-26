@@ -63,6 +63,52 @@ class SenderInventoryScreenTest {
     fun close() = scope.cancel()
 
     @Test
+    fun initialFailureShowsWarningAndFullWidthTonalRetryBeforeSuccessfulInventory() {
+        var attempts = 0
+        val initialResponse = CompletableDeferred<List<AccountSender>>()
+        openInventory(AppLanguage.SimplifiedChinese, load = false, list = {
+            if (attempts++ == 0) initialResponse.await() else response.await()
+        })
+        compose.onNodeWithText("正在获取设备列表…").assertIsDisplayed()
+        check(initialResponse.completeExceptionally(IllegalStateException("Network unavailable")))
+        val message = "网络错误，无法获取设备列表，请稍后重试。"
+        compose.waitUntil(5_000) { compose.onNodeWithText(message).isDisplayed() }
+        compose.onNodeWithText("本设备").assertDoesNotExist()
+        compose.onNodeWithText("暂无其他发送端设备").assertDoesNotExist()
+        val warning = compose.onNodeWithTag("sender-inventory-error").assertIsDisplayed()
+            .assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+            )
+        val retry = compose.onNodeWithText("重试").assertIsDisplayed().assertIsEnabled()
+        val warningBounds = warning.getUnclippedBoundsInRoot()
+        val retryBounds = retry.getUnclippedBoundsInRoot()
+        assertEquals(warningBounds.left, retryBounds.left)
+        assertEquals(warningBounds.right, retryBounds.right)
+        assertTrue(retryBounds.bottom - retryBounds.top >= 48.dp)
+        val warningImage = warning.captureToImage().asAndroidBitmap()
+        val retryImage = retry.captureToImage().asAndroidBitmap()
+        assertEquals(
+            ContextCompat.getColor(compose.activity, R.color.setup_warning_container),
+            warningImage.getPixel(warningImage.width / 2, 2)
+        )
+        assertEquals(
+            ContextCompat.getColor(compose.activity, R.color.secondary_container),
+            retryImage.getPixel(retryImage.width / 2, 10)
+        )
+        captureSettledUiEvidence(
+            "sender-inventory-error.png",
+            compose.onNode(isRoot() and hasAnyDescendant(hasText(message)))
+        )
+        retry.performClick()
+        compose.onNodeWithText("正在获取设备列表…").assertIsDisplayed()
+        respond(listOf(AccountSender("sender", "小米 15")))
+        compose.waitUntil(5_000) { compose.onNodeWithText("小米 15").isDisplayed() }
+        warning.assertDoesNotExist()
+        retry.assertDoesNotExist()
+        compose.onNodeWithText("暂无其他发送端设备").assertIsDisplayed()
+    }
+
+    @Test
     fun initialLoadingShowsApprovedStatusCardWithoutSenderRowsUntilResponse() {
         openInventory(AppLanguage.SimplifiedChinese, load = false)
         compose.onNodeWithText("正在获取设备列表…").assertIsDisplayed()
@@ -206,7 +252,8 @@ class SenderInventoryScreenTest {
             AccountSender("other", "Pixel 9"),
             AccountSender("sender", "小米 15")
         ),
-        load: Boolean = true
+        load: Boolean = true,
+        list: suspend () -> List<AccountSender> = { response.await() }
     ) {
         if (load) respond(senders)
         val app = compose.activity.application as PinGlideApplication
@@ -215,7 +262,7 @@ class SenderInventoryScreenTest {
         val inventory = AccountSenders(
             store,
             renewal,
-            { response.await() },
+            { list() },
             scope
         )
         val revocation = SenderRevocation(
