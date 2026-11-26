@@ -5,6 +5,7 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -16,6 +17,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -48,6 +50,7 @@ import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import com.buddylabs.pinglide.ui.components.captureSettledUiEvidence
 import com.buddylabs.pinglide.ui.components.withSystemFontScale
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -280,35 +283,40 @@ class SenderRevocationConfirmationTest {
         val description = "正在撤销「Pixel 9」…"
         compose.onNodeWithText(description, useUnmergedTree = true).assertIsDisplayed()
         assertSubmittingAnnouncement("正在提交撤销", description)
-        val root = compose.onNode(isRoot() and hasAnyDescendant(hasText("正在提交撤销")))
-        val viewport = root.getUnclippedBoundsInRoot()
+        val content = compose.onNode(
+            hasScrollAction() and hasAnyDescendant(hasText("正在提交撤销"))
+        )
+        val viewport = content.getUnclippedBoundsInRoot()
         val headingBounds = heading.getUnclippedBoundsInRoot()
         val waitBounds = wait.getUnclippedBoundsInRoot()
+        val layout = compose.textLayout("正在提交撤销")
+        val lineCenter = (layout.getLineLeft(0) + layout.getLineRight(0)) / 2
         assertDp(
             "Centered heading",
-            (headingBounds.left + headingBounds.right) / 2,
+            headingBounds.left + with(compose.density) { lineCenter.toDp() },
             (viewport.left + viewport.right) / 2
         )
         assertTrue(waitBounds.top > headingBounds.bottom)
         assertTrue(waitBounds.bottom - waitBounds.top >= 48.dp)
-        assertDp("Wait left inset", waitBounds.left - viewport.left, 20.dp)
-        assertDp("Wait right inset", viewport.right - waitBounds.right, 20.dp)
+        assertDp("Wait left edge", waitBounds.left, viewport.left)
+        assertDp("Wait right edge", waitBounds.right, viewport.right)
         val statusBounds = compose.onNodeWithText("正在提交撤销").getUnclippedBoundsInRoot()
         val emblemTop = statusBounds.top - 222.dp
         val groupCenter = (emblemTop + waitBounds.bottom) / 2
-        val viewportCenter = (viewport.top + viewport.bottom) / 2
-        assertTrue(
+        assertDp(
             "Vertically centered group",
-            kotlin.math.abs(
-                (groupCenter - viewportCenter).value
-            ) <= 16f
+            groupCenter,
+            (viewport.top + viewport.bottom) / 2 - 10.dp
         )
-        root.captureToImage()
+        val status = compose.onNodeWithText("正在提交撤销").fetchSemanticsNode()
+        val position = status.layoutInfo.coordinates.positionOnScreen()
+        content.captureToImage()
         val artwork =
             checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
         with(compose.density) {
-            val centerX = artwork.width / 2
-            val centerY = (emblemTop + 111.dp - viewport.top).roundToPx()
+            val centerX =
+                position.x.roundToInt() + status.size.width / 2
+            val centerY = position.y.roundToInt() - 111.dp.roundToPx()
             val lockColor = ContextCompat.getColor(compose.activity, R.color.on_primary_container)
             assertEquals(
                 "Lock body",

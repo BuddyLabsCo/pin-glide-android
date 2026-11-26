@@ -57,3 +57,20 @@ recaptured; the full device suite was not repeated for this focused fix.
 Issue attachment publication is complete: GitHub CLI 2.106.0 uploaded both
 comparisons directly in [the evidence comment](https://github.com/BuddyLabsCo/pin-glide-android/issues/135#issuecomment-7186961307).
 The attachments do not depend on publishing the local commits.
+
+## Second review follow-up
+
+The heading assertion measures the rendered text line rather than the
+full-width text node. The wait action and vertical centering are measured
+against the actual safe, width-capped scroll viewport. Artwork samples use
+the status group's screen coordinates.
+
+All five focused cases passed in both themes at 366 × 820 dp, and the
+submitting regression also passed at 700 × 820 dp. Both debug APK assemblies
+and `qualityCheck` passed; all 46 JVM tests remain passing. The full device
+suite was not repeated.
+
+The dark comparison was recaptured in an isolated submitting test at settled
+100% font scale. Its status icons are normal size and its white gesture
+indicator is visible. The [corrected direct attachment](https://github.com/BuddyLabsCo/pin-glide-android/issues/135#issuecomment-7187307246)
+supersedes the previous dark attachment. Runtime styling is unchanged.
