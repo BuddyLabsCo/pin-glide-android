@@ -1,3 +1,5 @@
+import com.android.build.api.variant.BuildConfigField
+import java.net.URI
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -6,22 +8,75 @@ plugins {
     alias(libs.plugins.serialization)
 }
 
-val releaseSigningInputs = listOf(
-    "PINGLIDE_SIGNING_STORE_FILE",
-    "PINGLIDE_SIGNING_STORE_PASSWORD",
-    "PINGLIDE_SIGNING_KEY_ALIAS",
-    "PINGLIDE_SIGNING_KEY_PASSWORD"
-).associateWith { providers.environmentVariable(it).orNull }
-val missingReleaseSigningInputs = releaseSigningInputs.filterValues { it.isNullOrBlank() }.keys
-val qqAppId = providers.environmentVariable("PINGLIDE_QQ_APP_ID").orElse("").get()
-val serviceUrl = providers.environmentVariable("PINGLIDE_SERVICE_URL").orElse("").get()
-require(
-    qqAppId.isEmpty() || qqAppId.all {
-        it in '0'..'9'
+fun signingInputs(prefix: String) = listOf(
+    "STORE_FILE",
+    "STORE_PASSWORD",
+    "KEY_ALIAS",
+    "KEY_PASSWORD"
+).associateWith { providers.environmentVariable("${prefix}SIGNING_$it").orNull }
+
+fun serviceOrigin(value: String, debug: Boolean): String {
+    if (value.isEmpty()) return value
+    val origin = runCatching { URI(value) }.getOrNull()
+    val schemes = if (debug) setOf("http", "https") else setOf("https")
+    require(
+        origin != null && origin.scheme in schemes && origin.host != null &&
+            (origin.port == -1 || origin.port in 1..65535) &&
+            '%' !in origin.host && !origin.rawAuthority.endsWith(
+                ":"
+            ) && origin.rawUserInfo == null &&
+            origin.rawPath in setOf("", "/") && origin.rawQuery == null &&
+            origin.rawFragment == null
+    ) {
+        "Service URL must be a valid ${schemes.joinToString("/")} origin without credentials, " +
+            "non-root paths, query parameters or fragments"
     }
-) { "QQ App ID must contain only digits" }
-require(serviceUrl.isEmpty() || serviceUrl.matches(Regex("https://[a-zA-Z0-9.:-]+"))) {
-    "Service URL must be an HTTPS origin without credentials, paths or query parameters"
+    return value.removeSuffix("/")
+}
+
+fun qqAppId(prefix: String) = providers.environmentVariable("${prefix}QQ_APP_ID")
+    .orElse("").map { value ->
+        require(value.all { it in '0'..'9' }) { "QQ App ID must contain only digits" }
+        value
+    }
+
+fun serviceUrl(prefix: String, debug: Boolean) =
+    providers.environmentVariable("${prefix}SERVICE_URL")
+        .orElse("").map { serviceOrigin(it, debug) }
+
+val devSigningInputs = signingInputs("PINGLIDE_DEV_")
+val releaseSigningInputs = signingInputs("PINGLIDE_")
+if ((devSigningInputs.values + releaseSigningInputs.values).any { it != null }) {
+    check(
+        !gradle.startParameter.isConfigurationCacheRequested &&
+            !gradle.startParameter.isBuildCacheEnabled
+    ) {
+        "Signing inputs require --no-configuration-cache --no-build-cache."
+    }
+}
+val devDistribution =
+    providers.gradleProperty("pinglide.devDistribution").orNull?.toBooleanStrict() ?: false
+val devQqAppId = qqAppId("PINGLIDE_DEV_")
+val releaseQqAppId = qqAppId("PINGLIDE_")
+val devServiceUrl = serviceUrl("PINGLIDE_DEV_", debug = true)
+val releaseServiceUrl = serviceUrl("PINGLIDE_", debug = false)
+val fixedDevSigning = devSigningInputs.values.none { it.isNullOrBlank() }
+
+androidComponents {
+    onVariants { variant ->
+        val debug = variant.buildType == "debug"
+        val appId = if (debug) devQqAppId else releaseQqAppId
+        val origin = if (debug) devServiceUrl else releaseServiceUrl
+        val fields = checkNotNull(variant.buildConfigFields)
+        fields.put("QQ_APP_ID", appId.map { BuildConfigField("String", "\"$it\"", null) })
+        fields.put("SERVICE_URL", origin.map { BuildConfigField("String", "\"$it\"", null) })
+        variant.manifestPlaceholders.put(
+            "qqAuthScheme",
+            appId.map {
+                "tencent${it.ifEmpty { "unconfigured" }}"
+            }
+        )
+    }
 }
 
 android {
@@ -35,21 +90,30 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "QQ_APP_ID", "\"$qqAppId\"")
-        buildConfigField("String", "SERVICE_URL", "\"$serviceUrl\"")
-        manifestPlaceholders["qqAuthScheme"] = "tencent${qqAppId.ifEmpty { "unconfigured" }}"
     }
 
     signingConfigs {
         create("release") {
-            storeFile = releaseSigningInputs["PINGLIDE_SIGNING_STORE_FILE"]?.let { file(it) }
-            storePassword = releaseSigningInputs["PINGLIDE_SIGNING_STORE_PASSWORD"]
-            keyAlias = releaseSigningInputs["PINGLIDE_SIGNING_KEY_ALIAS"]
-            keyPassword = releaseSigningInputs["PINGLIDE_SIGNING_KEY_PASSWORD"]
+            storeFile = releaseSigningInputs["STORE_FILE"]?.let { file(it) }
+            storePassword = releaseSigningInputs["STORE_PASSWORD"]
+            keyAlias = releaseSigningInputs["KEY_ALIAS"]
+            keyPassword = releaseSigningInputs["KEY_PASSWORD"]
+        }
+        if (fixedDevSigning) {
+            create("dev") {
+                storeFile = file(checkNotNull(devSigningInputs["STORE_FILE"]))
+                storePassword = devSigningInputs["STORE_PASSWORD"]
+                keyAlias = devSigningInputs["KEY_ALIAS"]
+                keyPassword = devSigningInputs["KEY_PASSWORD"]
+            }
         }
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".dev"
+            if (fixedDevSigning) signingConfig = signingConfigs.getByName("dev")
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
         }
@@ -87,13 +151,50 @@ tasks.named("preBuild") {
     dependsOn(rootProject.tasks.named("generateServiceClients"))
 }
 
-tasks.matching { it.name == "packageRelease" || it.name == "signReleaseBundle" }.configureEach {
-    doFirst {
-        check(missingReleaseSigningInputs.isEmpty()) {
-            "Missing release signing inputs: ${missingReleaseSigningInputs.joinToString()}. " +
-                "See docs/release.md."
+fun validateDistribution(
+    prefix: String,
+    signing: Map<String, String?>,
+    serviceUrl: String,
+    qqAppId: String
+) {
+    check(serviceUrl.isNotBlank() && qqAppId.isNotBlank()) {
+        "Distribution requires ${prefix}SERVICE_URL and ${prefix}QQ_APP_ID. See docs/release.md."
+    }
+    val missing = signing.filterValues { it.isNullOrBlank() }.keys
+    check(missing.isEmpty()) {
+        "Missing signing inputs: ${missing.joinToString {
+            "${prefix}SIGNING_$it"
+        }}. See docs/release.md."
+    }
+}
+
+val validateDebugPackaging = tasks.register("validateDebugPackaging") {
+    doLast {
+        if (devDistribution || devSigningInputs.values.any { it != null }) {
+            validateDistribution(
+                "PINGLIDE_DEV_",
+                devSigningInputs,
+                devServiceUrl.get(),
+                devQqAppId.get()
+            )
         }
     }
+}
+val validateReleasePackaging = tasks.register("validateReleasePackaging") {
+    doLast {
+        validateDistribution(
+            "PINGLIDE_",
+            releaseSigningInputs,
+            releaseServiceUrl.get(),
+            releaseQqAppId.get()
+        )
+    }
+}
+tasks.matching { it.name == "packageDebug" || it.name == "signDebugBundle" }.configureEach {
+    dependsOn(validateDebugPackaging)
+}
+tasks.matching { it.name == "packageRelease" || it.name == "signReleaseBundle" }.configureEach {
+    dependsOn(validateReleasePackaging)
 }
 
 kotlin {
@@ -124,6 +225,8 @@ dependencies {
     implementation(libs.barcode.scanning)
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
+    testImplementation(libs.okhttp.tls)
+    testImplementation(libs.mockwebserver)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.coroutines.test)
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

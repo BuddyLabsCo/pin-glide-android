@@ -35,7 +35,7 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node scripts/quality/changes.mjs "$GITHUB_EVENT_NAME" "$BASE" "$HEAD" >> "$GITHUB_OUTPUT"
       - name: Test quality selection
-        run: node --test scripts/quality/*.test.mjs
+        run: node --test scripts/quality/changes.test.mjs scripts/quality/aggregate.test.mjs
 
   lightweight:
     runs-on: ubuntu-latest
@@ -111,6 +111,8 @@ jobs:
           bash ./gradlew detekt :app:lintDebug :app:lintRelease \
             :app:assembleDebug :app:compileReleaseKotlin :app:testDebugUnitTest \
             :app:assembleDebugAndroidTest --build-cache --console=plain
+      - name: Verify build variants and distribution packaging
+        run: node --test scripts/quality/build-variants.test.mjs
       - uses: actions/cache/save@v4
         if: github.event_name == 'push' && steps.npm-cache.outputs.cache-hit != 'true'
         with:
