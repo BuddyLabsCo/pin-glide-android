@@ -261,15 +261,28 @@ class SenderInventoryScreenTest {
             compose.onNodeWithText("网络错误，无法获取设备列表，请稍后重试。").isDisplayed()
         }
         compose.onNodeWithTag("sender-inventory-loading").assertDoesNotExist()
+        val warning = compose.onNodeWithTag("sender-inventory-error").assertIsDisplayed()
+            .assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+            )
+        val retry = compose.onNodeWithText("重试").assertIsDisplayed().assertIsEnabled()
+        assertFullWidthRetry(warning, retry)
         val current = compose.onNodeWithContentDescription("撤销小米 15")
         val other = compose.onNodeWithContentDescription("撤销Pixel 9")
-        compose.onNodeWithTag("settings-group:本设备").assertIsDisplayed()
+        val currentGroup = compose.onNodeWithTag("settings-group:本设备").assertIsDisplayed()
+        assertTrue(
+            currentGroup.getUnclippedBoundsInRoot().top > retry.getUnclippedBoundsInRoot().bottom
+        )
         compose.onNodeWithTag("settings-group:其他发送端设备").assertIsDisplayed()
         assertDisabledRevokePalette(current)
         assertDisabledRevokePalette(other)
+        captureSettledUiEvidence(
+            "sender-inventory-refresh-error.png",
+            compose.onNode(isRoot() and hasAnyDescendant(hasText("重试")))
+        )
 
         compose.runOnIdle { response = CompletableDeferred() }
-        compose.onNodeWithText("重试").assertIsEnabled().performClick()
+        retry.performClick()
         compose.onNodeWithTag("sender-inventory-loading").assertIsDisplayed()
         current.assertIsNotEnabled()
         other.assertIsNotEnabled()
