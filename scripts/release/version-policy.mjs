@@ -7,8 +7,12 @@ const stable = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const gradlePath = "app/build.gradle.kts";
 const changelogPath = "CHANGELOG.md";
 
+export function isStableVersion(versionName) {
+  return typeof versionName === "string" && versionName.trim() === versionName && stable.test(versionName);
+}
+
 function requireVersion(versionName) {
-  if (typeof versionName !== "string" || versionName.trim() !== versionName || !stable.test(versionName)) {
+  if (!isStableVersion(versionName)) {
     throw new Error(`Expected stable version, found ${versionName}`);
   }
   return versionName;
@@ -156,7 +160,7 @@ function readGradle(gradle) {
   return current;
 }
 
-function readChangelog(changelog) {
+export function readChangelog(changelog) {
   const [preamble, ...sections] = changelog.replaceAll("\r\n", "\n").trim().split(/(?=^##(?:[ \t]|$))/m);
   if (preamble.trim() !== "# Changelog" || sections.length === 0) {
     throw new Error("Expected # Changelog and release sections");
@@ -166,7 +170,8 @@ function readChangelog(changelog) {
     if (!heading || !section.slice(heading[0].length).trim()) {
       throw new Error("Expected a version and versionCode heading with release notes");
     }
-    return { ...metadata(heading[1], Number(heading[2])), section: section.trimEnd() };
+    return { ...metadata(heading[1], Number(heading[2])), section: section.trimEnd(),
+      notes: section.slice(heading[0].length).trim() };
   });
   if (!sameVersion(releases.at(-1), initial)) throw new Error("Changelog must start at 0.1.0 / code 1");
   for (let index = 1; index < releases.length; index++) {

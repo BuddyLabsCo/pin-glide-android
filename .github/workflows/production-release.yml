@@ -1,0 +1,129 @@
+name: Production release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  authorize:
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.ref == 'auto-release' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      commit: ${{ steps.authorization.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - name: Verify authorization, version and Environment isolation
+        id: authorization
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLIC_VARIABLES: ${{ toJSON(vars) }}
+          SIGNING_FALLBACK: ${{ secrets.PINGLIDE_SIGNING_KEYSTORE_BASE64 != '' || secrets.PINGLIDE_SIGNING_STORE_PASSWORD != '' || secrets.PINGLIDE_SIGNING_KEY_ALIAS != '' || secrets.PINGLIDE_SIGNING_KEY_PASSWORD != '' }}
+        run: node scripts/release/production.mjs authorize
+
+  package:
+    name: package and publish
+    needs: authorize
+    if: needs.authorize.outputs.commit != ''
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 45
+    concurrency:
+      group: production-release
+      queue: max
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: read
+    env:
+      AUTHORIZED_COMMIT: ${{ needs.authorize.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.authorize.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25.0.3"
+      - uses: ./.github/actions/setup-android-sdk
+      - name: Inspect publication and recover retained candidate
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PINGLIDE_SIGNING_CERT_SHA256: ${{ vars.PINGLIDE_SIGNING_CERT_SHA256 }}
+          PINGLIDE_QQ_APP_ID: ${{ vars.PINGLIDE_QQ_APP_ID }}
+        run: node scripts/release/production.mjs prepare
+      - uses: ./.github/actions/download-service-contracts
+        if: steps.prepare.outputs.plan == 'build'
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          uncached: "true"
+      - name: Package authorized Release APK
+        if: steps.prepare.outputs.plan == 'build'
+        shell: bash
+        env:
+          PINGLIDE_PUBLISHED_RELEASE: ${{ steps.prepare.outputs.baseline }}
+          PINGLIDE_SERVICE_URL: ${{ vars.PINGLIDE_SERVICE_URL }}
+          PINGLIDE_QQ_APP_ID: ${{ vars.PINGLIDE_QQ_APP_ID }}
+          KEYSTORE_BASE64: ${{ secrets.PINGLIDE_SIGNING_KEYSTORE_BASE64 }}
+          PINGLIDE_SIGNING_STORE_PASSWORD: ${{ secrets.PINGLIDE_SIGNING_STORE_PASSWORD }}
+          PINGLIDE_SIGNING_KEY_ALIAS: ${{ secrets.PINGLIDE_SIGNING_KEY_ALIAS }}
+          PINGLIDE_SIGNING_KEY_PASSWORD: ${{ secrets.PINGLIDE_SIGNING_KEY_PASSWORD }}
+        run: |
+          : "${KEYSTORE_BASE64:?Missing production signing keystore}"
+          : "${PINGLIDE_SERVICE_URL:?Missing production Service URL}"
+          : "${PINGLIDE_QQ_APP_ID:?Missing production QQ App ID}"
+          : "${PINGLIDE_SIGNING_STORE_PASSWORD:?Missing production store password}"
+          : "${PINGLIDE_SIGNING_KEY_ALIAS:?Missing production key alias}"
+          : "${PINGLIDE_SIGNING_KEY_PASSWORD:?Missing production key password}"
+          umask 077
+          signing_dir=$(mktemp -d "$RUNNER_TEMP/pinglide-signing.XXXXXXXX")
+          trap 'rm -f -- "$signing_dir/release.keystore"; rmdir -- "$signing_dir"' EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          export PINGLIDE_SIGNING_STORE_FILE="$signing_dir/release.keystore"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$PINGLIDE_SIGNING_STORE_FILE"
+          unset KEYSTORE_BASE64
+          bash ./gradlew :app:assembleRelease --no-build-cache --no-configuration-cache --no-daemon --console=plain
+      - name: Verify and record candidate
+        if: steps.prepare.outputs.plan == 'build'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PINGLIDE_SIGNING_CERT_SHA256: ${{ vars.PINGLIDE_SIGNING_CERT_SHA256 }}
+          PINGLIDE_QQ_APP_ID: ${{ vars.PINGLIDE_QQ_APP_ID }}
+        run: node scripts/release/production.mjs candidate
+      - uses: actions/upload-artifact@v4
+        if: steps.prepare.outputs.plan == 'build'
+        with:
+          name: production-release-candidate
+          path: build/production-candidate/
+          if-no-files-found: error
+      - name: Publish exact verified candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PINGLIDE_SIGNING_CERT_SHA256: ${{ vars.PINGLIDE_SIGNING_CERT_SHA256 }}
+          PINGLIDE_QQ_APP_ID: ${{ vars.PINGLIDE_QQ_APP_ID }}
+        run: node scripts/release/production.mjs publish
