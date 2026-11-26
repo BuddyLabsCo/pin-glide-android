@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -60,7 +61,7 @@ internal fun SenderInventoryScreen(inventory: AccountSenders, revocation: Sender
     val operation by revocation.state.collectAsState()
     val scope = rememberCoroutineScope()
     LaunchedEffect(inventory) { inventory.open() }
-    Column(verticalArrangement = Arrangement.spacedBy(if (state.failed) 20.dp else 14.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         WarningInfoCard(R.string.settings_device_access_explanation, icon = R.drawable.ic_warning)
         SenderInventoryStatus(state, inventory::refresh)
     }
@@ -125,13 +126,25 @@ private fun SenderRevocationConfirmation(
 @Composable
 private fun SenderInventoryStatus(state: SenderInventoryState, onRetry: () -> Unit) {
     if (state.failed) {
-        Text(
-            stringResource(R.string.senders_error),
-            Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            color = MaterialTheme.colorScheme.error
-        )
-        TextButton(onClick = onRetry, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text(stringResource(R.string.senders_retry))
+        Column {
+            WarningInfoCard(
+                R.string.senders_error,
+                Modifier.testTag("sender-inventory-error").semantics {
+                    liveRegion = LiveRegionMode.Polite
+                },
+                icon = R.drawable.ic_cloud_off
+            )
+            FilledTonalButton(
+                onClick = onRetry,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            ) {
+                Text(
+                    stringResource(R.string.senders_retry),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.14.sp
+                )
+            }
         }
     } else if (state.loading) {
         InfoCard(
