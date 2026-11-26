@@ -39,3 +39,17 @@ No real QQ authorization or destructive service operation was exercised.
 Issue evidence links require publication of the local commit by the
 authorized publishing workflow; no issue attachment upload tool is
 available.
+
+## Review follow-up
+
+The shared warning layout also has coverage for failed QQ authorization and
+wrong-Account rejection at 200% system font scale in English. The regression
+checks the selected Sender, assertive warning, full unclipped message,
+warning palette and reachable enabled Verify and Cancel actions. Failed
+authorization submits nothing; a fresh attempt submits only for the selected
+Sender. Existing copy and runtime code are unchanged.
+
+All four focused cases passed in each theme on API 37. Both debug APK
+assemblies, Kotlin compilation and `qualityCheck` passed; the unchanged JVM
+test task was up-to-date. The full device suite was not repeated for this
+test-only follow-up.

@@ -314,6 +314,76 @@ class SenderRevocationConfirmationTest {
         captureSettledUiEvidence("sender-owner-proof-cancelled.png", warning)
     }
 
+    @Test
+    fun failedAndWrongAccountProofKeepFeedbackAndActionsReachableAtDoubleFontScale() {
+        compose.withSystemFontScale(2f) {
+            var attempts = 0
+            val submissions = mutableListOf<Pair<String, String>>()
+            renderInventory(
+                AppLanguage.English,
+                authorization = {
+                    if (attempts++ == 0) throw QqAuthorizationException()
+                    "fresh-proof"
+                },
+                service = { _, senderId, code ->
+                    submissions.add(senderId to code)
+                    RevocationReply.WrongAccount
+                }
+            )
+            compose.onNodeWithContentDescription("Revoke Pixel 9").performScrollTo().performClick()
+            compose.onNodeWithText("Confirm and verify QQ").performScrollTo().performClick()
+            val verify = compose.onNodeWithText("Verify with QQ and revoke")
+            verify.performScrollTo().performClick()
+            assertLargeOwnerProofWarning(
+                "QQ verification did not complete. The selected device was not revoked. " +
+                    "Please try again."
+            )
+            compose.runOnIdle { assertTrue(submissions.isEmpty()) }
+            verify.performScrollTo().performClick()
+            assertLargeOwnerProofWarning(
+                "Verify with the QQ Account currently signed in. The selected device was not " +
+                    "revoked and your Account has not changed."
+            )
+            compose.runOnIdle {
+                assertEquals(2, attempts)
+                assertEquals(listOf("pixel" to "fresh-proof"), submissions)
+            }
+            compose.onNodeWithText("Cancel").performScrollTo().performClick()
+            compose.onNodeWithText("Pixel 9").performScrollTo().assertIsDisplayed()
+        }
+    }
+
+    private fun assertLargeOwnerProofWarning(message: String) {
+        compose.onNodeWithText(
+            "You confirmed revoking “Pixel 9”. Verify the QQ Account currently signed in. " +
+                "Successful verification immediately submits the revocation."
+        ).performScrollTo().assertIsDisplayed()
+        val warning = compose.onNodeWithTag("owner-proof-warning").performScrollTo()
+            .assertIsDisplayed()
+            .assert(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.LiveRegion,
+                    LiveRegionMode.Assertive
+                )
+            )
+        val text = compose.onNodeWithText(message).assertIsDisplayed()
+        val bounds = text.getUnclippedBoundsInRoot()
+        val clipped = text.fetchSemanticsNode().boundsInRoot
+        with(compose.density) {
+            assertDp("Warning text height", clipped.height.toDp(), bounds.bottom - bounds.top)
+            assertDp("Warning text width", clipped.width.toDp(), bounds.right - bounds.left)
+        }
+        assertFalse(compose.textLayout(message).hasVisualOverflow)
+        val image = warning.captureToImage().asAndroidBitmap()
+        assertEquals(
+            ContextCompat.getColor(compose.activity, R.color.setup_warning_container),
+            image.getPixel(image.width / 2, 2)
+        )
+        compose.onNodeWithText("Verify with QQ and revoke")
+            .performScrollTo().assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithText("Cancel").performScrollTo().assertIsDisplayed().assertIsEnabled()
+    }
+
     private fun renderInventory(
         language: AppLanguage,
         authorization: QqAuthorization = { error("Confirmation must not open QQ") },
