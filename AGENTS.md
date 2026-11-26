@@ -18,4 +18,4 @@ Use a single-context layout. Read `docs/agents/domain.md` before codebase explor
 
 ### Repository documentation
 
-Keep committed documentation focused on durable architecture, decisions, conventions, and reproducible operating instructions. Put task-specific implementation notes, failure investigation transcripts, screenshots, test results, and timings in the PR description or issue comments instead of repository documentation.
+Commit only reusable documentation; keep task-specific notes and evidence in PRs or issues.
