@@ -36,6 +36,10 @@ jobs:
         run: node scripts/quality/changes.mjs "$GITHUB_EVENT_NAME" "$BASE" "$HEAD" >> "$GITHUB_OUTPUT"
       - name: Test quality selection
         run: node --test scripts/quality/changes.test.mjs scripts/quality/aggregate.test.mjs
+      - name: Test and check release version policy
+        run: |
+          node --test scripts/release/*.test.mjs
+          node scripts/release/version-policy.mjs check
 
   lightweight:
     runs-on: ubuntu-latest
