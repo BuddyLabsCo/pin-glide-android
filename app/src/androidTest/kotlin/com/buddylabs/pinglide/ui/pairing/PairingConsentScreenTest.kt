@@ -2,6 +2,7 @@ package com.buddylabs.pinglide.ui.pairing
 
 import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -29,6 +30,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -38,10 +40,14 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.domain.pairing.PairingAliasError
@@ -247,10 +253,19 @@ class PairingConsentScreenTest {
     fun compactHeightAtDoubleFontScaleKeepsAliasAndActionsReachable() {
         render(AppLanguage.English, usableHeight = 180.dp, fontScale = 2f)
         compose.mainClock.autoAdvance = true
+        val decor = compose.activity.window.decorView
         val alias = compose.onNodeWithContentDescription("Target name")
+        alias.performScrollTo().performTouchInput { click() }
+        compose.waitUntil(5_000) {
+            ViewCompat.getRootWindowInsets(decor)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        }
         alias.performScrollTo().assertIsDisplayed().performTextReplacement("My device")
         compose.mainClock.advanceTimeBy(100)
         compose.runOnIdle { assertEquals("My device", state.value.alias) }
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(5_000) {
+            ViewCompat.getRootWindowInsets(decor)?.isVisible(WindowInsetsCompat.Type.ime()) == false
+        }
         compose.onNodeWithText("Confirm and establish key").performScrollTo()
             .assertIsDisplayed().assertIsEnabled()
         compose.onNodeWithText("Cancel").performScrollTo().assertIsDisplayed()
