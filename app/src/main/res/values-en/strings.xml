@@ -222,6 +222,7 @@
     <string name="senders_revoke_consequences">This permanently closes this Sender’s old registration and removes all its Pairings. To use it again, sign in and pair again on that device. Other Senders are unaffected.</string>
     <string name="senders_confirm_proof">Confirm and verify QQ</string>
     <string name="senders_proof_title">Verify QQ Account</string>
+    <string name="senders_proof_eyebrow">OWNER PROOF REQUIRED</string>
     <string name="senders_proof_heading">Verify to revoke the device</string>
     <string name="senders_proof_description">You confirmed revoking “%1$s”. Verify the QQ Account currently signed in. Successful verification immediately submits the revocation.</string>
     <string name="senders_verify_revoke">Verify with QQ and revoke</string>
