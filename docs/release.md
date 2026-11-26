@@ -251,7 +251,13 @@ TLS for HTTP and WebSockets. The shared APK verifier checks the candidate's
 signature and approved signer, version, package, manifest, non-debuggability,
 cleartext policy, QQ callback and page alignment.
 
-Before any tag or Release mutation, the job retains these files as the immutable
+Immediately before candidate verification, the serialized job reserves the
+version with an annotated `v<versionName>` tag pointing to the authorized SHA.
+The annotation identifies the owning workflow run. A conflicting stable tag or
+an unfinished reservation for another version blocks packaging; the production
+Release itself is not created until verification and retention succeed.
+Protect these tags against deletion or modification. The job retains these files
+as the immutable
 `production-release-candidate` Actions artifact for the authorized workflow run:
 
 - `pin-glide-<versionName>.apk`
@@ -259,8 +265,8 @@ Before any tag or Release mutation, the job retains these files as the immutable
 - `release-candidate.json` (merge SHA, version name/code, package, approved signer,
   QQ App ID, filename and digest; no signing credentials)
 
-Publication re-verifies the retained candidate identity, digest and APK, creates
-the exact `v<versionName>` tag and a draft GitHub Release with the corresponding
+Publication re-verifies the retained candidate identity, digest and APK, uses
+the reserved `v<versionName>` tag and creates a draft GitHub Release with the corresponding
 changelog notes and candidate identity, and uploads those three files. The
 Release becomes public only after the API confirms all three assets' sizes and
 SHA-256 digests. No uploaded asset is replaced. A failed upload leaving an empty
@@ -274,30 +280,39 @@ asset, version/code, tag, draft or candidate is an error.
    Do not create another release proposal for the same version.
 2. Correct the external cause (for example, a temporary network failure) and
    rerun the failed job or original workflow. GitHub keeps the original run ID
-   and authorized commit. Keep the approved production signer and QQ identity
-   unchanged while recovery is pending.
+   and authorized commit. The reservation also identifies the original artifact
+   if another authorized run for the same commit is encountered. Keep the approved
+   production signer and QQ identity unchanged while recovery is pending.
 3. If the candidate exists, the job downloads it from that run, verifies its
    identity, digest and APK again and publishes those exact bytes. It skips
    Service contract download, assembly and signing. Successfully uploaded files
    are retained; missing files are uploaded, and a complete matching Release
    is left unchanged.
 4. If an earlier attempt never reached candidate verification and there is no
-   candidate, tag or Release, a retry can build normally. If verification was
-   reached, or publication state exists, missing/expired/ambiguous recovery
+   candidate, tag or Release, a retry can build normally. Once the version is
+   reserved, even an interruption before APK verification completes is treated
+   conservatively as requiring recovery. If verification was reached, or
+   publication state exists, missing/expired/ambiguous recovery
    artifacts cause the retry to fail closed. Recover the original verified files
    from protected backups or escalate for maintainer reconciliation; never
    rebuild, resign, move a tag or overwrite a release asset to make the same
    version succeed. Retain the candidate artifact for the configured Actions
    retention period and preserve verified copies if a release remains pending.
+   For attempts without a reservation, recovery checks the historical Actions
+   job name `package and publish` and step name `Verify and record candidate`.
+   These names are part of the recovery contract, not interchangeable UI labels.
 
 The workflow's preflight needs read-only repository contents. Only the serialized
 package/publication job has `contents: write` for tags and Releases and
 `actions: read` for candidate recovery. Signing secrets are provided only to the
-assembly step. The production publication workflow must not be tested against
-real production Releases: use the focused local tests instead:
+assembly step. Every later production release must retain each historical
+changelog section from its published source and use the same approved certificate
+fingerprint recorded by the earlier published candidates. The production
+publication workflow must not be tested against real production Releases: use
+the focused local tests instead:
 
 ```powershell
-node --test scripts/release/production-policy.test.mjs scripts/release/production-publication.test.mjs
+node --test scripts/release/production-policy.test.mjs scripts/release/production-publication.test.mjs scripts/release/production.test.mjs
 ```
 
 The tests use isolated temporary files and an in-memory GitHub API fixture;

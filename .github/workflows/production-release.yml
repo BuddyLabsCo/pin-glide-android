@@ -111,6 +111,7 @@ jobs:
       - name: Verify and record candidate
         if: steps.prepare.outputs.plan == 'build'
         env:
+          GH_TOKEN: ${{ github.token }}
           PINGLIDE_SIGNING_CERT_SHA256: ${{ vars.PINGLIDE_SIGNING_CERT_SHA256 }}
           PINGLIDE_QQ_APP_ID: ${{ vars.PINGLIDE_QQ_APP_ID }}
         run: node scripts/release/production.mjs candidate

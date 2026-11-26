@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { checkVersion } from "./version-policy.mjs";
+import { checkVersion, readChangelog } from "./version-policy.mjs";
 
 export function authorizedCommit(event, eventName, repository, workflowSha, checkout) {
   const pr = event.pull_request;
@@ -16,11 +16,10 @@ export function authorizedCommit(event, eventName, repository, workflowSha, chec
 
 export function releaseIdentity(commit, gradle, changelog) {
   const version = checkVersion(gradle, changelog);
-  const notes = changelog.replaceAll("\r\n", "\n").split(/^## /m)[1]
-    .split("\n").slice(1).join("\n").trim();
+  const { notes, section } = readChangelog(changelog)[0];
   assert.ok(!notes.includes("<!-- verified-candidate:"), "Reserved release metadata marker");
   return {
-    commit, ...version, tag: `v${version.versionName}`, notes,
+    commit, ...version, tag: `v${version.versionName}`, notes, section,
     filename: `pin-glide-${version.versionName}.apk`,
   };
 }
