@@ -40,5 +40,21 @@ are retained. No motion or prototype changes were made.
 QQ authorization and service operations were simulated; no real destructive
 operation was exercised.
 
-The issue evidence links require publication of the local commit by the
-authorized publishing workflow; no issue attachment upload tool is available.
+Both comparison screenshots are directly attached to
+[issue #134](https://github.com/BuddyLabsCo/pin-glide-android/issues/134#issuecomment-7189592577).
+They do not require commit publication.
+
+## Review decision
+
+The maintainer confirmed that local QQ authorization failure and service-side
+proof rejection must retain the same approved prototype warning. No extra
+wording or separate state is required. The service-rejection regression
+checks enabled retry, lack of automatic resubmission, and fresh authorization
+on explicit retry; the maintainer declined redundant text assertions.
+The prototype and runtime behavior remain unchanged.
+
+The focused service-rejection test passed, as did Kotlin compilation,
+instrumentation APK assembly and `qualityCheck`. A six-case confirmation
+class run passed four cases; two existing artwork and system Back assertions
+failed and failed again on individual retry. No runtime changes were made
+in the review fix.
