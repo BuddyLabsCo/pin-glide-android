@@ -1,5 +1,6 @@
 package com.buddylabs.pinglide.ui.settings
 
+import android.graphics.Color
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
@@ -11,7 +12,9 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -48,6 +51,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -116,9 +120,40 @@ class SenderRevocationConfirmationTest {
         assertTrue(verifyBounds.bottom - verifyBounds.top >= 48.dp)
         assertTrue(cancelActionBounds.bottom - cancelActionBounds.top >= 48.dp)
         assertTrue(cancelActionBounds.top >= verifyBounds.bottom)
+        assertOwnerProofArtworkAndAnchoring()
         captureSettledUiEvidence("sender-owner-proof.png", heading)
         proofCancel.performClick()
         compose.onNodeWithText("Pixel 9").assertIsDisplayed()
+    }
+
+    private fun assertOwnerProofArtworkAndAnchoring() {
+        val verifyBounds = compose.onNodeWithText("使用 QQ 验证并撤销").getUnclippedBoundsInRoot()
+        val cancelActionBounds = compose.onNodeWithText("取消").getUnclippedBoundsInRoot()
+        val root = compose.onNode(isRoot() and hasAnyDescendant(hasText("验证后撤销设备")))
+        val viewport = root.getUnclippedBoundsInRoot()
+        assertDp("Cancel bottom inset", viewport.bottom - cancelActionBounds.bottom, 24.dp)
+        assertDp("Verify to Cancel gap", cancelActionBounds.top - verifyBounds.bottom, 8.dp)
+        val header = compose.onNodeWithText("验证 QQ 账号").getUnclippedBoundsInRoot()
+        val emblemCenter = ((header.top + header.bottom) / 2 + verifyBounds.top) / 2 - 70.dp
+        root.captureToImage()
+        val screenshot =
+            checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+        with(compose.density) {
+            val centerX = screenshot.width / 2
+            val centerY = (emblemCenter - viewport.top).roundToPx()
+            val tileEdges = (centerX - 60.dp.roundToPx()..centerX + 60.dp.roundToPx())
+                .filter { isBrandTile(screenshot.getPixel(it, centerY)) }
+            assertTrue("Centered brand tile is visible", tileEdges.isNotEmpty())
+            assertDp("Tile left", tileEdges.first().toDp(), centerX.toDp() - 46.dp)
+            assertDp("Tile right", (tileEdges.last() + 1).toDp(), centerX.toDp() + 46.dp)
+            val tilePixels = (centerY - 60.dp.roundToPx()..centerY + 60.dp.roundToPx())
+                .filter { isBrandTile(screenshot.getPixel(centerX, it)) }
+            assertTrue("Centered brand tile is visible", tilePixels.isNotEmpty())
+            assertDp("Tile top", tilePixels.first().toDp(), centerY.toDp() - 46.dp)
+            assertDp("Tile bottom", (tilePixels.last() + 1).toDp(), centerY.toDp() + 46.dp)
+            val bird = screenshot.getPixel(centerX, centerY)
+            assertTrue("Pin Glide bird is visible", Color.red(bird) < 80 && Color.blue(bird) > 150)
+        }
     }
 
     @Test
@@ -146,6 +181,30 @@ class SenderRevocationConfirmationTest {
             compose.onNodeWithText(
                 "Verify to revoke the device"
             ).performScrollTo().assertIsDisplayed()
+            val description = "You confirmed revoking “Pixel 9”. Verify the QQ Account currently " +
+                "signed in. Successful verification immediately submits the revocation."
+            val descriptionNode = compose.onNodeWithText(
+                description
+            ).performScrollTo().assertIsDisplayed()
+            val descriptionBounds = descriptionNode.getUnclippedBoundsInRoot()
+            val viewport = compose.onNode(isRoot() and hasAnyDescendant(hasText(description)))
+                .getUnclippedBoundsInRoot()
+            assertTrue(descriptionBounds.top >= viewport.top)
+            assertTrue(descriptionBounds.bottom <= viewport.bottom)
+            val clipped = descriptionNode.fetchSemanticsNode().boundsInRoot
+            with(compose.density) {
+                assertDp(
+                    "Unclipped description height",
+                    clipped.height.toDp(),
+                    descriptionBounds.bottom - descriptionBounds.top
+                )
+                assertDp(
+                    "Unclipped description width",
+                    clipped.width.toDp(),
+                    descriptionBounds.right - descriptionBounds.left
+                )
+            }
+            assertFalse(compose.textLayout(description).hasVisualOverflow)
             compose.onNodeWithText(
                 "Verify with QQ and revoke"
             ).performScrollTo().assertIsDisplayed()
@@ -153,6 +212,10 @@ class SenderRevocationConfirmationTest {
             compose.onNodeWithText("Pixel 9").performScrollTo().assertIsDisplayed()
         }
     }
+
+    private fun isBrandTile(pixel: Int): Boolean = Color.red(pixel) in 235..241 &&
+        Color.green(pixel) in 248..254 &&
+        Color.blue(pixel) in 243..249
 
     @Test
     fun verificationRequestsFreshProofForOnlyTheSelectedSender() {

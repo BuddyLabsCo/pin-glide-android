@@ -154,14 +154,14 @@ private fun OwnerProofScreen(
 @Composable
 private fun OwnerProofMessage(state: SenderRevocationState, headingModifier: Modifier) {
     Column(
-        Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 63.dp),
+        Modifier.fillMaxWidth().padding(top = 21.dp, bottom = 63.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         RingedEmblem(CircleShape) {
             BrandIcon(Modifier.size(92.dp), RoundedCornerShape(28.dp))
         }
         Row(
-            Modifier.padding(top = 21.dp, bottom = 8.dp),
+            Modifier.padding(top = 21.dp, bottom = 3.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -193,7 +193,7 @@ private fun OwnerProofMessage(state: SenderRevocationState, headingModifier: Mod
         )
         Text(
             stringResource(R.string.senders_proof_description, state.selection.deviceName),
-            Modifier.padding(top = 12.dp).widthIn(max = 305.dp),
+            Modifier.padding(top = 8.dp).widthIn(max = 305.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 14.sp,

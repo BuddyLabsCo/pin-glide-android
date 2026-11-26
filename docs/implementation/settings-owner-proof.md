@@ -51,3 +51,22 @@ No real QQ authorization or destructive service operation was exercised.
 The issue evidence links require the authorized publisher to publish the
 local commit before they resolve. The GitHub browser session was signed out
 and the connector does not expose an issue-attachment upload operation.
+
+## Review follow-up
+
+The emblem and eyebrow now sit 9 dp lower, matching the pinned reference
+in both updated comparisons. The heading and description spacing is adjusted
+to preserve their approved positions and keep the bottom actions anchored.
+
+The focused regression checks rendered brand tile edges and bird pixels,
+the emblem's centered position relative to the header and actions, the
+Cancel bottom inset and the action gap. The English 200% font-scale case
+scrolls to the full selected-Sender description and checks its clipped
+and unclipped dimensions and text layout for overflow.
+
+All three focused cases passed in each theme on the isolated API 37
+emulator. Debug, release and instrumentation Kotlin compilation, both
+debug APK assemblies, `qualityCheck`, and all 46 JVM tests passed. The
+full instrumentation suite was not repeated for this focused review fix.
+Ripwire reports the screen contract unchanged and flags test-class growth;
+the additional regression assertions are intentional.
