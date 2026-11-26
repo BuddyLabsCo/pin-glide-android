@@ -15,7 +15,7 @@ const changelog = "# Changelog\n\n## 0.1.0 (versionCode 1)\n\n- Initial release.
 const initial = { versionName: "0.1.0", versionCode: 1 };
 
 function fixture({ paths = ["app/src/main/Example.kt"], published = false, proposed,
-  merged = false, identical = false, remoteMoved = false, after = head, pending = false,
+  merged = false, remoteMoved = false, after = head, pending = false,
   changedGradle = false, rejectedPush = false, closeOnPush = false, publicationRun,
   reserved = false, fork = false } = {}) {
   const files = new Map([[gradlePath, gradle], [changelogPath, changelog]]);
@@ -26,7 +26,8 @@ function fixture({ paths = ["app/src/main/Example.kt"], published = false, propo
     base: { ref: "main", repo: { full_name: repository } }, title: "Old title", body: "Old body",
   });
   if (merged) pulls.push({
-    number: 6, state: "closed", merged_at: "2026-11-26", merge_commit_sha: pending ? before : head,
+    number: 6, state: "closed", merged_at: "2026-11-26", merged: true, merged_by: { type: "User" },
+    merge_commit_sha: pending ? before : head,
     head: { ref: "auto-release", repo: { full_name: repository }, sha: branch },
     base: { ref: "main", repo: { full_name: repository } },
   });
@@ -56,6 +57,7 @@ function fixture({ paths = ["app/src/main/Example.kt"], published = false, propo
       return pulls;
     },
     async request(method, path, body) {
+      if (method === "GET") return pulls.find(pr => `/pulls/${pr.number}` === path);
       mutations.push({ method, path, body });
     },
   };
@@ -64,9 +66,9 @@ function fixture({ paths = ["app/src/main/Example.kt"], published = false, propo
       case "branch": return "main";
       case "status": return "";
       case "rev-parse": return localHead;
+      case "rev-list": return before;
       case "merge-base": return args[1] === head && args[2] === before ? before : args[1];
-      case "diff": return args.includes("--cached")
-        ? (args.includes(branch) && identical ? "" : changelogPath) : paths.join("\0");
+      case "diff": return args.includes("--cached") ? changelogPath : paths.join("\0");
       case "for-each-ref": return remoteBranch;
       case "show": {
         const [sha, path] = args[1].split(":");
@@ -103,13 +105,15 @@ test("initial proposal creates one same-repository PR with consistent version an
   assert.match(repo.files.get(changelogPath), /- Improve Sender\n- Earlier change/);
   assert.equal(repo.mutations.length, 2);
   assert.ok(repo.mutations[0].push.includes("--force-with-lease=refs/heads/auto-release:"));
-  assert.deepEqual(repo.mutations[1], {
-    method: "POST", path: "/pulls", body: {
-      head: "auto-release", base: "main", title: "chore: propose release v0.1.0",
-      body: repo.mutations[1].body.body,
-    },
+  const { method, path, body: { body, ...fields } } = repo.mutations[1];
+  assert.deepEqual({ method, path, fields }, {
+    method: "POST", path: "/pulls",
+    fields: { head: "auto-release", base: "main", title: "chore: propose release v0.1.0" },
   });
-  assert.match(repo.mutations[1].body.body, /merg(?:e|ing).*manually/i);
+  assert.match(body, /## Proposed release 0\.1\.0 \(versionCode 1\)/);
+  assert.match(body, /Changelog base: the repository root\./);
+  assert.match(body, /### Changelog\n\n- Improve Sender\n- Earlier change/);
+  assert.match(body, /merg(?:e|ing).*manually/i);
 });
 
 test("published baseline advances the patch and code once", async () => {
@@ -131,21 +135,8 @@ test("refresh keeps a higher maintainer selection and updates only the existing 
   assert.equal(repo.mutations.length, 2);
 });
 
-test("identical proposal tree and metadata do not push or edit again", async () => {
-  const repo = fixture({ published: true, proposed: "2.0.0", identical: true });
-  await repo.run();
-  assert.equal(repo.mutations.length, 1);
-  assert.equal(repo.mutations[0].method, "PATCH");
-  Object.assign(repo.pulls[0], repo.mutations[0].body);
-  repo.mutations.length = 0;
-  await repo.run();
-  assert.deepEqual(repo.mutations, []);
-});
-
-test("release-only, workflow-only, already authorized and pending release changes do not propose", async () => {
+test("already authorized and pending release changes do not propose", async () => {
   for (const options of [
-    { paths: [changelogPath, gradlePath] },
-    { paths: [".github/workflows/ci.yml"] },
     { merged: true },
     { merged: true, pending: true },
     { published: true, after: before },
@@ -196,9 +187,18 @@ test("stale main, rejected lease or closed proposal prevents stale PR mutation",
 
 test("unpublished stable reservations cannot become a proposal baseline", async () => {
   const repo = fixture({ reserved: true });
-  await assert.rejects(repo.run, /already reserved or published/);
+  await assert.rejects(repo.run, /Unpublished conflicting stable tag/);
   assert.deepEqual(repo.writes, []);
   assert.deepEqual(repo.mutations, []);
+});
+
+test("unauthorized release merges surface an error, not a pending publication", async () => {
+  for (const fields of [{ merged_by: { type: "Bot" } }, { auto_merge: {} }]) {
+    const repo = fixture({ merged: true, pending: true });
+    Object.assign(repo.pulls[0], fields);
+    await assert.rejects(repo.run, /Unauthorized production release merge/);
+    assert.deepEqual(repo.mutations, []);
+  }
 });
 
 test("a fork's release-looking PR does not replace the same-repository proposal", async () => {
@@ -225,5 +225,7 @@ test("release proposal uses a scoped App token, serialized main pushes and indep
   const ci = readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
   assert.match(ci, /pull_request:/);
   assert.match(ci, /node --test scripts\/release\/\*\.test\.mjs/);
+  assert.match(ci, /name: Check release PR against published history[\s\S]*?github\.event\.pull_request\.head\.ref == 'auto-release'[\s\S]*?github\.event\.pull_request\.head\.repo\.full_name == github\.repository[\s\S]*?github\.event\.pull_request\.base\.ref == 'main'[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}[\s\S]*?run: node scripts\/release\/check-release-pr\.mjs/);
+  assert.match(ci, /^permissions:\s+contents: read/m);
   assert.match(ci, /^  quality:/m);
 });

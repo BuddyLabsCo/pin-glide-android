@@ -88,12 +88,19 @@ no signing or distribution Environment inputs are used.
 
 - A main change outside `.github/` and the release metadata is eligible.
   Changes to `CHANGELOG.md` and only the two Gradle version assignments do not
-  open or refresh a proposal; ordinary Gradle changes do. Release PR merges
-  and stale pushes already included in a published release are ignored.
+  by themselves open or refresh a proposal; ordinary Gradle changes do.
+  When an ineligible push follows an interrupted proposal, current main is
+  compared against the main ancestor of the open proposal, the latest published
+  commit, or the initial root commit before the first release. Outstanding
+  eligible changes still receive a proposal. Release PR merges and stale
+  pushes already included in a published release are ignored.
 - The proposal uses the latest published stable Release, its tagged source
   and the shared version policy, not a version guessed from main or a reserved
-  tag. Notes summarize non-merge commits since that publication (or from the
-  repository root for the first release). The proposal updates the Gradle
+  tag. The proposal and production workflows share historical Release
+  validation; the release PR's independent read-only quality check verifies
+  the next version and published changelog sections. Notes summarize non-merge
+  commits since that publication (or from the repository root for the first
+  release). The proposal updates the Gradle
   version fields and changelog together.
 - To select a higher stable version, use the version policy on the open
   `auto-release` branch and commit the resulting consistent metadata. Subsequent
@@ -103,9 +110,12 @@ no signing or distribution Environment inputs are used.
 - The workflow checks remote main, the proposal branch and PR state before
   updates, uses an explicit force-with-lease on the proposal branch, and skips
   identical branch and PR metadata updates. If state changes concurrently,
-  rerun the failed proposal against current main.
+  the next queued main push reconciles outstanding eligible changes; rerun
+  the failed proposal if no newer run is queued.
 - An authorized but not yet published production release blocks another
-  proposal. After the production workflow successfully completes, the proposal
+  proposal. A matching release PR merged by a bot or with auto-merge is an
+  explicit error, not an authorized release awaiting publication. After the
+  production workflow successfully completes, the proposal
   workflow checks current main for eligible changes since the published release
   to catch up pushes made during packaging. Failed publication must be recovered
   through the original production run, not another release proposal.

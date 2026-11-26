@@ -40,6 +40,15 @@ jobs:
         run: |
           node --test scripts/release/*.test.mjs
           node scripts/release/version-policy.mjs check
+      - name: Check release PR against published history
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.ref == 'auto-release' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.base.ref == 'main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release/check-release-pr.mjs
 
   lightweight:
     runs-on: ubuntu-latest

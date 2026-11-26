@@ -1,17 +1,27 @@
 import assert from "node:assert/strict";
 import { checkVersion, readChangelog } from "./version-policy.mjs";
 
-export function authorizedCommit(event, eventName, repository, workflowSha, checkout) {
-  const pr = event.pull_request;
-  assert.ok(eventName === "pull_request" && event.action === "closed" &&
-    pr?.merged === true && pr.merged_by?.type === "User" && !pr.auto_merge && repository &&
+export function requireAuthorizedMerge(pr, repository) {
+  assert.ok(pr?.merged === true && pr.merged_by?.type === "User" && !pr.auto_merge && repository &&
     pr.head?.ref === "auto-release" && pr.head.repo?.full_name === repository &&
     pr.base?.ref === "main" && pr.base.repo?.full_name === repository,
-  "Unauthorized production release event");
-  const commit = pr.merge_commit_sha;
-  assert.ok(/^[0-9a-f]{40}$/.test(commit ?? "") && commit === workflowSha && commit === checkout,
+  "Unauthorized production release merge");
+  assert.match(pr.merge_commit_sha, /^[0-9a-f]{40}$/, "Invalid release merge SHA");
+  return pr.merge_commit_sha;
+}
+
+export function authorizedCommit(event, eventName, repository, workflowSha, checkout) {
+  assert.ok(eventName === "pull_request" && event.action === "closed", "Unauthorized production release event");
+  const commit = requireAuthorizedMerge(event.pull_request, repository);
+  assert.ok(commit === workflowSha && commit === checkout,
     "Merge SHA mismatch: authorization, workflow and checkout must agree");
   return commit;
+}
+
+export function readVersionAt(git, commit, ancestorOf) {
+  assert.match(commit, /^[0-9a-f]{40}$/);
+  assert.equal(git("merge-base", commit, ancestorOf), commit, "Published release is not an ancestor of checkout");
+  return releaseIdentity(commit, git("show", `${commit}:app/build.gradle.kts`), git("show", `${commit}:CHANGELOG.md`));
 }
 
 export function releaseIdentity(commit, gradle, changelog) {

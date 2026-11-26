@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { github } from "./production.mjs";
-import { releaseIdentity } from "./production-policy.mjs";
-import { inspectPublication } from "./production-publication.mjs";
-import { checkVersion, compareVersions, isStableVersion, proposeRelease } from "./version-policy.mjs";
+import { github } from "./github.mjs";
+import { readVersionAt, releaseIdentity, requireAuthorizedMerge } from "./production-policy.mjs";
+import { publicationSnapshot, publishedHistory, checkPublishedHistory, checkUnreservedPublication } from "./production-publication.mjs";
+import { checkVersion, compareVersions, proposeRelease } from "./version-policy.mjs";
 
 const gradlePath = "app/build.gradle.kts";
 const changelogPath = "CHANGELOG.md";
@@ -20,12 +20,12 @@ async function releasePulls(api, repository) {
       pr.base?.ref === "main" && pr.base.repo?.full_name === repository);
   const open = pulls.filter(pr => pr.state === "open");
   assert.ok(open.length <= 1, "Expected at most one open release PR");
-  return {
-    open: open[0],
-    merged: pulls.filter(pr => pr.merged_at)
-      .map(pr => ({ commit: pr.merge_commit_sha, head: pr.head.sha }))
-      .sort((left, right) => left.commit.localeCompare(right.commit)),
-  };
+  const merged = [];
+  for (const pr of pulls.filter(pr => pr.merged_at)) {
+    const detail = await api.request("GET", `/pulls/${pr.number}`);
+    merged.push({ commit: requireAuthorizedMerge(detail, repository), head: detail.head.sha });
+  }
+  return { open: open[0], merged: merged.sort((left, right) => left.commit.localeCompare(right.commit)) };
 }
 
 async function verifyState(git, api, repository, head, branch, state) {
@@ -57,27 +57,17 @@ export async function updateProposal({ before, after, publicationRun, repository
   if (!publicationRun) {
     assert.ok(sha.test(before) && sha.test(after), "Expected push event SHAs");
     assert.equal(git("merge-base", after, head), after, "Push is not an ancestor of current main");
-    if (state.merged.some(pr => pr.commit === after) || !eligiblePaths(git, before, after)) return;
+    if (state.merged.some(pr => pr.commit === after)) return;
   }
 
-  function readVersionAt(commit) {
-    assert.match(commit, sha);
-    assert.equal(git("merge-base", commit, head), commit, "Published release is not an ancestor of main");
-    return releaseIdentity(commit, git("show", `${commit}:${gradlePath}`), git("show", `${commit}:${changelogPath}`));
-  }
-  const releases = await api.list("/releases");
-  const tags = await api.list("/tags");
-  const published = releases.filter(release => !release.draft && !release.prerelease).map(release => {
-    const tag = tags.find(item => item.name === release.tag_name);
-    assert.ok(tag && isStableVersion(tag.name.slice(1)) && tag.name.startsWith("v"), "Missing stable published tag");
-    return readVersionAt(tag.commit.sha);
-  }).sort((left, right) => left.versionCode - right.versionCode);
-  const baseline = published.at(-1) ?? null;
+  const snapshot = await publicationSnapshot(api);
+  const { published, baseline } = publishedHistory(snapshot.releases.filter(release => !release.draft),
+    snapshot.tags, commit => readVersionAt(git, commit, head));
   if (publicationRun) {
     assert.match(publicationRun, sha, "Expected publication workflow SHA");
     if (!state.merged.some(pr => pr.commit === baseline?.commit &&
         (publicationRun === pr.commit || publicationRun === pr.head))) return;
-    if (!baseline || baseline.commit === head || !eligiblePaths(git, baseline.commit, head)) return;
+    if (!baseline || baseline.commit === head) return;
     after = head;
   }
   if (baseline && git("merge-base", after, baseline.commit) === after) return;
@@ -86,6 +76,16 @@ export async function updateProposal({ before, after, publicationRun, repository
     console.log("An authorized production release is pending; defer until publication completes.");
     return;
   }
+  const previous = git("for-each-ref", "--format=%(objectname)", "refs/remotes/origin/auto-release");
+  if (state.open) assert.match(previous, sha, "Open release PR has no branch reference");
+  const eventEligible = !publicationRun && eligiblePaths(git, before, after);
+  if (!eventEligible) {
+    const covered = state.open ? git("merge-base", previous, head) :
+      baseline?.commit ?? git("rev-list", "--max-parents=0", head);
+    assert.match(covered, sha, "Expected a unique release comparison base");
+    if (!eligiblePaths(git, covered, head)) return;
+  }
+  checkUnreservedPublication(snapshot);
 
   const range = baseline ? `${baseline.commit}..${head}` : head;
   const entries = git("log", "--no-merges", "--format=%s", range).split("\n").filter(Boolean);
@@ -93,11 +93,9 @@ export async function updateProposal({ before, after, publicationRun, repository
   const notes = entries.map(entry => `- ${entry}`).join("\n");
   const gradle = read(gradlePath);
   const changelog = read(changelogPath);
-  const previous = git("for-each-ref", "--format=%(objectname)", "refs/remotes/origin/auto-release");
   let proposal = proposeRelease(gradle, changelog, baseline, notes);
   let version = checkVersion(proposal.gradle, proposal.changelog, baseline);
   if (state.open) {
-    assert.match(previous, sha, "Open release PR has no branch reference");
     const selected = checkVersion(git("show", `${previous}:${gradlePath}`),
       git("show", `${previous}:${changelogPath}`), baseline);
     if (compareVersions(selected.versionName, version.versionName) > 0) {
@@ -105,9 +103,8 @@ export async function updateProposal({ before, after, publicationRun, repository
       version = checkVersion(proposal.gradle, proposal.changelog, baseline);
     }
   }
-  const identity = releaseIdentity(head, proposal.gradle, proposal.changelog);
-  const publication = await inspectPublication(api, identity, proposal.gradle, proposal.changelog, readVersionAt);
-  assert.ok(!publication.tag && !publication.release, "Release version already reserved or published");
+  checkPublishedHistory(proposal.changelog, published);
+  releaseIdentity(head, proposal.gradle, proposal.changelog);
   const title = `chore: propose release v${version.versionName}`;
   const body = [
     `## Proposed release ${version.versionName} (versionCode ${version.versionCode})`, "",

@@ -138,11 +138,11 @@ test("version baseline comes from published tags, not the current proposal", asy
   const previous = { versionName: "0.1.0", versionCode: 1 };
   const proposal = proposeRelease(gradle, changelog, previous, "- Next release.");
   const next = releaseIdentity("c".repeat(40), proposal.gradle, proposal.changelog);
-  const readVersionAt = sha => {
+  const readHistoricalFixture = sha => {
     assert.equal(sha, identity.commit);
     return identity;
   };
-  const inspect = () => inspectPublication(api, next, proposal.gradle, proposal.changelog, readVersionAt);
+  const inspect = () => inspectPublication(api, next, proposal.gradle, proposal.changelog, readHistoricalFixture);
   await assert.rejects(inspect(), /First production release/);
   api.tags.push({ name: identity.tag, commit: { sha: identity.commit } });
   const directory = mkdtempSync(join(tmpdir(), "previous-release-"));
@@ -155,11 +155,11 @@ test("version baseline comes from published tags, not the current proposal", asy
   });
   assert.deepEqual((await inspect()).baseline, identity);
   await assert.rejects(inspectPublication(api, next, proposal.gradle,
-    proposal.changelog.replace("Initial release.", "Rewritten notes."), readVersionAt), /changelog section changed/i);
+    proposal.changelog.replace("Initial release.", "Rewritten notes."), readHistoricalFixture), /changelog section changed/i);
   await assert.rejects(inspectPublication(api, next, proposal.gradle,
-    proposal.changelog, readVersionAt, "d".repeat(64)), /signer differs/);
+    proposal.changelog, readHistoricalFixture, "d".repeat(64)), /signer differs/);
   assert.deepEqual((await inspectPublication(api, next, proposal.gradle,
-    proposal.changelog, readVersionAt, expected.signerSha256)).baseline, identity);
+    proposal.changelog, readHistoricalFixture, expected.signerSha256)).baseline, identity);
   api.tags.push({ name: next.tag, commit: { sha: identity.commit } });
   await assert.rejects(inspect(), /Conflicting release tag/);
   api.tags.pop();
