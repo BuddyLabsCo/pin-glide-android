@@ -285,6 +285,41 @@ class SenderRevocationConfirmationTest {
         compose.onNodeWithText("Pixel 9").assertIsDisplayed()
     }
 
+    @Test
+    fun serviceRejectedOwnerProofRequiresFreshAuthorizationOnExplicitRetry() {
+        var attempts = 0
+        val submissions = mutableListOf<Pair<String, String>>()
+        compose.renderRevocationInventory(
+            scope,
+            AppLanguage.SimplifiedChinese,
+            authorization = { "proof-${++attempts}" },
+            service = { _, senderId, code ->
+                submissions.add(senderId to code)
+                RevocationReply.ProofFailed
+            }
+        )
+        compose.onNodeWithContentDescription("撤销Pixel 9").performScrollTo().performClick()
+        compose.onNodeWithText("确认，验证 QQ").performClick()
+        val verify = compose.onNodeWithText("使用 QQ 验证并撤销")
+        verify.performClick()
+        val warning = compose.onNodeWithTag("owner-proof-warning")
+        warning.assertIsDisplayed().assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Assertive)
+        )
+        verify.assertIsEnabled()
+        compose.runOnIdle {
+            assertEquals(1, attempts)
+            assertEquals(listOf("pixel" to "proof-1"), submissions)
+        }
+        verify.performClick()
+        warning.assertIsDisplayed()
+        verify.assertIsEnabled()
+        compose.runOnIdle {
+            assertEquals(2, attempts)
+            assertEquals(listOf("pixel" to "proof-1", "pixel" to "proof-2"), submissions)
+        }
+    }
+
     private fun assertOwnerProofWarning(message: String, evidenceFile: String) {
         val warning = compose.onNodeWithTag("owner-proof-warning").assertIsDisplayed()
             .assert(
