@@ -37,6 +37,7 @@ import com.buddylabs.pinglide.ui.components.captureSettledUiEvidence
 import kotlin.math.abs
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -55,7 +56,9 @@ class AccountScreenTest {
     @Test
     fun profileShowsServiceNicknameAndKeepsLogoutConfirmation() {
         fixture.openAccount()
-        compose.onNodeWithText("正在获取账号资料…").assertIsDisplayed()
+        AccountLayoutAssertions(compose).assertApprovedLayout("正在获取账号资料…")
+        compose.capturePendingAccountAndOpenThenCancelLogout()
+        compose.runOnIdle { assertEquals(0, fixture.logoutCount) }
         fixture.respond("示例昵称")
         compose.onNodeWithText("示例昵称").assertIsDisplayed().assertHasNoClickAction()
         compose.onNodeWithText("QQ 账号").assertIsDisplayed()
@@ -64,6 +67,7 @@ class AccountScreenTest {
             compose.onNode(isRoot() and hasAnyDescendant(hasText("示例昵称")))
         )
         AccountLayoutAssertions(compose).assertApprovedLayout("示例昵称")
+        assertEquals(11.sp, compose.textLayout("QQ 账号").layoutInput.style.fontSize)
         compose.onNodeWithText("退出登录").assertHasClickAction().performClick()
         compose.onNodeWithText("退出登录？").assertIsDisplayed()
         compose.onNodeWithText("取消").performClick()
@@ -95,6 +99,16 @@ class AccountScreenTest {
     fun compactEnglishAccountAtDoubleFontScaleKeepsLogoutAndBackReachable() =
         compose.withAccountViewport(244, 546) {
             fixture.openAccount(AppLanguage.English)
+            val loadingLabel = "Loading account information…"
+            compose.onNodeWithText(loadingLabel).assertIsDisplayed()
+            val loadingLayout = compose.textLayout(loadingLabel)
+            assertEquals(2f, loadingLayout.layoutInput.density.fontScale)
+            assertFalse(loadingLayout.hasVisualOverflow)
+            assertTrue((0 until loadingLayout.lineCount).none(loadingLayout::isLineEllipsized))
+            assertEquals(
+                loadingLabel.length,
+                loadingLayout.getLineEnd(loadingLayout.lineCount - 1, visibleEnd = true)
+            )
             fixture.respond("Example nickname")
             compose.onNodeWithText("Example nickname").assertIsDisplayed()
             assertEquals(2f, compose.textLayout("Example nickname").layoutInput.density.fontScale)
@@ -115,7 +129,7 @@ class AccountScreenTest {
 internal class AccountLayoutAssertions(
     private val compose: AndroidComposeTestRule<*, ComponentActivity>
 ) {
-    fun assertApprovedLayout(nickname: String? = null) {
+    fun assertApprovedLayout(profileLabel: String = "QQ 账号") {
         val title = compose.onNodeWithText("设置").assertIsDisplayed().getUnclippedBoundsInRoot()
         val back = compose.onNodeWithContentDescription("返回").getUnclippedBoundsInRoot()
         val profile = compose.onNodeWithTag("settings-account-profile").assertIsDisplayed()
@@ -128,12 +142,9 @@ internal class AccountLayoutAssertions(
         assertDp("Logout card height", logoutBounds.bottom - logoutBounds.top, 60.dp)
         assertDp("Card gap", logoutBounds.top - cardBounds.bottom, 14.dp)
         assertEquals(cardBounds.left to cardBounds.right, logoutBounds.left to logoutBounds.right)
-        val profileStyle = compose.textLayout(nickname ?: "QQ 账号").layoutInput.style
+        val profileStyle = compose.textLayout(profileLabel).layoutInput.style
         assertEquals(13.sp, profileStyle.fontSize)
         assertEquals(FontWeight.Bold, profileStyle.fontWeight)
-        if (nickname != null) {
-            assertEquals(11.sp, compose.textLayout("QQ 账号").layoutInput.style.fontSize)
-        }
         assertEquals(13.sp, compose.textLayout("退出登录").layoutInput.style.fontSize)
         assertArtwork(
             profile.captureToImage().asAndroidBitmap(),
