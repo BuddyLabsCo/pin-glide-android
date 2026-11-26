@@ -30,54 +30,70 @@ class SettingsPrivacyScreenTest {
     val compose = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun privacyFromSettingsUsesApprovedHeaderAndSharedFactsWithoutAcknowledgment() {
-        renderSettings(AppLanguage.SimplifiedChinese)
-        val privacy = compose.onNodeWithText("隐私与数据")
-        privacy.performScrollTo().performClick()
-        compose.onNodeWithText("设置").assertIsDisplayed()
-        val back = compose.onNodeWithContentDescription("返回").assertIsDisplayed()
-        val backBounds = back.getUnclippedBoundsInRoot()
-        assertTrue(backBounds.bottom - backBounds.top >= 48.dp)
-        compose.onNodeWithText("知道了").assertDoesNotExist()
-        val paragraphs = listOf(
-            "零数据保留",
-            "鹊信不会创建短信或 OTP 的转发历史，也不会把明文上传到鹊信服务。",
-            "短信正文",
-            "只在当前处理过程中存在于内存，完成或失败后释放。",
-            "配对密钥与模型凭据",
-            "由 Android Keystore 保护，不会写入日志、URL 或服务端请求。",
-            "服务端只路由密文",
-            "服务不会读取短信正文、OTP 或客户端加密密钥。",
-            "本地诊断",
-            "只保留时间、结果类别、状态码、请求 ID 和目标数量等非内容元数据。",
-            "卸载应用或清除应用数据会丢失本机身份与配对密钥，需要重新进行设备配对。"
-        )
-        val bounds = paragraphs.map {
-            compose.onNodeWithText(it).assertIsDisplayed().getUnclippedBoundsInRoot()
+    fun privacyFromSettingsUsesApprovedHeaderAndSharedFactsWithoutAcknowledgment() =
+        compose.withSystemFontScale(1f) {
+            renderSettings(AppLanguage.SimplifiedChinese)
+            val privacy = compose.onNodeWithText("隐私与数据")
+            privacy.performScrollTo().performClick()
+            compose.onNodeWithText("设置").assertIsDisplayed()
+            val back = compose.onNodeWithContentDescription("返回").assertIsDisplayed()
+            val backBounds = back.getUnclippedBoundsInRoot()
+            assertTrue(backBounds.bottom - backBounds.top >= 48.dp)
+            compose.onNodeWithText("知道了").assertDoesNotExist()
+            val paragraphs = listOf(
+                "零数据保留",
+                "鹊信不会创建短信或 OTP 的转发历史，也不会把明文上传到鹊信服务。",
+                "短信正文",
+                "只在当前处理过程中存在于内存，完成或失败后释放。",
+                "配对密钥与模型凭据",
+                "由 Android Keystore 保护，不会写入日志、URL 或服务端请求。",
+                "服务端只路由密文",
+                "服务不会读取短信正文、OTP 或客户端加密密钥。",
+                "本地诊断",
+                "只保留时间、结果类别、状态码、请求 ID 和目标数量等非内容元数据。",
+                "卸载应用或清除应用数据会丢失本机身份与配对密钥，需要重新进行设备配对。"
+            )
+            val bounds = paragraphs.map {
+                compose.onNodeWithText(it).assertIsDisplayed().getUnclippedBoundsInRoot()
+            }
+            assertTrue(bounds.zipWithNext().all { (previous, next) -> previous.bottom <= next.top })
+            captureSettledUiEvidence(
+                "settings-privacy.png",
+                compose.onNode(isRoot() and hasAnyDescendant(hasText("零数据保留")))
+            )
+            back.performClick()
+            privacy.assertIsDisplayed()
+            privacy.performClick()
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            privacy.assertIsDisplayed()
         }
-        assertTrue(bounds.zipWithNext().all { (previous, next) -> previous.bottom <= next.top })
-        captureSettledUiEvidence(
-            "settings-privacy.png",
-            compose.onNode(isRoot() and hasAnyDescendant(hasText("零数据保留")))
-        )
-        back.performClick()
-        privacy.assertIsDisplayed()
-        privacy.performClick()
-        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-        privacy.assertIsDisplayed()
-    }
 
     @Test
     fun englishPrivacyFactsAndBackRemainReachableAtDoubleFontScale() {
         compose.withSystemFontScale(2f) {
             renderSettings(AppLanguage.English)
             compose.onNodeWithText("Privacy and data").performScrollTo().performClick()
-            compose.onNodeWithText("Zero data retention").assertIsDisplayed()
             compose.onNodeWithText("Got it").assertDoesNotExist()
-            compose.onNodeWithText(
+            val paragraphs = listOf(
+                "Zero data retention",
+                "Pin Glide keeps no SMS or OTP forwarding history and never uploads plaintext " +
+                    "to the Pin Glide service.",
+                "SMS content",
+                "Kept in memory only during processing and released on completion or failure.",
+                "Pairing keys and model credentials",
+                "Protected by Android Keystore and kept out of logs, URLs and requests to the " +
+                    "Pin Glide service.",
+                "The service routes ciphertext only",
+                "The service cannot read SMS content, OTPs or client encryption keys.",
+                "Local diagnostics",
+                "Only non-content metadata is kept, such as time, result category, status code, " +
+                    "request ID and target count.",
                 "Uninstalling the app or clearing its data removes this device’s identity and " +
                     "Pairing keys. Pair your target devices again."
-            ).performScrollTo().assertIsDisplayed()
+            )
+            paragraphs.forEach {
+                compose.onNodeWithText(it).performScrollTo().assertIsDisplayed()
+            }
             compose.onNodeWithContentDescription("Back").assertIsDisplayed().performClick()
             compose.onNodeWithText("Privacy and data").assertIsDisplayed()
         }
