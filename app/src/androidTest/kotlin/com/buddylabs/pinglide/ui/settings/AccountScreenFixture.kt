@@ -1,6 +1,5 @@
 package com.buddylabs.pinglide.ui.settings
 
-import android.content.res.Configuration
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
@@ -26,10 +25,8 @@ import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import com.buddylabs.pinglide.ui.home.HomePairingStore
-import com.buddylabs.pinglide.ui.home.runHomeTestShell
 import java.time.Instant
 import kotlin.math.abs
-import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -128,48 +125,6 @@ internal class AccountScreenFixture(
                 Result.failure(IllegalStateException("Profile unavailable"))
             ).isSuccess
         )
-    }
-}
-
-internal fun AndroidComposeTestRule<*, ComponentActivity>.withAccountViewport(
-    widthDp: Int,
-    heightDp: Int,
-    check: () -> Unit
-) {
-    val originalSize = Regex("Override size: (\\d+x\\d+)")
-        .find(runHomeTestShell("wm size"))?.groupValues?.get(1)
-    val originalFont = runHomeTestShell("settings get system font_scale").trim()
-    val originalConfiguration = Configuration(activity.resources.configuration)
-    val density = activity.resources.displayMetrics.density
-    try {
-        runHomeTestShell("settings put system font_scale 2.0")
-        runHomeTestShell(
-            "wm size ${(widthDp * density).roundToInt()}x${(heightDp * density).roundToInt()}"
-        )
-        waitUntil(5_000) {
-            runOnUiThread {
-                val configuration = activity.resources.configuration
-                configuration.screenWidthDp <= widthDp &&
-                    configuration.screenHeightDp <= heightDp &&
-                    configuration.fontScale == 2f
-            }
-        }
-        check()
-    } finally {
-        runHomeTestShell("wm size ${originalSize ?: "reset"}")
-        if (originalFont == "null") {
-            runHomeTestShell("settings delete system font_scale")
-        } else {
-            runHomeTestShell("settings put system font_scale $originalFont")
-        }
-        waitUntil(5_000) {
-            runOnUiThread {
-                val configuration = activity.resources.configuration
-                configuration.screenWidthDp == originalConfiguration.screenWidthDp &&
-                    configuration.screenHeightDp == originalConfiguration.screenHeightDp &&
-                    configuration.fontScale == originalConfiguration.fontScale
-            }
-        }
     }
 }
 

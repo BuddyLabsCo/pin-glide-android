@@ -1,25 +1,19 @@
 package com.buddylabs.pinglide.ui.navigation
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
-import androidx.core.view.WindowCompat
 import com.buddylabs.pinglide.domain.identity.LoginState
 import com.buddylabs.pinglide.domain.identity.LogoutState
 import com.buddylabs.pinglide.domain.settings.SetupProgress
 import com.buddylabs.pinglide.domain.settings.SetupState
+import com.buddylabs.pinglide.ui.components.FullScreenDialog
 import com.buddylabs.pinglide.ui.components.PrivacyScreen
 import com.buddylabs.pinglide.ui.onboarding.BatterySetupScreen
 import com.buddylabs.pinglide.ui.onboarding.QqLoginScreen
@@ -141,28 +135,8 @@ fun SetupNavigation(
         )
     }
     if (privacyOpen) {
-        OnboardingPrivacyDialog(onDismiss = { privacyOpen = false })
-    }
-}
-
-@Composable
-private fun OnboardingPrivacyDialog(onDismiss: () -> Unit) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
-    ) {
-        val view = LocalView.current
-        val window = (view.parent as DialogWindowProvider).window
-        val lightBars = !isSystemInDarkTheme()
-        SideEffect {
-            WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = lightBars
-                isAppearanceLightNavigationBars = lightBars
-            }
+        FullScreenDialog(onDismissRequest = { privacyOpen = false }) {
+            PrivacyScreen(onDismiss = { privacyOpen = false })
         }
-        PrivacyScreen(onDismiss = onDismiss)
     }
 }
