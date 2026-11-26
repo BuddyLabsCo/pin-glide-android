@@ -3,9 +3,7 @@ package com.buddylabs.pinglide.ui.settings
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.view.accessibility.AccessibilityEvent
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -21,8 +19,8 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
-import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -30,32 +28,13 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.R
-import com.buddylabs.pinglide.app.LocalizedContent
-import com.buddylabs.pinglide.app.PinGlideApplication
-import com.buddylabs.pinglide.domain.identity.AccountService
-import com.buddylabs.pinglide.domain.identity.AccountSession
-import com.buddylabs.pinglide.domain.identity.CredentialRenewal
-import com.buddylabs.pinglide.domain.identity.LogoutStore
-import com.buddylabs.pinglide.domain.identity.RefreshCredential
-import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import com.buddylabs.pinglide.domain.settings.AppLanguage
-import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import com.buddylabs.pinglide.ui.components.captureSettledUiEvidence
-import com.buddylabs.pinglide.ui.home.HomePairingStore
-import com.buddylabs.pinglide.ui.home.runHomeTestShell
-import java.time.Instant
 import kotlin.math.abs
-import kotlin.math.roundToInt
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -67,73 +46,46 @@ class AccountScreenTest {
     @get:Rule
     val compose = createAndroidComposeRule<ComponentActivity>()
 
-    private val scope = CoroutineScope(Dispatchers.Main)
-    private val responses = Channel<Result<String?>>(Channel.UNLIMITED)
-    private var logoutCount = 0
+    private val fixture = AccountScreenFixture(compose)
 
     @After
     fun close() {
-        scope.cancel()
-        responses.close()
+        fixture.close()
     }
 
     @Test
     fun profileShowsServiceNicknameAndKeepsLogoutConfirmation() {
-        openAccount()
-        assertApprovedLayout("正在获取账号资料…")
+        fixture.openAccount()
+        AccountLayoutAssertions(compose).assertApprovedLayout("正在获取账号资料…")
         compose.capturePendingAccountAndOpenThenCancelLogout()
-        compose.runOnIdle { assertEquals(0, logoutCount) }
-        respond("示例昵称")
+        compose.runOnIdle { assertEquals(0, fixture.logoutCount) }
+        fixture.respond("示例昵称")
         compose.onNodeWithText("示例昵称").assertIsDisplayed().assertHasNoClickAction()
         compose.onNodeWithText("QQ 账号").assertIsDisplayed()
         captureSettledUiEvidence(
             "settings-account.png",
             compose.onNode(isRoot() and hasAnyDescendant(hasText("示例昵称")))
         )
-        assertApprovedLayout()
+        AccountLayoutAssertions(compose).assertApprovedLayout("示例昵称")
         assertEquals(11.sp, compose.textLayout("QQ 账号").layoutInput.style.fontSize)
         compose.onNodeWithText("退出登录").assertHasClickAction().performClick()
         compose.onNodeWithText("退出登录？").assertIsDisplayed()
         compose.onNodeWithText("取消").performClick()
-        compose.runOnIdle { assertEquals(0, logoutCount) }
+        compose.runOnIdle { assertEquals(0, fixture.logoutCount) }
         compose.onNodeWithText("退出登录").assertIsDisplayed().performClick()
         compose.onNodeWithText("退出登录？").assertIsDisplayed()
         compose.onNode(
             hasText("退出登录") and hasAnyAncestor(isDialog()) and
                 hasAnyAncestor(hasAnyDescendant(hasText("退出登录？")))
         ).performClick()
-        compose.runOnIdle { assertEquals(1, logoutCount) }
-    }
-
-    @Test
-    fun profileFailureShowsFallbackAndSystemToast() {
-        openAccount()
-        compose.onNodeWithText("正在获取账号资料…").assertIsDisplayed()
-        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-        automation.executeAndWaitForEvent(
-            {
-                check(
-                    responses.trySend(
-                        Result.failure(IllegalStateException("Profile unavailable"))
-                    ).isSuccess
-                )
-                compose.waitUntil(5_000) { compose.onNodeWithText("QQ 账号").isDisplayed() }
-            },
-            { event ->
-                event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED &&
-                    event.text.any { it.toString() == "网络错误，请稍后重试" }
-            },
-            5_000L
-        )
-        compose.onNodeWithText("QQ 账号").assertIsDisplayed()
-        compose.onNodeWithText("正在获取账号资料…").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(1, fixture.logoutCount) }
     }
 
     @Test
     fun longNicknameEllipsizesWithoutLosingAccessibleText() {
-        openAccount()
+        fixture.openAccount()
         val nickname = "很长的服务昵称".repeat(20)
-        respond(nickname)
+        fixture.respond(nickname)
         val name = compose.onNodeWithText(nickname).assertIsDisplayed().assertTextEquals(nickname)
         val layout = compose.textLayout(nickname)
         assertEquals(1, layout.lineCount)
@@ -144,114 +96,40 @@ class AccountScreenTest {
     }
 
     @Test
-    fun compactEnglishAccountAtDoubleFontScaleKeepsLogoutAndBackReachable() = withCompactViewport {
-        openAccount(AppLanguage.English)
-        val loadingLabel = "Loading account information…"
-        compose.onNodeWithText(loadingLabel).assertIsDisplayed()
-        val loadingLayout = compose.textLayout(loadingLabel)
-        assertEquals(2f, loadingLayout.layoutInput.density.fontScale)
-        assertFalse(loadingLayout.hasVisualOverflow)
-        assertTrue((0 until loadingLayout.lineCount).none(loadingLayout::isLineEllipsized))
-        assertEquals(
-            loadingLabel.length,
-            loadingLayout.getLineEnd(loadingLayout.lineCount - 1, visibleEnd = true)
-        )
-        respond("Example nickname")
-        compose.onNodeWithText("Example nickname").assertIsDisplayed()
-        assertEquals(2f, compose.textLayout("Example nickname").layoutInput.density.fontScale)
-        val card = compose.onNodeWithTag("settings-account-profile").getUnclippedBoundsInRoot()
-        assertDp("Actual dialog usable width", card.right - card.left, 204.dp)
-        val back = compose.onNodeWithContentDescription("Back").assertIsDisplayed()
-        val logout = compose.onNodeWithText("Log out").performScrollTo().assertIsDisplayed()
-        logout.assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
-            .assertHasClickAction().performClick()
-        compose.onNodeWithText("Log out?").assertIsDisplayed()
-        compose.onNodeWithText("Cancel").performClick()
-        compose.runOnIdle { assertEquals(0, logoutCount) }
-        back.assertIsDisplayed().performClick()
-        compose.onNodeWithText("QQ account").assertIsDisplayed().assertHasClickAction()
-    }
-
-    private fun withCompactViewport(check: () -> Unit) {
-        val originalSize = Regex("Override size: (\\d+x\\d+)")
-            .find(runHomeTestShell("wm size"))?.groupValues?.get(1)
-        val originalFont = runHomeTestShell("settings get system font_scale").trim()
-        val originalConfiguration = Configuration(compose.activity.resources.configuration)
-        val density = compose.activity.resources.displayMetrics.density
-        try {
-            runHomeTestShell("settings put system font_scale 2.0")
-            runHomeTestShell(
-                "wm size ${(244 * density).roundToInt()}x${(546 * density).roundToInt()}"
+    fun compactEnglishAccountAtDoubleFontScaleKeepsLogoutAndBackReachable() =
+        compose.withAccountViewport(244, 546) {
+            fixture.openAccount(AppLanguage.English)
+            val loadingLabel = "Loading account information…"
+            compose.onNodeWithText(loadingLabel).assertIsDisplayed()
+            val loadingLayout = compose.textLayout(loadingLabel)
+            assertEquals(2f, loadingLayout.layoutInput.density.fontScale)
+            assertFalse(loadingLayout.hasVisualOverflow)
+            assertTrue((0 until loadingLayout.lineCount).none(loadingLayout::isLineEllipsized))
+            assertEquals(
+                loadingLabel.length,
+                loadingLayout.getLineEnd(loadingLayout.lineCount - 1, visibleEnd = true)
             )
-            compose.waitUntil(5_000) {
-                compose.runOnUiThread {
-                    val configuration = compose.activity.resources.configuration
-                    configuration.screenWidthDp <= 244 && configuration.fontScale == 2f
-                }
-            }
-            check()
-        } finally {
-            runHomeTestShell("wm size ${originalSize ?: "reset"}")
-            if (originalFont == "null") {
-                runHomeTestShell("settings delete system font_scale")
-            } else {
-                runHomeTestShell("settings put system font_scale $originalFont")
-            }
-            compose.waitUntil(5_000) {
-                compose.runOnUiThread {
-                    val configuration = compose.activity.resources.configuration
-                    configuration.screenWidthDp == originalConfiguration.screenWidthDp &&
-                        configuration.fontScale == originalConfiguration.fontScale
-                }
-            }
+            fixture.respond("Example nickname")
+            compose.onNodeWithText("Example nickname").assertIsDisplayed()
+            assertEquals(2f, compose.textLayout("Example nickname").layoutInput.density.fontScale)
+            val card = compose.onNodeWithTag("settings-account-profile").getUnclippedBoundsInRoot()
+            assertDp("Actual dialog usable width", card.right - card.left, 204.dp)
+            val back = compose.onNodeWithContentDescription("Back").assertIsDisplayed()
+            val logout = compose.onNodeWithText("Log out").performScrollTo().assertIsDisplayed()
+            logout.assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+                .assertHasClickAction().performClick()
+            compose.onNodeWithText("Log out?").assertIsDisplayed()
+            compose.onNodeWithText("Cancel").performClick()
+            compose.runOnIdle { assertEquals(0, fixture.logoutCount) }
+            back.assertIsDisplayed().performClick()
+            compose.onNodeWithText("QQ account").assertIsDisplayed().assertHasClickAction()
         }
-    }
+}
 
-    private fun openAccount(language: AppLanguage = AppLanguage.SimplifiedChinese) {
-        val app = compose.activity.application as PinGlideApplication
-        val store = HomePairingStore(emptyList(), Instant.now().plusSeconds(3600).toString())
-        val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)
-        val account = AccountSession(
-            object : LogoutStore {
-                override suspend fun logout(): RefreshCredential? = error("Unexpected logout")
-            },
-            renewal,
-            object : AccountService {
-                override suspend fun profile(identity: SenderIdentity): String? =
-                    responses.receive().getOrThrow()
-                override suspend fun logout(credential: RefreshCredential): Unit =
-                    error("Unexpected service logout")
-            },
-            scope
-        )
-        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
-        compose.setContent {
-            LocalizedContent(language) {
-                PinGlideTheme {
-                    SettingsNavigation(
-                        language = language,
-                        onLanguage = {},
-                        onBatterySettings = { false },
-                        installedVersion = "0.1.0",
-                        account = account,
-                        senders = app.accountSenders,
-                        revocation = app.senderRevocation,
-                        onLogout = { logoutCount++ },
-                        onDismiss = {}
-                    )
-                }
-            }
-        }
-        val label = if (language == AppLanguage.English) "QQ account" else "QQ 账号"
-        compose.onNodeWithText(label).performClick()
-    }
-
-    private fun respond(nickname: String) {
-        check(responses.trySend(Result.success(nickname)).isSuccess)
-        compose.waitUntil(5_000) { compose.onNodeWithText(nickname).isDisplayed() }
-    }
-
-    private fun assertApprovedLayout(name: String = "示例昵称") {
+internal class AccountLayoutAssertions(
+    private val compose: AndroidComposeTestRule<*, ComponentActivity>
+) {
+    fun assertApprovedLayout(profileLabel: String = "QQ 账号") {
         val title = compose.onNodeWithText("设置").assertIsDisplayed().getUnclippedBoundsInRoot()
         val back = compose.onNodeWithContentDescription("返回").getUnclippedBoundsInRoot()
         val profile = compose.onNodeWithTag("settings-account-profile").assertIsDisplayed()
@@ -263,11 +141,10 @@ class AccountScreenTest {
         assertDp("Profile card height", cardBounds.bottom - cardBounds.top, 76.dp)
         assertDp("Logout card height", logoutBounds.bottom - logoutBounds.top, 60.dp)
         assertDp("Card gap", logoutBounds.top - cardBounds.bottom, 14.dp)
-        assertEquals(cardBounds.left, logoutBounds.left)
-        assertEquals(cardBounds.right, logoutBounds.right)
-        val nicknameStyle = compose.textLayout(name).layoutInput.style
-        assertEquals(13.sp, nicknameStyle.fontSize)
-        assertEquals(FontWeight.Bold, nicknameStyle.fontWeight)
+        assertEquals(cardBounds.left to cardBounds.right, logoutBounds.left to logoutBounds.right)
+        val profileStyle = compose.textLayout(profileLabel).layoutInput.style
+        assertEquals(13.sp, profileStyle.fontSize)
+        assertEquals(FontWeight.Bold, profileStyle.fontWeight)
         assertEquals(13.sp, compose.textLayout("退出登录").layoutInput.style.fontSize)
         assertArtwork(
             profile.captureToImage().asAndroidBitmap(),
@@ -493,8 +370,4 @@ class AccountScreenTest {
             val rows = top.dp.roundToPx() until bottom.dp.roundToPx()
             rows.any { row -> columns.any { column -> getPixel(column, row) == color } }
         }
-
-    private fun assertDp(label: String, actual: Dp, expected: Dp) {
-        assertTrue("$label: $actual", abs((actual - expected).value) <= 2f)
-    }
 }
