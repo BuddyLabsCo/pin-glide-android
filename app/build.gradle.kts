@@ -1,4 +1,4 @@
-import com.android.build.api.dsl.ApplicationBuildType
+import com.android.build.api.variant.BuildConfigField
 import java.net.URI
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -34,11 +34,15 @@ fun serviceOrigin(value: String, debug: Boolean): String {
     return value.removeSuffix("/")
 }
 
-fun qqAppId(prefix: String): String {
-    val value = providers.environmentVariable("${prefix}QQ_APP_ID").orElse("").get()
-    require(value.all { it in '0'..'9' }) { "QQ App ID must contain only digits" }
-    return value
-}
+fun qqAppId(prefix: String) = providers.environmentVariable("${prefix}QQ_APP_ID")
+    .orElse("").map { value ->
+        require(value.all { it in '0'..'9' }) { "QQ App ID must contain only digits" }
+        value
+    }
+
+fun serviceUrl(prefix: String, debug: Boolean) =
+    providers.environmentVariable("${prefix}SERVICE_URL")
+        .orElse("").map { serviceOrigin(it, debug) }
 
 val devSigningInputs = signingInputs("PINGLIDE_DEV_")
 val releaseSigningInputs = signingInputs("PINGLIDE_")
@@ -54,20 +58,25 @@ val devDistribution =
     providers.gradleProperty("pinglide.devDistribution").orNull?.toBooleanStrict() ?: false
 val devQqAppId = qqAppId("PINGLIDE_DEV_")
 val releaseQqAppId = qqAppId("PINGLIDE_")
-val devServiceUrl = serviceOrigin(
-    providers.environmentVariable("PINGLIDE_DEV_SERVICE_URL").orElse("").get(),
-    debug = true
-)
-val releaseServiceUrl = serviceOrigin(
-    providers.environmentVariable("PINGLIDE_SERVICE_URL").orElse("").get(),
-    debug = false
-)
+val devServiceUrl = serviceUrl("PINGLIDE_DEV_", debug = true)
+val releaseServiceUrl = serviceUrl("PINGLIDE_", debug = false)
 val fixedDevSigning = devSigningInputs.values.none { it.isNullOrBlank() }
 
-fun ApplicationBuildType.serviceConfiguration(qqAppId: String, serviceUrl: String) {
-    buildConfigField("String", "QQ_APP_ID", "\"$qqAppId\"")
-    buildConfigField("String", "SERVICE_URL", "\"$serviceUrl\"")
-    manifestPlaceholders["qqAuthScheme"] = "tencent${qqAppId.ifEmpty { "unconfigured" }}"
+androidComponents {
+    onVariants { variant ->
+        val debug = variant.buildType == "debug"
+        val appId = if (debug) devQqAppId else releaseQqAppId
+        val origin = if (debug) devServiceUrl else releaseServiceUrl
+        val fields = checkNotNull(variant.buildConfigFields)
+        fields.put("QQ_APP_ID", appId.map { BuildConfigField("String", "\"$it\"", null) })
+        fields.put("SERVICE_URL", origin.map { BuildConfigField("String", "\"$it\"", null) })
+        variant.manifestPlaceholders.put(
+            "qqAuthScheme",
+            appId.map {
+                "tencent${it.ifEmpty { "unconfigured" }}"
+            }
+        )
+    }
 }
 
 android {
@@ -103,11 +112,9 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".dev"
-            serviceConfiguration(devQqAppId, devServiceUrl)
             if (fixedDevSigning) signingConfig = signingConfigs.getByName("dev")
         }
         release {
-            serviceConfiguration(releaseQqAppId, releaseServiceUrl)
             signingConfig = signingConfigs.getByName("release")
         }
     }
@@ -164,13 +171,23 @@ fun validateDistribution(
 val validateDebugPackaging = tasks.register("validateDebugPackaging") {
     doLast {
         if (devDistribution || devSigningInputs.values.any { it != null }) {
-            validateDistribution("PINGLIDE_DEV_", devSigningInputs, devServiceUrl, devQqAppId)
+            validateDistribution(
+                "PINGLIDE_DEV_",
+                devSigningInputs,
+                devServiceUrl.get(),
+                devQqAppId.get()
+            )
         }
     }
 }
 val validateReleasePackaging = tasks.register("validateReleasePackaging") {
     doLast {
-        validateDistribution("PINGLIDE_", releaseSigningInputs, releaseServiceUrl, releaseQqAppId)
+        validateDistribution(
+            "PINGLIDE_",
+            releaseSigningInputs,
+            releaseServiceUrl.get(),
+            releaseQqAppId.get()
+        )
     }
 }
 tasks.matching { it.name == "packageDebug" || it.name == "signDebugBundle" }.configureEach {
@@ -208,6 +225,8 @@ dependencies {
     implementation(libs.barcode.scanning)
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
+    testImplementation(libs.okhttp.tls)
+    testImplementation(libs.mockwebserver)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.coroutines.test)
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

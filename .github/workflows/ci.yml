@@ -53,3 +53,5 @@ jobs:
         run: bash ./gradlew qualityCheck --console=plain
       - name: Build the minimal application
         run: bash ./gradlew :app:assembleDebug :app:compileReleaseKotlin :app:testDebugUnitTest --console=plain
+      - name: Verify build variants and distribution packaging
+        run: node --test scripts/quality/build-variants.test.mjs

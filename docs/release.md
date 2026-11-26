@@ -44,6 +44,7 @@ Supply an HTTP(S) origin with a valid host and optional port. An optional root s
 is normalized away; credentials, non-root paths, queries and fragments are rejected.
 Prod requires HTTPS and denies cleartext at runtime. Pairing WebSockets use the
 corresponding WS/WSS transport. Service redirects are disabled in both builds.
+The production HTTP client also permits only TLS connections.
 Use only development credentials and test data with Dev HTTP. There is no runtime
 environment switch or fallback between variant inputs.
 
@@ -120,6 +121,12 @@ From the repository root, without deployment inputs:
 .\gradlew.bat :app:test --console=plain
 node --test scripts/quality/build-variants.test.mjs
 ```
+
+The variant suite also runs in ordinary CI and exercises both APK and bundle
+packaging with disposable, independently generated test keys. Its build outputs
+are verification artifacts, not distribution candidates. The host unit suite uses
+loopback HTTP and HTTPS fixtures to check WebSocket transport, redirect denial
+and certificate validation without contacting a deployed Service.
 
 For distribution, inject the intended variant's public and protected inputs and
 run its packaging command:
