@@ -19,6 +19,7 @@ import com.buddylabs.pinglide.domain.identity.LoginAttempt
 import com.buddylabs.pinglide.domain.identity.ManagementCredential
 import com.buddylabs.pinglide.domain.identity.QqAuthorization
 import com.buddylabs.pinglide.domain.identity.RefreshCredential
+import com.buddylabs.pinglide.domain.identity.RevocationReply
 import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import com.buddylabs.pinglide.domain.identity.SenderRevocation
 import com.buddylabs.pinglide.domain.identity.SenderRevocationService
@@ -59,6 +60,7 @@ internal fun AndroidComposeTestRule<*, ComponentActivity>.renderRevocationInvent
         ): Boolean = error("Unexpected login")
     }
     val renewal = CredentialRenewal(store, { _, _ -> error("Unexpected renewal") }, scope)
+    var revokedSenderId: String? = null
     val inventory = AccountSenders(
         store,
         renewal,
@@ -67,7 +69,7 @@ internal fun AndroidComposeTestRule<*, ComponentActivity>.renderRevocationInvent
                 AccountSender("example-sender", "小米 15"),
                 AccountSender("pixel", "Pixel 9"),
                 AccountSender("samsung", "Galaxy S25")
-            )
+            ).filterNot { it.senderId == revokedSenderId }
         },
         scope
     )
@@ -76,7 +78,11 @@ internal fun AndroidComposeTestRule<*, ComponentActivity>.renderRevocationInvent
         inventory,
         renewal,
         authorization,
-        service,
+        { owner, senderId, code ->
+            service.revoke(owner, senderId, code).also {
+                if (it == RevocationReply.Revoked) revokedSenderId = senderId
+            }
+        },
         scope
     )
     val app = activity.application as PinGlideApplication

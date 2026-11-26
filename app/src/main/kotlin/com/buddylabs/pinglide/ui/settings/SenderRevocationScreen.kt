@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -55,6 +56,7 @@ import com.buddylabs.pinglide.domain.identity.RevocationStep
 import com.buddylabs.pinglide.domain.identity.SenderRevocation
 import com.buddylabs.pinglide.domain.identity.SenderRevocationState
 import com.buddylabs.pinglide.ui.components.BrandIcon
+import com.buddylabs.pinglide.ui.components.RevokedRegistrationMessage
 import com.buddylabs.pinglide.ui.components.RingedEmblem
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 import com.buddylabs.pinglide.ui.components.WarningInfoCard
@@ -93,20 +95,24 @@ private fun RevocationSuccessScreen(
     revocation: SenderRevocation,
     headingModifier: Modifier
 ) {
-    SettingsPage(stringResource(R.string.settings_device_access), { revocation.dismiss(state) }) {
-        Icon(painterResource(R.drawable.ic_devices), contentDescription = null)
-        Text(
+    CenteredRevocationLayout(PaddingValues(horizontal = 8.dp, vertical = 28.dp)) {
+        RevokedRegistrationMessage(
             stringResource(R.string.senders_revoked, state.selection.deviceName),
-            headingModifier,
-            style = MaterialTheme.typography.headlineSmall
+            stringResource(R.string.senders_revoked_description),
+            headingModifier
         )
-        Text(stringResource(R.string.senders_revoked_description, state.selection.deviceName))
         OwnerProofFeedback(state.notice)
-        TextButton(
+        Spacer(Modifier.size(22.dp))
+        Button(
             onClick = { revocation.dismiss(state) },
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) {
-            Text(stringResource(R.string.senders_return))
+            Text(
+                stringResource(R.string.senders_return),
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.14.sp,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
@@ -235,12 +241,15 @@ private fun CenteredRevocationHeading(title: String, modifier: Modifier = Modifi
 }
 
 @Composable
-private fun CenteredRevocationLayout(content: @Composable ColumnScope.() -> Unit) {
+private fun CenteredRevocationLayout(
+    contentPadding: PaddingValues = PaddingValues(top = 8.dp, bottom = 28.dp),
+    content: @Composable ColumnScope.() -> Unit
+) {
     ScreenLayout {
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             Column(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                    .heightIn(min = maxHeight).padding(top = 8.dp, bottom = 28.dp),
+                    .heightIn(min = maxHeight).padding(contentPadding),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
                 content = content
