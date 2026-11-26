@@ -33,7 +33,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -127,13 +126,13 @@ class SenderRevocationUnconfirmedTest {
                 "Retry revocation",
                 returnLabel
             )) {
-                assertReadableText(text)
+                compose.assertReadableRevocationText(text)
             }
             compose.onNodeWithText(
                 "Retry revocation"
             ).performScrollTo().assertIsEnabled().performClick()
             for (text in listOf("Retrying…", returnLabel)) {
-                assertReadableText(text)
+                compose.assertReadableRevocationText(text)
                 compose.onNodeWithText(text).assertIsNotEnabled()
             }
             compose.runOnIdle { response.complete(RevocationReply.Revoked) }
@@ -242,28 +241,5 @@ class SenderRevocationUnconfirmedTest {
         assertEquals("Refresh arc", foreground, sample(0, -6))
         assertEquals("Refresh center cutout", background, sample(0, 0))
         assertEquals("Refresh open corner", background, sample(-6, -6))
-    }
-
-    private fun assertReadableText(text: String) {
-        val node = compose.onNodeWithText(text, useUnmergedTree = true)
-            .performScrollTo().assertIsDisplayed()
-        val bounds = node.getUnclippedBoundsInRoot()
-        val clipped = node.fetchSemanticsNode().boundsInRoot
-        with(compose.density) {
-            assertDp("Unclipped $text width", clipped.width.toDp(), bounds.right - bounds.left)
-            assertDp("Unclipped $text height", clipped.height.toDp(), bounds.bottom - bounds.top)
-        }
-        val layout = compose.textLayout(text)
-        assertFalse(
-            "$text overflows vertically: ${layout.size}, ${layout.lineCount} lines",
-            layout.didOverflowHeight
-        )
-        for (line in 0 until layout.lineCount) {
-            assertTrue(
-                "$text line $line extends beyond ${layout.size.width}px",
-                layout.getLineLeft(line) >= -1f &&
-                    layout.getLineRight(line) <= layout.size.width + 1f
-            )
-        }
     }
 }

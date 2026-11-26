@@ -26,7 +26,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -57,6 +56,7 @@ import com.buddylabs.pinglide.domain.identity.RevocationStep
 import com.buddylabs.pinglide.domain.identity.SenderRevocation
 import com.buddylabs.pinglide.domain.identity.SenderRevocationState
 import com.buddylabs.pinglide.ui.components.BrandIcon
+import com.buddylabs.pinglide.ui.components.RevokedRegistrationMessage
 import com.buddylabs.pinglide.ui.components.RingedEmblem
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 import com.buddylabs.pinglide.ui.components.WarningInfoCard
@@ -96,39 +96,10 @@ private fun RevocationSuccessScreen(
     headingModifier: Modifier
 ) {
     CenteredRevocationLayout(PaddingValues(horizontal = 8.dp, vertical = 28.dp)) {
-        Surface(
-            modifier = Modifier.padding(bottom = 18.dp),
-            shape = RoundedCornerShape(24.dp),
-            color = colorResource(R.color.error_emblem_container)
-        ) {
-            Icon(
-                painterResource(R.drawable.ic_registration_revoked_lock),
-                contentDescription = null,
-                tint = colorResource(R.color.error_emblem),
-                modifier = Modifier.padding(21.dp).size(30.dp)
-            )
-        }
-        Text(
+        RevokedRegistrationMessage(
             stringResource(R.string.senders_revoked, state.selection.deviceName),
-            headingModifier,
-            style = MaterialTheme.typography.headlineSmall.copy(
-                fontSize = 26.sp,
-                lineHeight = 32.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-1.04).sp
-            ),
-            textAlign = TextAlign.Center
-        )
-        Text(
             stringResource(R.string.senders_revoked_description),
-            Modifier.padding(top = 10.dp).widthIn(max = 300.dp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontSize = 13.sp,
-                lineHeight = 20.sp,
-                letterSpacing = 0.sp
-            ),
-            textAlign = TextAlign.Center
+            headingModifier
         )
         OwnerProofFeedback(state.notice)
         Spacer(Modifier.size(22.dp))
