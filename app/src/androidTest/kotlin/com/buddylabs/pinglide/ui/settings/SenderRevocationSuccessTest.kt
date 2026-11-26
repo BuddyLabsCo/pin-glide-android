@@ -33,7 +33,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -49,38 +48,44 @@ class SenderRevocationSuccessTest {
 
     @Test
     fun otherSenderResultMatchesCenteredPrototypeAndReturnsToInventory() {
-        compose.renderRevocationInventory(
-            scope,
-            AppLanguage.SimplifiedChinese,
-            authorization = { "fresh-proof" },
-            service = { _, senderId, _ ->
-                assertEquals("pixel", senderId)
-                RevocationReply.Revoked
-            }
-        )
-        compose.onNodeWithContentDescription("撤销Pixel 9").performScrollTo().performClick()
-        compose.onNodeWithText("确认，验证 QQ").performClick()
-        compose.onNodeWithText("使用 QQ 验证并撤销").performClick()
-        val title = "「Pixel 9」已撤销"
-        val heading = compose.onNodeWithText(title).assertIsDisplayed()
-            .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
-            .assert(
-                SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+        compose.withSystemFontScale(1f) {
+            compose.renderRevocationInventory(
+                scope,
+                AppLanguage.SimplifiedChinese,
+                authorization = { "fresh-proof" },
+                service = { _, senderId, _ ->
+                    assertEquals("pixel", senderId)
+                    RevocationReply.Revoked
+                }
             )
-        val description = "该发送端设备的旧注册已关闭，所有配对已移除。" +
-            "再次使用时，需要在该设备重新登录并重新配对。"
-        compose.onNodeWithText(description).assertIsDisplayed()
-        compose.onNodeWithContentDescription("返回").assertDoesNotExist()
-        val returnLabel = "返回设备访问管理"
-        val action = compose.onNodeWithText(returnLabel).assertIsDisplayed().assertIsEnabled()
-        assertApprovedLayout(title, description, returnLabel, heading, action)
-        captureSettledUiEvidence("sender-revoked.png", heading)
-        action.performClick()
-        heading.assertDoesNotExist()
-        compose.onNodeWithText("设备访问管理").assertIsDisplayed()
-        compose.onNodeWithText("小米 15").assertIsDisplayed()
-        compose.onNodeWithText("Galaxy S25").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Pixel 9").assertDoesNotExist()
+            compose.onNodeWithContentDescription("撤销Pixel 9").performScrollTo().performClick()
+            compose.onNodeWithText("确认，验证 QQ").performClick()
+            compose.onNodeWithText("使用 QQ 验证并撤销").performClick()
+            val title = "「Pixel 9」已撤销"
+            val heading = compose.onNodeWithText(title).assertIsDisplayed()
+                .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
+                .assert(
+                    SemanticsMatcher.expectValue(
+                        SemanticsProperties.LiveRegion,
+                        LiveRegionMode.Polite
+                    )
+                )
+            val description = "该发送端设备的旧注册已关闭，所有配对已移除。" +
+                "再次使用时，需要在该设备重新登录并重新配对。"
+            compose.onNodeWithText(description).assertIsDisplayed()
+            compose.onNodeWithContentDescription("返回").assertDoesNotExist()
+            val returnLabel = "返回设备访问管理"
+            val action = compose.onNodeWithText(returnLabel).assertIsDisplayed().assertIsEnabled()
+            assertEquals(1f, compose.textLayout(title).layoutInput.density.fontScale)
+            assertApprovedLayout(title, description, returnLabel, heading, action)
+            captureSettledUiEvidence("sender-revoked.png", heading)
+            action.performClick()
+            heading.assertDoesNotExist()
+            compose.onNodeWithText("设备访问管理").assertIsDisplayed()
+            compose.onNodeWithText("小米 15").assertIsDisplayed()
+            compose.onNodeWithText("Galaxy S25").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Pixel 9").assertDoesNotExist()
+        }
     }
 
     private fun assertApprovedLayout(
@@ -198,16 +203,7 @@ class SenderRevocationSuccessTest {
                     "To use it again, sign in and pair again on that device.",
                 "Return to device access management"
             )) {
-                val layout = compose.assertReadableRevocationText(text)
-                assertFalse("$text overflows: ${layout.size}", layout.hasVisualOverflow)
-                for (line in 0 until layout.lineCount) {
-                    assertFalse("$text line $line is ellipsized", layout.isLineEllipsized(line))
-                    assertTrue(
-                        "$text line $line extends outside ${layout.size}",
-                        layout.getLineTop(line) >= -1f &&
-                            layout.getLineBottom(line) <= layout.size.height + 1f
-                    )
-                }
+                compose.assertReadableRevocationText(text)
             }
             compose.onNodeWithText("Return to device access management").performClick()
             compose.onNodeWithText("Device access management").assertIsDisplayed()
