@@ -40,7 +40,7 @@ for the pinned Service release. From the repository root, build the APKs
 before starting the emulator to avoid concurrent compilation during startup:
 
 ```sh
-./gradlew :app:assembleDebug :app:assembleDebugAndroidTest
+bash ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest
 ```
 
 Create a fresh, dedicated AVD and launch it (use `avdmanager.bat` on Windows):
@@ -58,7 +58,7 @@ In a second shell (Git Bash on Windows), use the matching emulator serial:
 ```sh
 export ANDROID_SERIAL=emulator-5556
 bash scripts/quality/prepare-instrumentation-emulator.sh
-timeout --kill-after=30s 25m ./gradlew :app:connectedDebugAndroidTest --console=plain
+timeout --kill-after=30s 25m bash ./gradlew :app:connectedDebugAndroidTest --console=plain
 ```
 
 On PowerShell, set `$env:ANDROID_SERIAL = 'emulator-5556'` and run
