@@ -82,7 +82,9 @@ class AccountScreenTest {
     @Test
     fun profileShowsServiceNicknameAndKeepsLogoutConfirmation() {
         openAccount()
-        compose.onNodeWithText("正在获取账号资料…").assertIsDisplayed()
+        assertApprovedLayout("正在获取账号资料…")
+        compose.assertPendingAccountProfile()
+        compose.runOnIdle { assertEquals(0, logoutCount) }
         respond("示例昵称")
         compose.onNodeWithText("示例昵称").assertIsDisplayed().assertHasNoClickAction()
         compose.onNodeWithText("QQ 账号").assertIsDisplayed()
@@ -145,6 +147,7 @@ class AccountScreenTest {
     @Test
     fun compactEnglishAccountAtDoubleFontScaleKeepsLogoutAndBackReachable() = withCompactViewport {
         openAccount(AppLanguage.English)
+        compose.onNodeWithText("Loading account information…").assertIsDisplayed()
         respond("Example nickname")
         compose.onNodeWithText("Example nickname").assertIsDisplayed()
         assertEquals(2f, textLayout("Example nickname").layoutInput.density.fontScale)
@@ -240,7 +243,7 @@ class AccountScreenTest {
         compose.waitUntil(5_000) { compose.onNodeWithText(nickname).isDisplayed() }
     }
 
-    private fun assertApprovedLayout() {
+    private fun assertApprovedLayout(name: String = "示例昵称") {
         val title = compose.onNodeWithText("设置").assertIsDisplayed().getUnclippedBoundsInRoot()
         val back = compose.onNodeWithContentDescription("返回").getUnclippedBoundsInRoot()
         val profile = compose.onNodeWithTag("settings-account-profile").assertIsDisplayed()
@@ -254,10 +257,10 @@ class AccountScreenTest {
         assertDp("Card gap", logoutBounds.top - cardBounds.bottom, 14.dp)
         assertEquals(cardBounds.left, logoutBounds.left)
         assertEquals(cardBounds.right, logoutBounds.right)
-        val nicknameStyle = textLayout("示例昵称").layoutInput.style
+        val nicknameStyle = textLayout(name).layoutInput.style
         assertEquals(13.sp, nicknameStyle.fontSize)
         assertEquals(FontWeight.Bold, nicknameStyle.fontWeight)
-        assertEquals(11.sp, textLayout("QQ 账号").layoutInput.style.fontSize)
+        if (name == "示例昵称") assertEquals(11.sp, textLayout("QQ 账号").layoutInput.style.fontSize)
         assertEquals(13.sp, textLayout("退出登录").layoutInput.style.fontSize)
         assertArtwork(
             profile.captureToImage().asAndroidBitmap(),
