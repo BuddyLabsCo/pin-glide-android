@@ -8,7 +8,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -30,8 +29,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -61,6 +58,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -83,7 +81,7 @@ class AccountScreenTest {
     fun profileShowsServiceNicknameAndKeepsLogoutConfirmation() {
         openAccount()
         assertApprovedLayout("正在获取账号资料…")
-        compose.assertPendingAccountProfile()
+        compose.capturePendingAccountAndOpenThenCancelLogout()
         compose.runOnIdle { assertEquals(0, logoutCount) }
         respond("示例昵称")
         compose.onNodeWithText("示例昵称").assertIsDisplayed().assertHasNoClickAction()
@@ -93,6 +91,7 @@ class AccountScreenTest {
             compose.onNode(isRoot() and hasAnyDescendant(hasText("示例昵称")))
         )
         assertApprovedLayout()
+        assertEquals(11.sp, compose.textLayout("QQ 账号").layoutInput.style.fontSize)
         compose.onNodeWithText("退出登录").assertHasClickAction().performClick()
         compose.onNodeWithText("退出登录？").assertIsDisplayed()
         compose.onNodeWithText("取消").performClick()
@@ -136,7 +135,7 @@ class AccountScreenTest {
         val nickname = "很长的服务昵称".repeat(20)
         respond(nickname)
         val name = compose.onNodeWithText(nickname).assertIsDisplayed().assertTextEquals(nickname)
-        val layout = textLayout(nickname)
+        val layout = compose.textLayout(nickname)
         assertEquals(1, layout.lineCount)
         assertTrue(layout.isLineEllipsized(0))
         name.assertHasNoClickAction()
@@ -147,10 +146,19 @@ class AccountScreenTest {
     @Test
     fun compactEnglishAccountAtDoubleFontScaleKeepsLogoutAndBackReachable() = withCompactViewport {
         openAccount(AppLanguage.English)
-        compose.onNodeWithText("Loading account information…").assertIsDisplayed()
+        val loadingLabel = "Loading account information…"
+        compose.onNodeWithText(loadingLabel).assertIsDisplayed()
+        val loadingLayout = compose.textLayout(loadingLabel)
+        assertEquals(2f, loadingLayout.layoutInput.density.fontScale)
+        assertFalse(loadingLayout.hasVisualOverflow)
+        assertTrue((0 until loadingLayout.lineCount).none(loadingLayout::isLineEllipsized))
+        assertEquals(
+            loadingLabel.length,
+            loadingLayout.getLineEnd(loadingLayout.lineCount - 1, visibleEnd = true)
+        )
         respond("Example nickname")
         compose.onNodeWithText("Example nickname").assertIsDisplayed()
-        assertEquals(2f, textLayout("Example nickname").layoutInput.density.fontScale)
+        assertEquals(2f, compose.textLayout("Example nickname").layoutInput.density.fontScale)
         val card = compose.onNodeWithTag("settings-account-profile").getUnclippedBoundsInRoot()
         assertDp("Actual dialog usable width", card.right - card.left, 204.dp)
         val back = compose.onNodeWithContentDescription("Back").assertIsDisplayed()
@@ -257,11 +265,10 @@ class AccountScreenTest {
         assertDp("Card gap", logoutBounds.top - cardBounds.bottom, 14.dp)
         assertEquals(cardBounds.left, logoutBounds.left)
         assertEquals(cardBounds.right, logoutBounds.right)
-        val nicknameStyle = textLayout(name).layoutInput.style
+        val nicknameStyle = compose.textLayout(name).layoutInput.style
         assertEquals(13.sp, nicknameStyle.fontSize)
         assertEquals(FontWeight.Bold, nicknameStyle.fontWeight)
-        if (name == "示例昵称") assertEquals(11.sp, textLayout("QQ 账号").layoutInput.style.fontSize)
-        assertEquals(13.sp, textLayout("退出登录").layoutInput.style.fontSize)
+        assertEquals(13.sp, compose.textLayout("退出登录").layoutInput.style.fontSize)
         assertArtwork(
             profile.captureToImage().asAndroidBitmap(),
             logout.captureToImage().asAndroidBitmap()
@@ -486,13 +493,6 @@ class AccountScreenTest {
             val rows = top.dp.roundToPx() until bottom.dp.roundToPx()
             rows.any { row -> columns.any { column -> getPixel(column, row) == color } }
         }
-
-    private fun textLayout(text: String): TextLayoutResult {
-        val results = mutableListOf<TextLayoutResult>()
-        compose.onNodeWithText(text, useUnmergedTree = true)
-            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
-        return results.single()
-    }
 
     private fun assertDp(label: String, actual: Dp, expected: Dp) {
         assertTrue("$label: $actual", abs((actual - expected).value) <= 2f)

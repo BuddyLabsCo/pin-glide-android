@@ -42,3 +42,13 @@ only finding was the minor increase in the existing Account test class size.
 
 Simulated profile data was used; no live QQ login, service logout, or
 physical-device acceptance was exercised.
+
+Review follow-up: the compact English test now checks the loading label's
+actual 200% font scale, absence of visual overflow or ellipsized lines, and
+the complete visible text length. The loaded subtitle typography assertion
+is unconditional in the loaded-profile test. The pending-state helper's
+name now identifies capture and opening/cancelling Logout confirmation.
+All four Account tests passed again in both themes on API 37.
+Instrumentation compilation and APK assembly and `qualityCheck` passed;
+the JVM test task was up to date. The full instrumentation suite was not
+rerun for this test-only follow-up. Production UI and the comparisons are unchanged.
