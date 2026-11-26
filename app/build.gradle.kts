@@ -181,7 +181,20 @@ val validateDebugPackaging = tasks.register("validateDebugPackaging") {
         }
     }
 }
+val publishedRelease = providers.environmentVariable("PINGLIDE_PUBLISHED_RELEASE")
+val validateReleaseVersion = tasks.register<Exec>("validateReleaseVersion") {
+    workingDir(rootProject.projectDir)
+    commandLine("node", "scripts/release/version-policy.mjs", "check")
+    doFirst {
+        val baseline = publishedRelease.orNull
+        check(!baseline.isNullOrBlank()) {
+            "Production packaging requires PINGLIDE_PUBLISHED_RELEASE (none or version:code). See docs/release.md."
+        }
+        args(baseline)
+    }
+}
 val validateReleasePackaging = tasks.register("validateReleasePackaging") {
+    dependsOn(validateReleaseVersion)
     doLast {
         validateDistribution(
             "PINGLIDE_",
