@@ -15,8 +15,61 @@ app-private Sender registration, Pairings, and settings. Prod retains its existi
 identity and storage format.
 
 The installed version comes from `versionCode` and `versionName` in
-`app/build.gradle.kts` (currently `1` and `0.1.0`). Increase these deliberately when
-preparing an upgrade; keep the application ID and release signing identity stable.
+`app/build.gradle.kts`. Debug adds `-dev` to its source branch's version name
+and uses that branch's version code; it does not consult production releases
+or derive a code from the build run. Keep the application ID and release
+signing identity stable.
+
+## Release version policy
+
+The production release proposal owns the two Gradle version fields and
+`CHANGELOG.md` together. The first production release is `0.1.0` / code `1`.
+After publication, the next proposal defaults to the next stable patch and
+exactly the previous published version code plus one. A maintainer may select
+a strictly higher stable minor or major version (or higher patch). Stable
+names consist of three decimal components with no leading zeroes, prefixes,
+prerelease suffixes or build metadata. Codes are positive integers up to
+2,100,000,000. Each changelog heading records both values and has release notes;
+published sections are retained, newest first.
+
+Use the dependency-free policy from the repository root:
+
+```powershell
+node scripts/release/version-policy.mjs check
+node --test scripts/release/version-policy.test.mjs
+```
+
+The check prints JSON containing `versionName` and `versionCode`. It verifies
+the Gradle source matches the changelog and that the history increases without
+reused names or skipped codes. Ordinary CI runs this consistency check without
+deployment secrets. Release proposal and publication callers must independently
+obtain the latest published production version and code, not infer publication
+from the branch or changelog. Use `none` only when no production release exists.
+
+For example, with release notes in a Markdown file (without release headings):
+
+```powershell
+node scripts/release/version-policy.mjs propose none notes.md
+node scripts/release/version-policy.mjs check none
+```
+
+After `0.1.0` / code `1` has actually been published:
+
+```powershell
+node scripts/release/version-policy.mjs propose 0.1.0:1 notes.md
+node scripts/release/version-policy.mjs check 0.1.0:1
+```
+
+Pass an optional final stable version, such as `0.2.0`, to select a higher
+version. Refreshing an existing proposal against the same published baseline
+replaces only its notes, keeps its higher chosen version (unless explicitly
+overridden) and never increments its code again. When refreshing from the published source rather than the
+proposal's checkout, pass the previous proposal's chosen version explicitly.
+The baseline-aware `check` is also the packaging/publication validation entry
+point: it rejects an already published version, reused or skipped code, or a
+changelog that does not match the supplied published baseline.
+These commands do not open proposals, sign packages, tag commits or publish
+releases.
 
 ## Build prerequisites
 

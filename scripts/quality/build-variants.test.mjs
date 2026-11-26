@@ -5,6 +5,7 @@ import { mkdtempSync, readFileSync, rmSync, rmdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { checkVersion } from "../release/version-policy.mjs";
 
 const environment = Object.fromEntries(
   Object.entries(process.env).filter(([name]) => !name.startsWith("PINGLIDE_")),
@@ -48,6 +49,12 @@ test("Debug HTTP and Release HTTPS produce independent identities and configurat
     PINGLIDE_QQ_APP_ID: "456",
   });
   assert.equal(result.status, 0, result.output);
+  const version = checkVersion(readFileSync("app/build.gradle.kts", "utf8"),
+    readFileSync("CHANGELOG.md", "utf8"));
+  assert.match(buildConfig("debug"), new RegExp(`VERSION_CODE = ${version.versionCode};`));
+  assert.match(buildConfig("release"), new RegExp(`VERSION_CODE = ${version.versionCode};`));
+  assert.ok(buildConfig("debug").includes(`VERSION_NAME = "${version.versionName}-dev";`));
+  assert.ok(buildConfig("release").includes(`VERSION_NAME = "${version.versionName}";`));
   assert.match(buildConfig("debug"), /APPLICATION_ID = "com\.buddylabs\.pinglide\.dev"/);
   assert.match(buildConfig("debug"), /SERVICE_URL = "http:\/\/localhost:8080"/);
   assert.match(buildConfig("debug"), /QQ_APP_ID = "123"/);

@@ -112,6 +112,7 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
             if (fixedDevSigning) signingConfig = signingConfigs.getByName("dev")
         }
         release {
