@@ -1,12 +1,22 @@
 package com.buddylabs.pinglide.ui.components
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.colorResource
 import com.buddylabs.pinglide.R
+
+@Composable
+internal fun dangerButtonColors(): ButtonColors = ButtonDefaults.buttonColors(
+    containerColor = colorResource(R.color.error_emblem_container),
+    contentColor = colorResource(R.color.on_error_emblem_container),
+    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+)
 
 @Composable
 fun PinGlideTheme(content: @Composable () -> Unit) {

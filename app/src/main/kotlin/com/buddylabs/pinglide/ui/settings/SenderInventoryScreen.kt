@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -51,6 +52,7 @@ import com.buddylabs.pinglide.ui.components.ConfirmationDialogEmblem
 import com.buddylabs.pinglide.ui.components.ConfirmationDialogHeading
 import com.buddylabs.pinglide.ui.components.InfoCard
 import com.buddylabs.pinglide.ui.components.WarningInfoCard
+import com.buddylabs.pinglide.ui.components.dangerButtonColors
 import kotlinx.coroutines.launch
 
 @Composable
@@ -212,14 +214,11 @@ private fun SenderRow(
             enabled = state.canSelect,
             modifier = Modifier.heightIn(
                 min = 48.dp
-            ).focusRequester(actionFocus).semantics {
+            ).alpha(if (state.canSelect) 1f else 0.38f).focusRequester(actionFocus).semantics {
                 contentDescription = actionDescription
             },
             contentPadding = PaddingValues(horizontal = 22.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = colorResource(R.color.error_emblem_container),
-                contentColor = colorResource(R.color.on_error_emblem_container)
-            )
+            colors = dangerButtonColors()
         ) {
             Text(
                 stringResource(R.string.senders_revoke),

@@ -46,6 +46,7 @@ import com.buddylabs.pinglide.domain.pairing.PairingChange
 import com.buddylabs.pinglide.ui.components.ConfirmationDialog
 import com.buddylabs.pinglide.ui.components.ConfirmationDialogEmblem
 import com.buddylabs.pinglide.ui.components.ConfirmationDialogHeading
+import com.buddylabs.pinglide.ui.components.dangerButtonColors
 
 @Composable
 internal fun PairingRemovalDialog(
@@ -175,12 +176,7 @@ private fun RemovalActions(
         onClick = onRemove,
         enabled = !pending,
         modifier = actionModifier,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = colorResource(R.color.error_emblem_container),
-            contentColor = colorResource(R.color.on_error_emblem_container),
-            disabledContainerColor = colors.surfaceContainerHighest,
-            disabledContentColor = colors.onSurfaceVariant
-        )
+        colors = dangerButtonColors()
     ) {
         Text(
             stringResource(

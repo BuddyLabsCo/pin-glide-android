@@ -1,9 +1,12 @@
 package com.buddylabs.pinglide.ui.settings
 
+import android.graphics.Color as AndroidColor
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -45,6 +48,7 @@ import com.buddylabs.pinglide.ui.components.captureSettledUiEvidence
 import com.buddylabs.pinglide.ui.components.withSystemFontScale
 import com.buddylabs.pinglide.ui.home.HomePairingStore
 import java.time.Instant
+import kotlin.math.abs
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,7 +64,7 @@ class SenderInventoryScreenTest {
     val compose = createAndroidComposeRule<ComponentActivity>()
 
     private val scope = CoroutineScope(Dispatchers.Main)
-    private val response = CompletableDeferred<List<AccountSender>>()
+    private var response = CompletableDeferred<List<AccountSender>>()
 
     @After
     fun close() = scope.cancel()
@@ -214,6 +218,101 @@ class SenderInventoryScreenTest {
         compose.onNodeWithTag("settings-group:本设备").assertIsDisplayed()
         compose.onNodeWithTag("settings-group:其他发送端设备").assertIsDisplayed()
         compose.onNodeWithText("暂无其他发送端设备").assertIsDisplayed()
+    }
+
+    @Test
+    fun refreshingRetainsSenderRowsBelowStatusCardAndDisablesRevocation() {
+        val inventory = openInventory(AppLanguage.SimplifiedChinese)
+        val current = compose.onNodeWithContentDescription("撤销小米 15").assertIsEnabled()
+        val other = compose.onNodeWithContentDescription("撤销Pixel 9").assertIsEnabled()
+        beginRefresh(inventory)
+
+        val card = compose.onNodeWithTag("sender-inventory-loading").assertIsDisplayed()
+            .assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+            )
+        compose.onNodeWithText("正在获取设备列表…").assertIsDisplayed()
+        val bounds = card.getUnclippedBoundsInRoot()
+        assertEquals(45.dp, bounds.bottom - bounds.top)
+        val currentGroup = compose.onNodeWithTag("settings-group:本设备").assertIsDisplayed()
+        assertTrue(currentGroup.getUnclippedBoundsInRoot().top > bounds.bottom)
+        compose.onNodeWithTag("settings-group:其他发送端设备").assertIsDisplayed()
+        assertDisabledRevokePalette(current)
+        assertDisabledRevokePalette(other)
+        captureSettledUiEvidence(
+            "sender-inventory-refreshing.png",
+            compose.onNode(isRoot() and hasAnyDescendant(hasText("正在获取设备列表…")))
+        )
+
+        respond(listOf(AccountSender("other", "Pixel 9"), AccountSender("sender", "小米 15")))
+        compose.waitUntil(5_000) { !card.isDisplayed() }
+        card.assertDoesNotExist()
+        current.assertIsEnabled()
+        other.assertIsEnabled()
+    }
+
+    @Test
+    fun failedRefreshRetainsRowsAndDisabledActionsUntilRetrySucceeds() {
+        val inventory = openInventory(AppLanguage.SimplifiedChinese)
+        beginRefresh(inventory)
+        compose.onNodeWithTag("sender-inventory-loading").assertIsDisplayed()
+        check(response.completeExceptionally(IllegalStateException("Simulated inventory failure")))
+        compose.waitUntil(5_000) {
+            compose.onNodeWithText("网络错误，无法获取设备列表，请稍后重试。").isDisplayed()
+        }
+        compose.onNodeWithTag("sender-inventory-loading").assertDoesNotExist()
+        val current = compose.onNodeWithContentDescription("撤销小米 15")
+        val other = compose.onNodeWithContentDescription("撤销Pixel 9")
+        compose.onNodeWithTag("settings-group:本设备").assertIsDisplayed()
+        compose.onNodeWithTag("settings-group:其他发送端设备").assertIsDisplayed()
+        assertDisabledRevokePalette(current)
+        assertDisabledRevokePalette(other)
+
+        compose.runOnIdle { response = CompletableDeferred() }
+        compose.onNodeWithText("重试").assertIsEnabled().performClick()
+        compose.onNodeWithTag("sender-inventory-loading").assertIsDisplayed()
+        current.assertIsNotEnabled()
+        other.assertIsNotEnabled()
+        respond(listOf(AccountSender("other", "Pixel 9"), AccountSender("sender", "小米 15")))
+        compose.waitUntil(5_000) {
+            !compose.onNodeWithTag("sender-inventory-loading").isDisplayed()
+        }
+        current.assertIsEnabled()
+        other.assertIsEnabled()
+    }
+
+    private fun beginRefresh(inventory: AccountSenders) {
+        compose.runOnIdle {
+            response = CompletableDeferred()
+            inventory.background()
+            inventory.foreground()
+        }
+    }
+
+    private fun assertDisabledRevokePalette(action: SemanticsNodeInteraction) {
+        val image = action.assertIsDisplayed().assertIsNotEnabled()
+            .captureToImage().asAndroidBitmap()
+        val context = compose.activity
+        val surface = Color(ContextCompat.getColor(context, R.color.surface_container))
+        val expectedContainer = Color(
+            ContextCompat.getColor(context, R.color.surface_container_highest)
+        )
+            .copy(alpha = 0.38f).compositeOver(surface).toArgb()
+        val expectedLabel = Color(ContextCompat.getColor(context, R.color.on_surface_variant))
+            .copy(alpha = 0.38f).compositeOver(surface).toArgb()
+        assertEquals(expectedContainer, image.getPixel(image.width / 2, 2))
+        val width = image.width / 2
+        val height = image.height / 2
+        val pixels = IntArray(width * height)
+        image.getPixels(pixels, 0, width, image.width / 4, image.height / 4, width, height)
+        assertTrue(
+            "Disabled revoke label should use the muted surface-variant color",
+            pixels.count {
+                abs(AndroidColor.red(expectedLabel) - AndroidColor.red(it)) <= 2 &&
+                    abs(AndroidColor.green(expectedLabel) - AndroidColor.green(it)) <= 2 &&
+                    abs(AndroidColor.blue(expectedLabel) - AndroidColor.blue(it)) <= 2
+            } >= 4
+        )
     }
 
     @Test
