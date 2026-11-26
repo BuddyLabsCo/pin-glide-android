@@ -1,0 +1,104 @@
+name: Package development APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require a branch and Environment-only Service URL
+        env:
+          PUBLIC_VARIABLES: ${{ toJSON(vars) }}
+        run: |
+          test "$GITHUB_REF_TYPE" = branch
+          node --input-type=module <<'NODE'
+          if (Object.keys(JSON.parse(process.env.PUBLIC_VARIABLES))
+            .some(name => name.toUpperCase() === "PINGLIDE_SERVICE_URL")) {
+            throw new Error("Remove repository/organization PINGLIDE_SERVICE_URL; configure it only in the Environment.");
+          }
+          NODE
+
+  package:
+    needs: preflight
+    environment: development
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25.0.3"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - uses: ./.github/actions/setup-android-sdk
+      - name: Read the service repository
+        id: contracts
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from "node:fs";
+          const { repository } = JSON.parse(readFileSync("config/codegen/service-contracts.json", "utf8"));
+          const [owner, name] = repository.split("/");
+          appendFileSync(process.env.GITHUB_OUTPUT, `owner=${owner}\nrepository=${name}\n`);
+          NODE
+      - name: Create a read-only service repository token
+        uses: actions/create-github-app-token@v3
+        id: service-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ steps.contracts.outputs.owner }}
+          repositories: ${{ steps.contracts.outputs.repository }}
+          permission-contents: read
+      - name: Download the pinned service contracts
+        env:
+          GH_TOKEN: ${{ steps.service-token.outputs.token }}
+        run: bash ./gradlew downloadServiceContracts --no-build-cache --no-configuration-cache --no-daemon --console=plain
+      - name: Package fixed-key Debug APK
+        shell: bash
+        env:
+          PINGLIDE_DEV_SERVICE_URL: ${{ vars.PINGLIDE_SERVICE_URL }}
+          PINGLIDE_DEV_QQ_APP_ID: ${{ vars.PINGLIDE_QQ_APP_ID }}
+          KEYSTORE_BASE64: ${{ secrets.PINGLIDE_SIGNING_KEYSTORE_BASE64 }}
+          PINGLIDE_DEV_SIGNING_STORE_PASSWORD: ${{ secrets.PINGLIDE_SIGNING_STORE_PASSWORD }}
+          PINGLIDE_DEV_SIGNING_KEY_ALIAS: ${{ secrets.PINGLIDE_SIGNING_KEY_ALIAS }}
+          PINGLIDE_DEV_SIGNING_KEY_PASSWORD: ${{ secrets.PINGLIDE_SIGNING_KEY_PASSWORD }}
+        run: |
+          : "${KEYSTORE_BASE64:?Missing signing keystore}"
+          : "${PINGLIDE_DEV_SERVICE_URL:?Missing Service URL}"
+          : "${PINGLIDE_DEV_QQ_APP_ID:?Missing QQ App ID}"
+          : "${PINGLIDE_DEV_SIGNING_STORE_PASSWORD:?Missing store password}"
+          : "${PINGLIDE_DEV_SIGNING_KEY_ALIAS:?Missing key alias}"
+          : "${PINGLIDE_DEV_SIGNING_KEY_PASSWORD:?Missing key password}"
+          umask 077
+          signing_dir=$(mktemp -d "$RUNNER_TEMP/pinglide-signing.XXXXXXXX")
+          trap 'rm -f -- "$signing_dir/dev.keystore"; rmdir -- "$signing_dir"' EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          export PINGLIDE_DEV_SIGNING_STORE_FILE="$signing_dir/dev.keystore"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$PINGLIDE_DEV_SIGNING_STORE_FILE"
+          unset KEYSTORE_BASE64
+          bash ./gradlew :app:assembleDebug -Ppinglide.devDistribution=true \
+            --no-build-cache --no-configuration-cache --no-daemon --console=plain
+      - name: Verify distribution APK
+        id: verify
+        env:
+          PINGLIDE_SIGNING_CERT_SHA256: ${{ vars.PINGLIDE_SIGNING_CERT_SHA256 }}
+        run: |
+          version=$(node scripts/distribution/verify-apk.mjs debug app/build/outputs/apk/debug/app-debug.apk)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pin-glide-${{ steps.verify.outputs.version }}-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

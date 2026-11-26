@@ -5,6 +5,7 @@ import { mkdtempSync, readFileSync, rmSync, rmdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { verifyApk } from "../distribution/verify-apk.mjs";
 
 const environment = Object.fromEntries(
   Object.entries(process.env).filter(([name]) => !name.startsWith("PINGLIDE_")),
@@ -49,9 +50,11 @@ test("Debug HTTP and Release HTTPS produce independent identities and configurat
   });
   assert.equal(result.status, 0, result.output);
   assert.match(buildConfig("debug"), /APPLICATION_ID = "com\.buddylabs\.pinglide\.dev"/);
+  assert.match(buildConfig("debug"), /VERSION_NAME = "[^"]+-dev"/);
   assert.match(buildConfig("debug"), /SERVICE_URL = "http:\/\/localhost:8080"/);
   assert.match(buildConfig("debug"), /QQ_APP_ID = "123"/);
   assert.match(buildConfig("release"), /APPLICATION_ID = "com\.buddylabs\.pinglide"/);
+  assert.doesNotMatch(buildConfig("release"), /VERSION_NAME = "[^"]+-dev"/);
   assert.match(buildConfig("release"), /SERVICE_URL = "https:\/\/production\.example"/);
   assert.match(buildConfig("release"), /QQ_APP_ID = "456"/);
   assert.match(manifest("debug"), /android:usesCleartextTraffic="true"/);
@@ -217,6 +220,14 @@ test("APK and bundle packaging use the intended independent signing identities",
     for (const [variant, signing] of [["debug", debug], ["release", release]]) {
       const apk = apkSigner(variant);
       assert.match(apk, new RegExp(`certificate SHA-256 digest: ${signing.fingerprint}\\b`));
+      const apkPath = `app/build/outputs/apk/${variant}/app-${variant}.apk`;
+      assert.match(verifyApk(variant, apkPath, signing.fingerprint),
+        variant === "debug" ? /-dev$/ : /^(?!.*-dev$)/);
+      const other = variant === "debug" ? release : debug;
+      assert.throws(() => verifyApk(variant, apkPath, other.fingerprint), /signer/);
+      assert.throws(() => verifyApk(variant, apkPath, ""), /SHA-256/);
+      assert.throws(() => verifyApk(variant === "debug" ? "release" : "debug", apkPath,
+        signing.fingerprint), /package/);
       const bundle = `app/build/outputs/bundle/${variant}/app-${variant}.aab`;
       assert.match(javaTool("jarsigner", ["-J-Duser.language=en", "-verify", bundle]), /jar verified\./);
       const certs = javaTool("keytool", ["-printcert", "-rfc", "-jarfile", bundle]);

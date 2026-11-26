@@ -15,8 +15,9 @@ app-private Sender registration, Pairings, and settings. Prod retains its existi
 identity and storage format.
 
 The installed version comes from `versionCode` and `versionName` in
-`app/build.gradle.kts` (currently `1` and `0.1.0`). Increase these deliberately when
-preparing an upgrade; keep the application ID and release signing identity stable.
+`app/build.gradle.kts` (currently `1` and `0.1.0`). Debug keeps the numeric code
+and appends `-dev` to the version name. Increase these deliberately when preparing
+an upgrade; keep the application ID and release signing identity stable.
 
 ## Build prerequisites
 
@@ -111,6 +112,51 @@ Development-only code and injections must stay in `app/src/debug/`; Release uses
 the main/release source sets. Do not add debug seeds or onboarding bypasses to
 produce a release.
 
+## Manual development packaging
+
+Configure the GitHub Environment named `development`:
+
+| Environment variable | Value |
+| --- | --- |
+| `PINGLIDE_SERVICE_URL` | Development HTTP or HTTPS origin |
+| `PINGLIDE_QQ_APP_ID` | Numeric Dev QQ Connect App ID |
+| `PINGLIDE_SIGNING_CERT_SHA256` | Approved Dev certificate SHA-256 fingerprint (hex, optionally colon-separated) |
+
+| Environment secret | Value |
+| --- | --- |
+| `PINGLIDE_SIGNING_KEYSTORE_BASE64` | Base64 of the shared Dev keystore file |
+| `PINGLIDE_SIGNING_STORE_PASSWORD` | Keystore password |
+| `PINGLIDE_SIGNING_KEY_ALIAS` | Dev key alias |
+| `PINGLIDE_SIGNING_KEY_PASSWORD` | Dev key password |
+
+Obtain the certificate fingerprint from the independently approved Dev key using
+`keytool -list -v -keystore <dev-keystore> -alias <dev-alias>` (enter the password
+at the prompt). Do not derive the expected fingerprint from the APK being verified.
+Register Dev QQ Connect with this package and certificate. Protect the Environment
+with appropriate branch restrictions and reviewer approval: selected branch code
+will execute with the Dev signing inputs. Do not grant untrusted branches access.
+Remove `PINGLIDE_SERVICE_URL` from repository and organization variables; packaging
+rejects that fallback before accessing the Environment.
+
+In GitHub Actions, choose **Package development APK**, select **Run workflow**,
+choose the source branch and start the run. It checks out the dispatch commit,
+downloads the pinned contracts with the existing read-only Service App token,
+assembles Debug with the branch's version code and `-dev` version name, and
+verifies its signature, signer, alignment and manifest. The keystore is decoded
+only during packaging into a private runner temporary directory and removed when
+the step exits, including on failure. Distribution runs use no Gradle build or
+configuration cache or shared CI caches, and can run independently.
+
+Download `pin-glide-<versionName>-<source SHA>` from the successful run's
+Artifacts section and extract `app-debug.apk`. The artifact contains only that
+verified APK; no GitHub Release is created. This workflow does not enable
+production distribution.
+
+For an upgrade-compatible local Dev build, inject the same shared Dev key via the
+four `PINGLIDE_DEV_SIGNING_*` inputs above, alongside `PINGLIDE_DEV_SERVICE_URL`
+and `PINGLIDE_DEV_QQ_APP_ID`. Use the Dev distribution build command below and
+the independently approved Dev certificate fingerprint when verifying.
+
 ## Build and verify
 
 From the repository root, without deployment inputs:
@@ -148,7 +194,19 @@ version metadata is also recorded in
 `app/build/outputs/apk/debug/app-debug.apk`. Distribute only APKs verified against
 the intended fixed signing identity, never build caches or signing material.
 
-Verify the signature, alignment and manifest with the installed SDK tools:
+Verify either distribution APK using the shared verifier and the independently
+approved certificate fingerprint for that variant, supplied as the public
+`PINGLIDE_SIGNING_CERT_SHA256` environment variable:
+
+```powershell
+node scripts/distribution/verify-apk.mjs debug app/build/outputs/apk/debug/app-debug.apk
+node scripts/distribution/verify-apk.mjs release app/build/outputs/apk/release/app-release.apk
+```
+
+The verifier compares the APK with the source version, expected variant package,
+launcher, debuggability, min/target SDK and manifest cleartext policy, requires
+exactly one approved signer and checks page alignment. For manual diagnostics,
+the corresponding Android SDK tools are:
 
 ```powershell
 $buildTools = Join-Path $env:ANDROID_HOME 'build-tools/36.0.0'
