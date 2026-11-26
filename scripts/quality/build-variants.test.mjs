@@ -202,6 +202,7 @@ function testSigning(directory, variant, prefix) {
 
 test("APK and bundle packaging use the intended independent signing identities", () => {
   const directory = mkdtempSync(join(tmpdir(), "pinglide-build-test-"));
+  const fixtureNames = ["fixture-a.bin", "fixture-b.bin", "fixture-c.bin"];
   try {
     const debug = testSigning(directory, "debug", "PINGLIDE_DEV_");
     const release = testSigning(directory, "release", "PINGLIDE_");
@@ -265,9 +266,17 @@ test("APK and bundle packaging use the intended independent signing identities",
 
     const alteredApk = join(directory, "altered.apk");
     copyFileSync("app/build/outputs/apk/debug/app-debug.apk", alteredApk);
-    writeFileSync(join(directory, "fixture.txt"), "APK verification fixture");
-    javaTool("jar", ["--update", "--file", alteredApk, "--no-compress", "-C", directory, "fixture.txt"]);
-    assert.throws(() => verifyApk("debug", alteredApk, debug.fingerprint, "123"), /apksigner\.jar/);
+    for (const [index, name] of fixtureNames.entries()) {
+      writeFileSync(join(directory, name), Buffer.alloc(index + 1));
+    }
+    javaTool("jar", ["--update", "--file", alteredApk, "--no-compress",
+      ...fixtureNames.flatMap(name => ["-C", directory, name])]);
+    assert.throws(() => verifyApk("debug", alteredApk, debug.fingerprint, "123"), error => {
+      assert.equal(error.status, 1);
+      assert.match(error.stderr, /^DOES NOT VERIFY\r?$/m);
+      assert.match(error.stderr, /^ERROR: Missing META-INF\/MANIFEST\.MF\r?$/m);
+      return true;
+    });
 
     javaTool("java", [
       "-jar", join(environment.ANDROID_HOME, "build-tools", "36.0.0", "lib", "apksigner.jar"),
@@ -278,10 +287,17 @@ test("APK and bundle packaging use the intended independent signing identities",
       "--alignment-preserved", "true",
       "--v4-signing-enabled", "false", alteredApk,
     ], debug.inputs);
-    assert.throws(() => verifyApk("debug", alteredApk, debug.fingerprint, "123"), /zipalign/);
+    assert.throws(() => verifyApk("debug", alteredApk, debug.fingerprint, "123"), error => {
+      assert.equal(error.status, 1);
+      assert.match(error.stdout, /^\s*\d+ fixture-[abc]\.bin \(BAD - [123]\)\r?$/m);
+      assert.match(error.stdout, /^Verification FAILED\r?$/m);
+      return true;
+    });
   } finally {
     rmSync(join(directory, "altered.apk"), { force: true });
-    rmSync(join(directory, "fixture.txt"), { force: true });
+    for (const name of fixtureNames) {
+      rmSync(join(directory, name), { force: true });
+    }
     for (const variant of ["debug", "release"]) {
       rmSync(join(directory, `${variant}.p12`), { force: true });
     }

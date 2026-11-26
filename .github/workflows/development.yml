@@ -15,6 +15,10 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
       - name: Require a branch and Environment-only distribution inputs
         env:
           PUBLIC_VARIABLES: ${{ toJSON(vars) }}
