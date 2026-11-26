@@ -20,6 +20,7 @@ import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -62,7 +63,7 @@ class AccountScreenTest {
             "settings-account.png",
             compose.onNode(isRoot() and hasAnyDescendant(hasText("示例昵称")))
         )
-        assertApprovedLayout()
+        AccountLayoutAssertions(compose).assertApprovedLayout("示例昵称")
         compose.onNodeWithText("退出登录").assertHasClickAction().performClick()
         compose.onNodeWithText("退出登录？").assertIsDisplayed()
         compose.onNodeWithText("取消").performClick()
@@ -109,8 +110,12 @@ class AccountScreenTest {
             back.assertIsDisplayed().performClick()
             compose.onNodeWithText("QQ account").assertIsDisplayed().assertHasClickAction()
         }
+}
 
-    private fun assertApprovedLayout() {
+internal class AccountLayoutAssertions(
+    private val compose: AndroidComposeTestRule<*, ComponentActivity>
+) {
+    fun assertApprovedLayout(nickname: String? = null) {
         val title = compose.onNodeWithText("设置").assertIsDisplayed().getUnclippedBoundsInRoot()
         val back = compose.onNodeWithContentDescription("返回").getUnclippedBoundsInRoot()
         val profile = compose.onNodeWithTag("settings-account-profile").assertIsDisplayed()
@@ -123,10 +128,12 @@ class AccountScreenTest {
         assertDp("Logout card height", logoutBounds.bottom - logoutBounds.top, 60.dp)
         assertDp("Card gap", logoutBounds.top - cardBounds.bottom, 14.dp)
         assertEquals(cardBounds.left to cardBounds.right, logoutBounds.left to logoutBounds.right)
-        val nicknameStyle = compose.textLayout("示例昵称").layoutInput.style
-        assertEquals(13.sp, nicknameStyle.fontSize)
-        assertEquals(FontWeight.Bold, nicknameStyle.fontWeight)
-        assertEquals(11.sp, compose.textLayout("QQ 账号").layoutInput.style.fontSize)
+        val profileStyle = compose.textLayout(nickname ?: "QQ 账号").layoutInput.style
+        assertEquals(13.sp, profileStyle.fontSize)
+        assertEquals(FontWeight.Bold, profileStyle.fontWeight)
+        if (nickname != null) {
+            assertEquals(11.sp, compose.textLayout("QQ 账号").layoutInput.style.fontSize)
+        }
         assertEquals(13.sp, compose.textLayout("退出登录").layoutInput.style.fontSize)
         assertArtwork(
             profile.captureToImage().asAndroidBitmap(),

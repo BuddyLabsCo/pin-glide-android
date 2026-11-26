@@ -17,6 +17,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -151,6 +152,51 @@ class AccountFailureScreenTest {
         }
 
     @Test
+    fun failureArrivingAfterScrollingToLogoutBringsNoticeIntoView() =
+        compose.withAccountViewport(366, 164) {
+            fixture.openAccount(AppLanguage.English)
+            compose.onNodeWithText("Log out").performScrollTo().assertIsDisplayed()
+            assertTrue(
+                "Header was scrolled out of view",
+                !compose.onNodeWithContentDescription("Back").isDisplayed()
+            )
+            fixture.fail(englishError)
+            val notice = compose.onNodeWithText(englishError).assertIsDisplayed()
+            val full = notice.getUnclippedBoundsInRoot()
+            val clipped = notice.fetchSemanticsNode().boundsInRoot
+            assertDp(
+                "Full notice height",
+                with(compose.density) { clipped.height.toDp() },
+                full.bottom - full.top
+            )
+            notice.assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+            )
+            compose.onNodeWithText("Log out").performScrollTo().assertHasClickAction()
+        }
+
+    @Test
+    fun retainedReadFailingDuringRestorationShowsNewNoticeOnce() {
+        val restoration = StateRestorationTester(compose)
+        fixture.openAccount(restoration = restoration)
+        compose.onNodeWithText("正在获取账号资料…").assertIsDisplayed()
+        fixture.failDuringRestoration()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.waitUntil(5_000) { compose.onNodeWithText(chineseError).isDisplayed() }
+        compose.onNodeWithText(chineseError).assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+        )
+        compose.onAllNodes(hasText(chineseError)).assertCountEquals(1)
+        compose.runOnIdle { assertEquals(1, fixture.readCount) }
+        compose.mainClock.advanceTimeBy(3_000)
+        compose.onNodeWithText(chineseError).assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(1_100)
+        compose.onNodeWithText(chineseError).assertDoesNotExist()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText(chineseError).assertDoesNotExist()
+    }
+
+    @Test
     fun restoredFailureUsesRemainingTimeoutAndDoesNotResurrectAfterDismissal() {
         val restoration = StateRestorationTester(compose)
         fixture.openAccount(restoration = restoration)
@@ -175,14 +221,8 @@ class AccountFailureScreenTest {
     private fun assertApprovedFailureLayout() {
         compose.onNodeWithText("正在获取账号资料…").assertDoesNotExist()
         compose.onNodeWithText("QQ 账号").assertIsDisplayed().assertHasNoClickAction()
-        val profile = compose.onNodeWithTag("settings-account-profile").getUnclippedBoundsInRoot()
         compose.onNodeWithText("退出登录").assertHasClickAction()
-        val logout = compose.onNodeWithTag("settings-account-logout").getUnclippedBoundsInRoot()
-        assertDp("Profile height", profile.bottom - profile.top, 76.dp)
-        assertDp("Logout height", logout.bottom - logout.top, 60.dp)
-        assertDp("Card gap", logout.top - profile.bottom, 14.dp)
-        assertEquals(13.sp, compose.textLayout("QQ 账号").layoutInput.style.fontSize)
-        assertEquals(FontWeight.Bold, compose.textLayout("QQ 账号").layoutInput.style.fontWeight)
+        AccountLayoutAssertions(compose).assertApprovedLayout()
         val notice = compose.onNodeWithText(chineseError).assertIsDisplayed()
             .assert(
                 SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)

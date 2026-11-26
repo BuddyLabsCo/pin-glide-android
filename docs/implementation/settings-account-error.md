@@ -10,13 +10,18 @@ notice within the inset-aware viewport. Where the approved placement fits,
 the cards stay stationary. In shorter windows the notice is placed in the
 scrollable content without overlapping the cards or Back action; in the
 shortest windows it is first so that the notice is visible.
+Each newly completed failed read reveals its notice at the top of the
+scrollable page, even if the user had already scrolled toward Logout.
+Restoring the same notice retains the user's scroll position.
 
 The network-error Toast required by [#32](https://github.com/BuddyLabsCo/pin-glide-android/issues/32)
 is now the single app-owned capsule specified by the pinned prototype's
 `role="status"` treatment. It uses the selected app language and a polite
 accessibility live region. There is no duplicate platform Toast. The
-saved monotonic deadline preserves the remaining timeout on configuration
-change, including a dismissed notice, until a new profile read begins.
+saved monotonic deadline is associated with the completed failure's read
+generation. It preserves the remaining timeout or dismissal on
+configuration change, but a retained read that fails during restoration
+receives a fresh notice and timeout.
 The approved prototype is unchanged.
 
 | Theme | Approved prototype (left), Android (right) |
@@ -74,6 +79,35 @@ during and after feedback, including a fresh read on reentry.
   unrelated Home test infrastructure is unchanged.
 - The full device suite was not rerun for this review fix; its original
   implementation verification and existing stall are recorded below.
+
+### Review round 2
+
+The two new regressions both failed against the round-one implementation:
+the retained loading read completed unsuccessfully during disposal after
+state saving, and the notice was not displayed after restoration; the
+other case scrolled to Logout in a 366 × 164 dp window at 200% font scale
+before the read failed, leaving the new notice outside the viewport.
+Both now pass. The restoration fixture verifies that the retained read
+has actually failed before the restored content is composed, and the
+scroll regression compares the clipped and unclipped notice heights
+before exercising the Logout action's reachability.
+
+The success and failure tests now use the same `AccountLayoutAssertions`
+for header positioning, card geometry and alignment, typography, color,
+and QQ/Logout/chevron artwork. The separate failure assertions continue
+to verify the capsule's position, styling, live region and lifetime.
+The approved visual composition and screenshot references are unchanged.
+
+- Both new targeted regressions failed before the fix and passed afterward.
+- All nine Account cases passed in light and dark; all 24 Settings cases
+  passed together in light mode on the isolated API 37 emulator.
+- All 46 JVM tests, debug/release and instrumentation Kotlin compilation,
+  debug APK assemblies, `qualityCheck` and `git diff --check` passed.
+- The only AccountPage caller was updated. Ripwire's supplemental quality
+  delta flags the two similar restoration scenarios, pre-existing artwork
+  assertion similarity now attributed to the shared test class, recent
+  AccountScreen churn, and the longer AccountPage function.
+- The full device suite was not rerun for this review round.
 
 ### Original implementation verification
 

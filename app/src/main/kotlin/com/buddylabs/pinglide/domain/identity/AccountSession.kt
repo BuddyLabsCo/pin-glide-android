@@ -22,7 +22,8 @@ interface AccountService {
 data class AccountState(
     val loading: Boolean = true,
     val nickname: String? = null,
-    val failed: Boolean = false
+    val failed: Boolean = false,
+    val failureGeneration: Long? = null
 )
 
 class AccountSession(
@@ -65,7 +66,8 @@ class AccountSession(
             }
             synchronized(this@AccountSession) {
                 if (generation == expected && renewal.isSessionCurrent(session)) {
-                    mutableState.value = result
+                    mutableState.value =
+                        result.copy(failureGeneration = expected.takeIf { result.failed })
                 }
             }
         }

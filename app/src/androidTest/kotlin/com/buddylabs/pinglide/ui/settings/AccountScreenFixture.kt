@@ -4,6 +4,7 @@ import android.content.res.Configuration
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
@@ -38,8 +39,9 @@ import org.junit.Assert.assertTrue
 internal class AccountScreenFixture(
     private val compose: AndroidComposeTestRule<*, ComponentActivity>
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = CoroutineScope(Dispatchers.Main.immediate)
     private val responses = Channel<Result<String?>>(Channel.UNLIMITED)
+    private var failOnDisposal = false
     var logoutCount = 0
         private set
     var readCount = 0
@@ -75,6 +77,16 @@ internal class AccountScreenFixture(
         )
         compose.runOnUiThread { compose.activity.enableEdgeToEdge() }
         val content: @Composable () -> Unit = {
+            DisposableEffect(Unit) {
+                onDispose {
+                    if (failOnDisposal) {
+                        failOnDisposal = false
+                        check(account.state.value.loading)
+                        sendFailure()
+                        check(account.state.value.failed)
+                    }
+                }
+            }
             LocalizedContent(language) {
                 PinGlideTheme {
                     SettingsNavigation(
@@ -102,12 +114,20 @@ internal class AccountScreenFixture(
     }
 
     fun fail(message: String) {
+        sendFailure()
+        compose.waitUntil(5_000) { compose.onNodeWithText(message).isDisplayed() }
+    }
+
+    fun failDuringRestoration() {
+        compose.runOnIdle { failOnDisposal = true }
+    }
+
+    private fun sendFailure() {
         check(
             responses.trySend(
                 Result.failure(IllegalStateException("Profile unavailable"))
             ).isSuccess
         )
-        compose.waitUntil(5_000) { compose.onNodeWithText(message).isDisplayed() }
     }
 }
 

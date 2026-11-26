@@ -52,35 +52,39 @@ import kotlinx.coroutines.delay
 internal fun AccountScreen(account: AccountSession, onBack: () -> Unit, onLogout: () -> Unit) {
     val state by account.state.collectAsState()
     LaunchedEffect(account) { account.open() }
-    val notice = if (rememberFailureNotice(
-            state.failed
-        )
-    ) {
-        stringResource(R.string.account_error)
-    } else {
-        null
-    }
-    AccountPage(notice, onBack) {
+    val noticeGeneration = rememberFailureNotice(state.failureGeneration)
+    AccountPage(noticeGeneration, onBack) {
         AccountScreenContent(state, onLogout)
     }
 }
 
 @Composable
-private fun rememberFailureNotice(failed: Boolean): Boolean {
+private fun rememberFailureNotice(failureGeneration: Long?): Long? {
     val accessibility = LocalAccessibilityManager.current
-    var deadline by rememberSaveable(failed) {
-        val now = SystemClock.elapsedRealtime()
-        val timeout = accessibility?.calculateRecommendedTimeoutMillis(4_000L, containsText = true)
-            ?: 4_000L
-        mutableLongStateOf(if (failed) now + timeout.coerceAtMost(Long.MAX_VALUE - now) else 0L)
-    }
-    LaunchedEffect(failed, deadline) {
-        if (failed && deadline != 0L) {
+    var noticeGeneration by rememberSaveable { mutableStateOf<Long?>(null) }
+    var deadline by rememberSaveable { mutableLongStateOf(0L) }
+    LaunchedEffect(failureGeneration) {
+        if (failureGeneration != noticeGeneration) {
+            noticeGeneration = failureGeneration
+            val now = SystemClock.elapsedRealtime()
+            val timeout = accessibility?.calculateRecommendedTimeoutMillis(
+                4_000L,
+                containsText = true
+            ) ?: 4_000L
+            deadline = if (failureGeneration != null) {
+                now + timeout.coerceAtMost(Long.MAX_VALUE - now)
+            } else {
+                0L
+            }
+        }
+        if (failureGeneration != null && deadline != 0L) {
             delay((deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
             deadline = 0L
         }
     }
-    return failed && deadline > SystemClock.elapsedRealtime()
+    return failureGeneration?.takeIf {
+        it == noticeGeneration && deadline > SystemClock.elapsedRealtime()
+    }
 }
 
 @Composable
