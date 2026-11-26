@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { github, runProduction } from "./production.mjs";
-import { artifactName, candidateJob, candidateStep } from "./production-publication.mjs";
+import { artifactName } from "./production-publication.mjs";
+import { proposeRelease } from "./version-policy.mjs";
 
 const repository = "BuddyLabsCo/pin-glide-android";
 const commit = "a".repeat(40);
@@ -18,6 +19,8 @@ const event = { action: "closed", pull_request: {
 const gradle = 'android {\n  defaultConfig {\n    versionCode = 1\n    versionName = "0.1.0"\n  }\n}\n';
 const changelog = "# Changelog\n\n## 0.1.0 (versionCode 1)\n\n- Initial release.\n";
 const tagSha = "c".repeat(40);
+const historicalJob = "package and publish";
+const historicalStep = "Verify and record candidate";
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), "production-run-"));
@@ -155,11 +158,11 @@ test("previous attempts without artifacts can build only when verification never
   const { context, jobs, outputs } = fixture(t);
   context.env.GITHUB_RUN_ATTEMPT = "2";
   const jobPath = "/actions/runs/10/attempts/1/jobs";
-  jobs.set(jobPath, [{ name: candidateJob, steps: [{ name: candidateStep, conclusion: "skipped" }] }]);
+  jobs.set(jobPath, [{ name: historicalJob, steps: [{ name: historicalStep, conclusion: "skipped" }] }]);
   await runProduction("prepare", context);
   assert.deepEqual(outputs.pop(), { plan: "build", baseline: "none" });
   for (const conclusion of ["success", "failure", "cancelled"]) {
-    jobs.set(jobPath, [{ name: candidateJob, steps: [{ name: candidateStep, started_at: "2026-01-01", conclusion }] }]);
+    jobs.set(jobPath, [{ name: historicalJob, steps: [{ name: historicalStep, started_at: "2026-01-01", conclusion }] }]);
     await assert.rejects(runProduction("prepare", context), /required for recovery/);
   }
   assert.equal(outputs.length, 0);
@@ -167,8 +170,40 @@ test("previous attempts without artifacts can build only when verification never
 
 test("workflow preserves the historical recovery step naming contract", () => {
   const workflow = readFileSync(".github/workflows/production-release.yml", "utf8");
-  assert.ok(workflow.includes(`name: ${candidateJob}\n`) || workflow.includes(`name: ${candidateJob}\r\n`));
-  assert.ok(workflow.includes(`name: ${candidateStep}\n`) || workflow.includes(`name: ${candidateStep}\r\n`));
+  assert.ok(workflow.includes(`name: ${historicalJob}\n`) || workflow.includes(`name: ${historicalJob}\r\n`));
+  assert.ok(workflow.includes(`name: ${historicalStep}\n`) || workflow.includes(`name: ${historicalStep}\r\n`));
+});
+
+test("prepare rejects a changed production signer before selecting a build for the next release", async t => {
+  const { context, outputs, root } = fixture(t);
+  await runProduction("candidate", context);
+  await runProduction("publish", context);
+  const nextCommit = "d".repeat(40);
+  const proposal = proposeRelease(gradle, changelog, { versionName: "0.1.0", versionCode: 1 }, "- Next release.");
+  const next = {
+    ...context, ...proposal, directory: join(root, "next"),
+    env: {
+      ...context.env, GITHUB_SHA: nextCommit, AUTHORIZED_COMMIT: nextCommit, GITHUB_RUN_ID: "20",
+      PINGLIDE_SIGNING_CERT_SHA256: "e".repeat(64),
+    },
+    event: { ...event, pull_request: { ...event.pull_request, merge_commit_sha: nextCommit } },
+    git: (...args) => {
+      if (args[0] === "rev-parse") return nextCommit;
+      if (args[0] === "merge-base") {
+        assert.deepEqual(args, ["merge-base", commit, nextCommit]);
+        return commit;
+      }
+      if (args[0] === "show" && args[1] === `${commit}:app/build.gradle.kts`) return gradle;
+      if (args[0] === "show" && args[1] === `${commit}:CHANGELOG.md`) return changelog;
+      assert.fail(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  };
+  await assert.rejects(runProduction("prepare", next), /signer differs from published release identity/);
+  assert.deepEqual(outputs, []);
+  assert.equal(existsSync(next.directory), false);
+  next.env.PINGLIDE_SIGNING_CERT_SHA256 = signer;
+  await runProduction("prepare", next);
+  assert.deepEqual(outputs, [{ plan: "build", baseline: "0.1.0:1" }]);
 });
 
 test("GitHub adapter paginates collection and array responses without real API requests", async () => {
