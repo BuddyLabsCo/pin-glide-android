@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -30,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalDensity
@@ -55,7 +57,7 @@ import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 @Composable
 internal fun SenderRevocationScreen(state: SenderRevocationState, revocation: SenderRevocation) {
-    val pending = state.step == RevocationStep.Submitting || state.step == RevocationStep.Retrying
+    val pending = state.step == RevocationStep.Retrying
     val proof = state.step == RevocationStep.Proof || state.step == RevocationStep.Verifying
     val focus = remember { FocusRequester() }
     val windowFocused = LocalWindowInfo.current.isWindowFocused
@@ -70,12 +72,15 @@ internal fun SenderRevocationScreen(state: SenderRevocationState, revocation: Se
         OwnerProofScreen(state, revocation, headingModifier)
         return
     }
+    if (state.step == RevocationStep.Submitting) {
+        RevocationSubmittingScreen(state, headingModifier)
+        return
+    }
     val (title, description) = when (state.step) {
         RevocationStep.Proof, RevocationStep.Verifying ->
             R.string.senders_proof_heading to R.string.senders_proof_description
 
-        RevocationStep.Submitting ->
-            R.string.senders_submitting to R.string.senders_submitting_description
+        RevocationStep.Submitting -> error("Submitting has a dedicated screen")
 
         RevocationStep.Unconfirmed, RevocationStep.Retrying ->
             R.string.senders_unconfirmed to R.string.senders_unconfirmed_description
@@ -99,13 +104,74 @@ internal fun SenderRevocationScreen(state: SenderRevocationState, revocation: Se
         Text(stringResource(description, state.selection.deviceName))
         OwnerProofFeedback(state.notice)
         SenderRevocationAction(state, revocation)
-        if (state.step != RevocationStep.Submitting) {
-            TextButton(
-                onClick = { revocation.dismiss(state) },
-                enabled = !pending,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        TextButton(
+            onClick = { revocation.dismiss(state) },
+            enabled = !pending,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        ) {
+            Text(stringResource(R.string.senders_return))
+        }
+    }
+}
+
+@Composable
+private fun RevocationSubmittingScreen(state: SenderRevocationState, headingModifier: Modifier) {
+    val colors = MaterialTheme.colorScheme
+    ScreenLayout {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    .heightIn(min = maxHeight).padding(top = 8.dp, bottom = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Text(stringResource(R.string.senders_return))
+                RingedEmblem(RoundedCornerShape(44.dp)) {
+                    Icon(
+                        painterResource(R.drawable.ic_revoke_lock),
+                        contentDescription = null,
+                        modifier = Modifier.size(54.dp),
+                        tint = colors.onPrimaryContainer
+                    )
+                }
+                Text(
+                    stringResource(R.string.senders_submitting),
+                    headingModifier.padding(top = 7.dp),
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontSize = 26.sp,
+                        lineHeight = 29.4.sp,
+                        fontWeight = FontWeight(750),
+                        letterSpacing = (-1.17).sp
+                    ),
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    stringResource(
+                        R.string.senders_submitting_description,
+                        state.selection.deviceName
+                    ),
+                    Modifier.padding(top = 10.dp),
+                    color = colors.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    letterSpacing = 0.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.size(26.dp))
+                Button(
+                    onClick = {},
+                    enabled = false,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).alpha(0.38f),
+                    colors = ButtonDefaults.buttonColors(
+                        disabledContainerColor = colors.primary,
+                        disabledContentColor = colors.onPrimary
+                    )
+                ) {
+                    Text(
+                        stringResource(R.string.senders_submitting_wait),
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.14.sp
+                    )
+                }
             }
         }
     }

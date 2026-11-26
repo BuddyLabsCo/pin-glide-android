@@ -234,7 +234,8 @@
     <string name="senders_proof_failed">QQ 验证未完成，所选设备未被撤销。请重试。</string>
     <string name="senders_proof_wrong_account">请使用当前登录的 QQ 账号验证。所选设备未被撤销，当前账号未改变。</string>
     <string name="senders_submitting">正在提交撤销</string>
-    <string name="senders_submitting_description">正在撤销“%1$s”…</string>
+    <string name="senders_submitting_description">正在撤销「%1$s」…</string>
+    <string name="senders_submitting_wait">请稍候…</string>
     <string name="senders_unconfirmed">撤销未确认</string>
     <string name="senders_unconfirmed_description">暂时无法确认“%1$s”的撤销结果，请稍后重试。</string>
     <string name="senders_revoke_retry">重试撤销</string>

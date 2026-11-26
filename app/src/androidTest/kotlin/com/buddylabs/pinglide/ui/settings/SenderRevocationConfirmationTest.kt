@@ -258,6 +258,39 @@ class SenderRevocationConfirmationTest {
         compose.onNodeWithText("Pixel 9").assertIsDisplayed()
     }
 
+    @Test
+    fun submittingShowsSelectedSenderAndDisabledWaitUntilResponse() {
+        val response = CompletableDeferred<RevocationReply>()
+        renderInventory(
+            AppLanguage.SimplifiedChinese,
+            authorization = { "fresh-proof" },
+            service = { _, _, _ -> response.await() }
+        )
+        compose.onNodeWithContentDescription("撤销Pixel 9").performScrollTo().performClick()
+        compose.onNodeWithText("确认，验证 QQ").performClick()
+        compose.onNodeWithText("使用 QQ 验证并撤销").performClick()
+        val heading = compose.onNodeWithText("正在提交撤销").assertIsDisplayed()
+        val wait = compose.onNodeWithText("请稍候…").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithText("正在撤销「Pixel 9」…").assertIsDisplayed()
+        val viewport = compose.onNode(isRoot() and hasAnyDescendant(hasText("正在提交撤销")))
+            .getUnclippedBoundsInRoot()
+        val headingBounds = heading.getUnclippedBoundsInRoot()
+        val waitBounds = wait.getUnclippedBoundsInRoot()
+        assertDp(
+            "Centered heading",
+            (headingBounds.left + headingBounds.right) / 2,
+            (viewport.left + viewport.right) / 2
+        )
+        assertTrue(waitBounds.top > headingBounds.bottom)
+        assertTrue(waitBounds.bottom - waitBounds.top >= 48.dp)
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        wait.assertIsDisplayed().assertIsNotEnabled()
+        captureSettledUiEvidence("sender-revoke-submitting.png", heading)
+        compose.runOnIdle { response.complete(RevocationReply.WrongAccount) }
+        wait.assertDoesNotExist()
+        compose.onNodeWithText("验证后撤销设备").assertIsDisplayed()
+    }
+
     private fun renderInventory(
         language: AppLanguage,
         authorization: QqAuthorization = { error("Confirmation must not open QQ") },
