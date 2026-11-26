@@ -31,6 +31,9 @@ names consist of three decimal components with no leading zeroes, prefixes,
 prerelease suffixes or build metadata. Codes are positive integers up to
 2,100,000,000. Each changelog heading records both values and has release notes;
 published sections are retained, newest first.
+The policy expects one simple `android`/`defaultConfig` block with literal
+version assignments, and rejects unsupported Gradle source shapes (including
+block comments or multiline strings) rather than treating them as metadata.
 
 Use the dependency-free policy from the repository root:
 
@@ -63,8 +66,9 @@ node scripts/release/version-policy.mjs check 0.1.0:1
 Pass an optional final stable version, such as `0.2.0`, to select a higher
 version. Refreshing an existing proposal against the same published baseline
 replaces only its notes, keeps its higher chosen version (unless explicitly
-overridden) and never increments its code again. When refreshing from the published source rather than the
-proposal's checkout, pass the previous proposal's chosen version explicitly.
+overridden) and never increments its code again. When refreshing from the
+published source rather than the proposal's checkout, pass the previous
+proposal's chosen version explicitly.
 The baseline-aware `check` is also the packaging/publication validation entry
 point: it rejects an already published version, reused or skipped code, or a
 changelog that does not match the supplied published baseline.
@@ -147,7 +151,9 @@ step ends, including on failure. Keep GitHub download credentials scoped to the
 existing contract-download step. The ordinary quality workflow compiles Release
 without signing access; it does not publish or distribute APKs.
 
-Release APK/bundle packaging always requires all signing and public inputs.
+Release APK/bundle packaging always requires all signing and public inputs,
+plus the independently obtained `PINGLIDE_PUBLISHED_RELEASE` baseline
+(`none` or `version:code`). The baseline is public metadata, not a signing secret.
 Dev distribution packaging additionally requires `-Ppinglide.devDistribution=true`
 so missing inputs cannot silently produce an APK signed with the default debug key.
 Supplying any Dev signing input also requires the complete Dev configuration at
@@ -182,12 +188,25 @@ loopback HTTP and HTTPS fixtures to check WebSocket transport, redirect denial
 and certificate validation without contacting a deployed Service.
 
 For distribution, inject the intended variant's public and protected inputs and
-run its packaging command:
+run its packaging command. Before production packaging, determine the latest
+published production release and set `PINGLIDE_PUBLISHED_RELEASE` to its actual
+version and code (for example, `0.1.0:1`), or `none` only for the first release.
+The following uses `none` as the first-release example:
 
 ```powershell
 .\gradlew.bat :app:assembleDebug '-Ppinglide.devDistribution=true' --no-configuration-cache --no-build-cache --console=plain
+$env:PINGLIDE_PUBLISHED_RELEASE = 'none'
+node scripts/release/version-policy.mjs check $env:PINGLIDE_PUBLISHED_RELEASE
+if ($LASTEXITCODE -ne 0) { throw 'Production release version validation failed' }
 .\gradlew.bat :app:assembleRelease --no-configuration-cache --no-build-cache --console=plain
+if ($LASTEXITCODE -ne 0) { throw 'Production packaging failed' }
 ```
+
+Gradle also runs the baseline-aware policy before Release APK or bundle packaging,
+so missing, reused or inconsistent release metadata fails packaging even when
+invoked directly. Never publish a candidate after a failed validation or build,
+including a stale APK from an earlier build. Publication must recheck the same
+candidate metadata against the current published baseline.
 
 `qualityCheck` retains the four existing gates: Android/Compose Lint,
 Spotless/ktlint, handwritten Kotlin file size, and detekt. The build keeps compiler

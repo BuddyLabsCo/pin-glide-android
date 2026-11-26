@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { checkVersion, proposeRelease } from "./version-policy.mjs";
 
 const initial = { versionName: "0.1.0", versionCode: 1 };
@@ -76,9 +81,104 @@ test("published baseline must identify the previous changelog release", () => {
 });
 
 test("rejects invalid codes and changelog notes instead of generating inconsistent metadata", () => {
-  for (const code of ["01", "-1", "1.5", "2100000001", "1 + 1"]) {
-    assert.throws(() => checkVersion(gradle("0.1.0", code), history));
+  for (const code of ["01", "-1", "1.5", "1 + 1"]) {
+    assert.throws(() => checkVersion(gradle("0.1.0", code), history), /literal versionCode/);
   }
+  assert.throws(() => checkVersion(gradle("0.1.0", 2100000001), history), /Invalid Android versionCode: 2100000001/);
+  assert.throws(() => checkVersion(gradle("0.1.0", 2100000000), history), /Gradle and changelog version metadata must agree/);
   assert.throws(() => proposeRelease(gradle(), history, initial, ""));
   assert.throws(() => proposeRelease(gradle(), history, initial, "## Unrelated heading\n\n- Notes."));
+});
+
+test("only accepts active literal assignments in defaultConfig", () => {
+  const commented = gradle().replace("        versionCode", "        /*\n        versionCode")
+    .replace('versionName = "0.1.0"', 'versionName = "0.1.0"\n        */');
+  assert.throws(() => checkVersion(commented, history), /defaultConfig|unsupported/i);
+  assert.throws(() => checkVersion(gradle().replace("defaultConfig", "release"), history), /defaultConfig/);
+  assert.throws(() => checkVersion(gradle().replace("android", "other"), history), /defaultConfig/);
+  assert.throws(() => checkVersion("android {\n    other {\n" +
+    gradle().split("\n").slice(1, -2).map(line => `    ${line}`).join("\n") + "\n    }\n}\n", history), /defaultConfig/);
+  assert.throws(() => checkVersion(gradle().replace("defaultConfig {", "defaultConfig {\n        other {")
+    .replace("    }\n}", "        }\n    }\n}"), history), /defaultConfig/);
+});
+
+const cliPath = fileURLToPath(new URL("./version-policy.mjs", import.meta.url));
+
+function checkout(context) {
+  const directory = mkdtempSync(join(tmpdir(), "pinglide-version-"));
+  context.after(() => rmSync(directory, { recursive: true, force: true }));
+  mkdirSync(join(directory, "app"));
+  const gradleFile = join(directory, "app", "build.gradle.kts");
+  const changelogFile = join(directory, "CHANGELOG.md");
+  const notesFile = join(directory, "notes.md");
+  writeFileSync(gradleFile, gradle());
+  writeFileSync(changelogFile, history);
+  writeFileSync(notesFile, "- First notes.");
+  const run = (args, options = []) => {
+    const result = spawnSync(process.execPath, [...options, cliPath, ...args], {
+      cwd: directory, encoding: "utf8",
+      env: Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("PINGLIDE_"))),
+    });
+    assert.ifError(result.error);
+    return result;
+  };
+  const contents = () => [readFileSync(gradleFile, "utf8"), readFileSync(changelogFile, "utf8")];
+  return { directory, notesFile, run, contents };
+}
+
+test("CLI generates initial and subsequent proposals, refreshes and checks the baseline", context => {
+  const fixture = checkout(context);
+  function succeeds(args, expected) {
+    const result = fixture.run(args);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), expected);
+  }
+  succeeds(["propose", "none", "notes.md"], initial);
+  const firstHistory = history.replace("Initial release.", "First notes.");
+  assert.deepEqual(fixture.contents(), [gradle(), firstHistory]);
+  succeeds(["check", "none"], initial);
+  const next = { versionName: "0.2.0", versionCode: 2 };
+  writeFileSync(fixture.notesFile, "- New feature.");
+  succeeds(["propose", "0.1.0:1", "notes.md", "0.2.0"], next);
+  assert.deepEqual(fixture.contents(), [gradle("0.2.0", 2),
+    "# Changelog\n\n## 0.2.0 (versionCode 2)\n\n- New feature.\n\n" + firstHistory.slice(13)]);
+  writeFileSync(fixture.notesFile, "- Refreshed.");
+  succeeds(["propose", "0.1.0:1", "notes.md"], next);
+  const refreshed = [gradle("0.2.0", 2),
+    "# Changelog\n\n## 0.2.0 (versionCode 2)\n\n- Refreshed.\n\n" + firstHistory.slice(13)];
+  assert.deepEqual(fixture.contents(), refreshed);
+  succeeds(["check", "0.1.0:1"], next);
+  for (const [args, diagnostic] of [
+    [["check", "0.2.0:2"], /higher stable version/],
+    [["check", "0.1.0:01"], /Expected published version:code/],
+    [["propose", "0.1.0:1", "notes.md", "0.1.0"], /higher stable version/],
+    [["propose", "0.1.0:1", "missing.md"], /ENOENT/],
+  ]) {
+    const result = fixture.run(args);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, diagnostic);
+    assert.deepEqual(fixture.contents(), refreshed);
+  }
+});
+
+test("CLI restores both original files if the second staged replacement fails", context => {
+  const fixture = checkout(context);
+  const before = fixture.contents();
+  const preload = join(fixture.directory, "fail-rename.mjs");
+  writeFileSync(preload, `
+    import fs from "node:fs";
+    import { syncBuiltinESMExports } from "node:module";
+    import { basename } from "node:path";
+    const rename = fs.renameSync;
+    fs.renameSync = (source, destination) => {
+      if (basename(destination) === "CHANGELOG.md") throw new Error("Injected replacement failure");
+      return rename(source, destination);
+    };
+    syncBuiltinESMExports();
+  `);
+  const result = fixture.run(["propose", "0.1.0:1", "notes.md"], ["--import", pathToFileURL(preload).href]);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Injected replacement failure/);
+  assert.deepEqual(fixture.contents(), before);
+  assert.deepEqual(readdirSync(fixture.directory).sort(), ["CHANGELOG.md", "app", "fail-rename.mjs", "notes.md"]);
 });

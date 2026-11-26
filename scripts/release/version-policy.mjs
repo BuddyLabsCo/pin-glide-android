@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const initial = { versionName: "0.1.0", versionCode: 1 };
@@ -42,20 +43,35 @@ function requireSuccessor(current, previous) {
 }
 
 function assignment(name) {
-  return new RegExp(`^(\\s*${name}\\s*=\\s*)([^\\r\\n]+)(?=\\r?$)`, "gm");
+  return new RegExp(`^([ \\t]*${name}[ \\t]*=[ \\t]*)([^\\r\\n]+)(?=\\r?$)`, "gm");
 }
 
-function readAssignment(gradle, name, pattern) {
-  const matches = [...gradle.matchAll(assignment(name))];
-  const value = matches.length === 1 && pattern.exec(matches[0][2].trim());
+function defaultConfig(gradle) {
+  if (/\/\*|\*\/|"""/.test(gradle)) {
+    throw new Error("Unsupported Gradle source: block comments or multiline strings");
+  }
+  const android = [...gradle.matchAll(/^android[ \t]*\{[ \t]*\r?\n([\s\S]*?)^\}[ \t]*\r?$/gm)];
+  const blocks = android.length === 1 &&
+    [...android[0][1].matchAll(/^    defaultConfig[ \t]*\{[ \t]*\r?\n[^{}]*?^    \}[ \t]*(?=\r?$)/gm)];
+  if (!blocks || blocks.length !== 1) {
+    throw new Error("Expected exactly one simple android defaultConfig block");
+  }
+  return blocks[0][0];
+}
+
+function readAssignment(gradle, block, name, pattern) {
+  const matches = [...block.matchAll(assignment(name))];
+  const value = matches.length === 1 && [...gradle.matchAll(assignment(name))].length === 1 &&
+    pattern.exec(matches[0][2].trim());
   if (!value) throw new Error(`Expected exactly one literal ${name} assignment in ${gradlePath}`);
   return value[1];
 }
 
 function readGradle(gradle) {
+  const block = defaultConfig(gradle);
   return metadata(
-    readAssignment(gradle, "versionName", /^"([^"]+)"$/),
-    Number(readAssignment(gradle, "versionCode", /^([1-9]\d*)$/)),
+    readAssignment(gradle, block, "versionName", /^"([^"]+)"$/),
+    Number(readAssignment(gradle, block, "versionCode", /^([1-9]\d*)$/)),
   );
 }
 
@@ -112,9 +128,11 @@ export function proposeRelease(gradle, changelog, published, notes, selected) {
     requireSuccessor(next, published);
     kept = refreshing ? releases.slice(1) : releases;
   }
-  const updatedGradle = gradle
+  const block = defaultConfig(gradle);
+  const updatedBlock = block
     .replace(assignment("versionName"), (_, prefix) => `${prefix}"${next.versionName}"`)
     .replace(assignment("versionCode"), (_, prefix) => `${prefix}${next.versionCode}`);
+  const updatedGradle = gradle.replace(block, () => updatedBlock);
   const updatedChangelog = [
     "# Changelog",
     `## ${next.versionName} (versionCode ${next.versionCode})\n\n${notes.trim()}`,
@@ -131,6 +149,35 @@ function parsePublished(value) {
   return metadata(match[1], Number(match[2]));
 }
 
+function writeProposal(proposal) {
+  const directory = mkdtempSync(join(process.cwd(), ".release-"));
+  const stagedGradle = join(directory, "build.gradle.kts");
+  const stagedChangelog = join(directory, "CHANGELOG.md");
+  const originalGradle = join(directory, "original.gradle.kts");
+  let preserveBackup = false;
+  try {
+    copyFileSync(gradlePath, originalGradle);
+    copyFileSync(gradlePath, stagedGradle);
+    copyFileSync(changelogPath, stagedChangelog);
+    writeFileSync(stagedGradle, proposal.gradle);
+    writeFileSync(stagedChangelog, proposal.changelog);
+    renameSync(stagedGradle, gradlePath);
+    try {
+      renameSync(stagedChangelog, changelogPath);
+    } catch (error) {
+      try {
+        renameSync(originalGradle, gradlePath);
+      } catch (rollbackError) {
+        preserveBackup = true;
+        throw new Error(`${error.message}; rollback failed: ${rollbackError.message}. Restore ${originalGradle}`);
+      }
+      throw error;
+    }
+  } finally {
+    if (!preserveBackup) rmSync(directory, { recursive: true, force: true });
+  }
+}
+
 function main([command, baseline, notesPath, selected, ...extra]) {
   const gradle = readFileSync(gradlePath, "utf8");
   const changelog = readFileSync(changelogPath, "utf8");
@@ -140,8 +187,7 @@ function main([command, baseline, notesPath, selected, ...extra]) {
   } else if (command === "propose" && baseline && notesPath && extra.length === 0) {
     const published = parsePublished(baseline);
     const proposal = proposeRelease(gradle, changelog, published, readFileSync(notesPath, "utf8"), selected);
-    writeFileSync(gradlePath, proposal.gradle);
-    writeFileSync(changelogPath, proposal.changelog);
+    writeProposal(proposal);
     console.log(JSON.stringify(checkVersion(proposal.gradle, proposal.changelog, published)));
   } else {
     throw new Error("Usage: version-policy.mjs check [none|version:code] or propose <none|version:code> <notes-file> [version]");

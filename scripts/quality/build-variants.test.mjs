@@ -10,15 +10,20 @@ import { checkVersion } from "../release/version-policy.mjs";
 const environment = Object.fromEntries(
   Object.entries(process.env).filter(([name]) => !name.startsWith("PINGLIDE_")),
 );
+const changelog = readFileSync("CHANGELOG.md", "utf8");
+const branchVersion = checkVersion(readFileSync("app/build.gradle.kts", "utf8"), changelog);
+const previousRelease = [...changelog.matchAll(/^## (\S+) \(versionCode (\d+)\)/gm)][1];
+const fixtureBaseline = previousRelease ? `${previousRelease[1]}:${previousRelease[2]}` : "none";
 
 function gradle(tasks, inputs = {}) {
   const args = [...tasks, "--console=plain", "--no-configuration-cache", "--no-build-cache"];
+  const env = { ...environment, PINGLIDE_PUBLISHED_RELEASE: fixtureBaseline, ...inputs };
   const result = process.platform === "win32"
     ? spawnSync("cmd.exe", ["/d", "/c", `.\\gradlew.bat ${args.join(" ")}`], {
-      env: { ...environment, ...inputs }, encoding: "utf8", maxBuffer: 8 * 1024 * 1024,
+      env, encoding: "utf8", maxBuffer: 8 * 1024 * 1024,
     })
     : spawnSync("bash", ["./gradlew", ...args], {
-      env: { ...environment, ...inputs }, encoding: "utf8", maxBuffer: 8 * 1024 * 1024,
+      env, encoding: "utf8", maxBuffer: 8 * 1024 * 1024,
     });
   assert.ifError(result.error);
   return { status: result.status, output: result.stdout + result.stderr };
@@ -49,12 +54,10 @@ test("Debug HTTP and Release HTTPS produce independent identities and configurat
     PINGLIDE_QQ_APP_ID: "456",
   });
   assert.equal(result.status, 0, result.output);
-  const version = checkVersion(readFileSync("app/build.gradle.kts", "utf8"),
-    readFileSync("CHANGELOG.md", "utf8"));
-  assert.match(buildConfig("debug"), new RegExp(`VERSION_CODE = ${version.versionCode};`));
-  assert.match(buildConfig("release"), new RegExp(`VERSION_CODE = ${version.versionCode};`));
-  assert.ok(buildConfig("debug").includes(`VERSION_NAME = "${version.versionName}-dev";`));
-  assert.ok(buildConfig("release").includes(`VERSION_NAME = "${version.versionName}";`));
+  assert.match(buildConfig("debug"), new RegExp(`VERSION_CODE = ${branchVersion.versionCode};`));
+  assert.match(buildConfig("release"), new RegExp(`VERSION_CODE = ${branchVersion.versionCode};`));
+  assert.ok(buildConfig("debug").includes(`VERSION_NAME = "${branchVersion.versionName}-dev";`));
+  assert.ok(buildConfig("release").includes(`VERSION_NAME = "${branchVersion.versionName}";`));
   assert.match(buildConfig("debug"), /APPLICATION_ID = "com\.buddylabs\.pinglide\.dev"/);
   assert.match(buildConfig("debug"), /SERVICE_URL = "http:\/\/localhost:8080"/);
   assert.match(buildConfig("debug"), /QQ_APP_ID = "123"/);
@@ -183,6 +186,19 @@ function apkSigner(variant) {
   ]);
 }
 
+function apkVersion(variant) {
+  const executable = join(environment.ANDROID_HOME, "build-tools", "36.0.0",
+    process.platform === "win32" ? "aapt.exe" : "aapt");
+  const result = spawnSync(executable, [
+    "dump", "badging", `app/build/outputs/apk/${variant}/app-${variant}.apk`,
+  ], { env: environment, encoding: "utf8" });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+  const details = /^package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'/m.exec(result.stdout);
+  assert.ok(details, result.stdout);
+  return { packageName: details[1], versionCode: Number(details[2]), versionName: details[3] };
+}
+
 function testSigning(directory, variant, prefix) {
   const store = join(directory, `${variant}.p12`);
   const secret = randomBytes(24).toString("hex");
@@ -210,20 +226,35 @@ test("APK and bundle packaging use the intended independent signing identities",
     const debug = testSigning(directory, "debug", "PINGLIDE_DEV_");
     const release = testSigning(directory, "release", "PINGLIDE_");
     assert.notEqual(debug.fingerprint, release.fingerprint);
-    const result = gradle([
-      ":app:assembleDebug", ":app:bundleDebug", ":app:assembleRelease", ":app:bundleRelease",
-      "-Ppinglide.devDistribution=true",
-    ], {
+    const inputs = {
       ...debug.inputs, ...release.inputs,
       PINGLIDE_DEV_SERVICE_URL: "http://localhost:8080",
       PINGLIDE_DEV_QQ_APP_ID: "123",
       PINGLIDE_SERVICE_URL: "https://production.example",
       PINGLIDE_QQ_APP_ID: "456",
+    };
+    const reused = gradle([":app:assembleRelease"], {
+      ...inputs, PINGLIDE_PUBLISHED_RELEASE: `${branchVersion.versionName}:${branchVersion.versionCode}`,
     });
+    assert.notEqual(reused.status, 0);
+    assert.match(reused.output, /higher stable version/);
+    const missing = gradle([":app:bundleRelease"], { ...inputs, PINGLIDE_PUBLISHED_RELEASE: "" });
+    assert.notEqual(missing.status, 0);
+    assert.match(missing.output, /PINGLIDE_PUBLISHED_RELEASE/);
+    const result = gradle([
+      ":app:assembleDebug", ":app:bundleDebug", ":app:assembleRelease", ":app:bundleRelease",
+      "-Ppinglide.devDistribution=true",
+    ], inputs);
     assert.equal(result.status, 0, result.output);
     for (const [variant, signing] of [["debug", debug], ["release", release]]) {
       const apk = apkSigner(variant);
       assert.match(apk, new RegExp(`certificate SHA-256 digest: ${signing.fingerprint}\\b`));
+      const suffix = variant === "debug" ? "-dev" : "";
+      assert.deepEqual(apkVersion(variant), {
+        packageName: `com.buddylabs.pinglide${variant === "debug" ? ".dev" : ""}`,
+        versionCode: branchVersion.versionCode,
+        versionName: `${branchVersion.versionName}${suffix}`,
+      });
       const bundle = `app/build/outputs/bundle/${variant}/app-${variant}.aab`;
       assert.match(javaTool("jarsigner", ["-J-Duser.language=en", "-verify", bundle]), /jar verified\./);
       const certs = javaTool("keytool", ["-printcert", "-rfc", "-jarfile", bundle]);
