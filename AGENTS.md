@@ -15,3 +15,7 @@ Read `docs/agents/triage-labels.md` before labeling issues or organizing E2E wor
 ### Domain docs
 
 Use a single-context layout. Read `docs/agents/domain.md` before codebase exploration.
+
+### Instrumentation tests
+
+Read `docs/instrumentation.md` before running or debugging Android Instrumentation tests.

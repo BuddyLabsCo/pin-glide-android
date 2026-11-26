@@ -207,7 +207,8 @@ class HomeDuplicateScanTest {
 
     @Test
     fun cameraRecognizesAnotherQrAfterRejection() {
-        assumeTrue(InstrumentationRegistry.getArguments().getString("cameraQrSequence") == "true")
+        val sequence = InstrumentationRegistry.getArguments().getString("cameraQrSequence")
+        assumeTrue("Requires the documented back-camera QR video sequence", sequence == "true")
         renderHome(
             usableHeight = 820.dp,
             language = AppLanguage.SimplifiedChinese,
