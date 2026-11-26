@@ -3,8 +3,6 @@ package com.buddylabs.pinglide.ui.components
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
-import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -13,8 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -29,9 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.dropShadow
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -42,14 +35,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -93,7 +82,7 @@ internal fun PairingTestAction(
                 val message = testMessageFeedbackText(delivery)
                 if (bottomOffset == null) {
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        PairingTestNoticePill(message, accessible = true, modifier = Modifier)
+                        FeedbackPill(message, accessible = true, modifier = Modifier)
                     }
                 } else {
                     PairingTestNotice(
@@ -246,7 +235,7 @@ private fun PairingTestNotice(
 ) {
     Layout(
         modifier = modifier,
-        content = { PairingTestNoticePill(message, accessible) }
+        content = { FeedbackPill(message, accessible) }
     ) { measurables, constraints ->
         val notice = measurables.single().measure(constraints.copy(minWidth = 0, minHeight = 0))
         layout(constraints.maxWidth, constraints.maxHeight) {
@@ -262,38 +251,6 @@ private fun PairingTestNotice(
             notice.placeRelative((constraints.maxWidth - notice.width) / 2, visibleTop)
         }
     }
-}
-
-@Composable
-private fun PairingTestNoticePill(
-    message: String,
-    accessible: Boolean,
-    modifier: Modifier = Modifier.padding(horizontal = 24.dp).widthIn(max = 280.dp)
-) {
-    val colors = MaterialTheme.colorScheme
-    val shadowColor = if (isSystemInDarkTheme()) Color(0x61000000) else Color(0x260A1210)
-    Text(
-        message,
-        modifier.dropShadow(
-            CircleShape,
-            Shadow(24.dp, shadowColor, offset = DpOffset(0.dp, 8.dp))
-        )
-            .background(colors.onSurface.copy(alpha = 0.88f), CircleShape)
-            .semantics {
-                if (accessible) {
-                    liveRegion = LiveRegionMode.Polite
-                } else {
-                    hideFromAccessibility()
-                }
-            }
-            .padding(horizontal = 18.dp, vertical = 12.dp),
-        color = colors.surface,
-        style = TextStyle(
-            fontSize = 12.sp,
-            fontWeight = FontWeight(650),
-            textAlign = TextAlign.Center
-        )
-    )
 }
 
 private val testMessageLabels = mapOf(

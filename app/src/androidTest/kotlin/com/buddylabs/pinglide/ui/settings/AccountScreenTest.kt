@@ -124,8 +124,12 @@ class AccountScreenTest {
             },
             5_000L
         )
-        compose.onNodeWithText("QQ 账号").assertIsDisplayed()
         compose.onNodeWithText("正在获取账号资料…").assertDoesNotExist()
+        val notice = compose.onNodeWithText("网络错误，请稍后重试").assertIsDisplayed()
+        captureSettledUiEvidence("settings-account-error.png", notice)
+        assertApprovedLayout("QQ 账号")
+        compose.mainClock.advanceTimeBy(4_000)
+        notice.assertDoesNotExist()
     }
 
     @Test
@@ -240,7 +244,7 @@ class AccountScreenTest {
         compose.waitUntil(5_000) { compose.onNodeWithText(nickname).isDisplayed() }
     }
 
-    private fun assertApprovedLayout() {
+    private fun assertApprovedLayout(name: String = "示例昵称") {
         val title = compose.onNodeWithText("设置").assertIsDisplayed().getUnclippedBoundsInRoot()
         val back = compose.onNodeWithContentDescription("返回").getUnclippedBoundsInRoot()
         val profile = compose.onNodeWithTag("settings-account-profile").assertIsDisplayed()
@@ -252,12 +256,11 @@ class AccountScreenTest {
         assertDp("Profile card height", cardBounds.bottom - cardBounds.top, 76.dp)
         assertDp("Logout card height", logoutBounds.bottom - logoutBounds.top, 60.dp)
         assertDp("Card gap", logoutBounds.top - cardBounds.bottom, 14.dp)
-        assertEquals(cardBounds.left, logoutBounds.left)
-        assertEquals(cardBounds.right, logoutBounds.right)
-        val nicknameStyle = textLayout("示例昵称").layoutInput.style
+        assertEquals(cardBounds.left to cardBounds.right, logoutBounds.left to logoutBounds.right)
+        val nicknameStyle = textLayout(name).layoutInput.style
         assertEquals(13.sp, nicknameStyle.fontSize)
         assertEquals(FontWeight.Bold, nicknameStyle.fontWeight)
-        assertEquals(11.sp, textLayout("QQ 账号").layoutInput.style.fontSize)
+        if (name != "QQ 账号") assertEquals(11.sp, textLayout("QQ 账号").layoutInput.style.fontSize)
         assertEquals(13.sp, textLayout("退出登录").layoutInput.style.fontSize)
         assertArtwork(
             profile.captureToImage().asAndroidBitmap(),

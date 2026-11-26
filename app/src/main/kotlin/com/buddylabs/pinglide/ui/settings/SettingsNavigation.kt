@@ -155,28 +155,30 @@ private fun SettingsDestinationContent(
         SenderRevocationScreen(checkNotNull(operation), revocation)
         return
     }
-    if (destination == SettingsDestination.Root) {
-        SettingsScreen(language, installedVersion, onBatterySettings, onNavigate, onBack)
-        return
-    }
-    if (destination == SettingsDestination.Privacy) {
-        PrivacyScreen(onDismiss = onBack)
-        return
-    }
-    val title = when (destination) {
-        SettingsDestination.Language, SettingsDestination.Account -> R.string.settings_title
-        SettingsDestination.DeviceAccess -> R.string.settings_device_access
-    }
-    SettingsPage(
-        stringResource(title),
-        onBack,
-        rootLayout = true,
-        contentTopPadding = if (destination == SettingsDestination.DeviceAccess) 14.dp else 10.dp
-    ) {
-        when (destination) {
-            SettingsDestination.Language -> LanguageScreen(language, onLanguage)
-            SettingsDestination.Account -> AccountScreen(account, onLogout)
-            SettingsDestination.DeviceAccess -> SenderInventoryScreen(senders, revocation)
+    when (destination) {
+        SettingsDestination.Root ->
+            SettingsScreen(language, installedVersion, onBatterySettings, onNavigate, onBack)
+
+        SettingsDestination.Privacy -> PrivacyScreen(onDismiss = onBack)
+
+        SettingsDestination.Account -> AccountScreen(account, onBack, onLogout)
+
+        SettingsDestination.Language -> SettingsPage(
+            stringResource(R.string.settings_title),
+            onBack,
+            rootLayout = true,
+            contentTopPadding = 10.dp
+        ) {
+            LanguageScreen(language, onLanguage)
+        }
+
+        SettingsDestination.DeviceAccess -> SettingsPage(
+            stringResource(R.string.settings_device_access),
+            onBack,
+            rootLayout = true,
+            contentTopPadding = 14.dp
+        ) {
+            SenderInventoryScreen(senders, revocation)
         }
     }
 }

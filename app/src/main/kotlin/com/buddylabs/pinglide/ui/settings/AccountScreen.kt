@@ -3,9 +3,11 @@ package com.buddylabs.pinglide.ui.settings
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.colorResource
@@ -45,21 +48,49 @@ import com.buddylabs.pinglide.domain.identity.AccountState
 import com.buddylabs.pinglide.ui.components.ConfirmationDialog
 import com.buddylabs.pinglide.ui.components.ConfirmationDialogEmblem
 import com.buddylabs.pinglide.ui.components.ConfirmationDialogHeading
+import com.buddylabs.pinglide.ui.components.FeedbackPill
+import kotlinx.coroutines.delay
 
 @Composable
-internal fun AccountScreen(account: AccountSession, onLogout: () -> Unit) {
+internal fun AccountScreen(account: AccountSession, onBack: () -> Unit, onLogout: () -> Unit) {
     val state by account.state.collectAsState()
     LaunchedEffect(account) { account.open() }
     val context = LocalContext.current
-    DisposableEffect(state.failed, context) {
+    val accessibility = LocalAccessibilityManager.current
+    val errorMessage = stringResource(R.string.account_error)
+    var noticeVisible by remember(state.failed) { mutableStateOf(state.failed) }
+    LaunchedEffect(state.failed) {
+        if (state.failed) {
+            delay(
+                accessibility?.calculateRecommendedTimeoutMillis(4_000L, containsText = true)
+                    ?: 4_000L
+            )
+            noticeVisible = false
+        }
+    }
+    DisposableEffect(state.failed, context, errorMessage) {
         val toast = if (state.failed) {
-            Toast.makeText(context, R.string.account_error, Toast.LENGTH_LONG).also { it.show() }
+            Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).also { it.show() }
         } else {
             null
         }
         onDispose { toast?.cancel() }
     }
-    AccountScreenContent(state, onLogout)
+    Box(Modifier.fillMaxSize()) {
+        SettingsPage(
+            stringResource(R.string.settings_title),
+            onBack,
+            rootLayout = true,
+            contentTopPadding = 10.dp
+        ) {
+            AccountScreenContent(state, onLogout)
+        }
+        if (noticeVisible) {
+            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 164.dp)) {
+                FeedbackPill(errorMessage, accessible = false)
+            }
+        }
+    }
 }
 
 @Composable
