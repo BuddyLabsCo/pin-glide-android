@@ -57,3 +57,30 @@ acceptance was exercised. The status icon is static, so no recording is
 needed. Issue evidence links to the locally committed comparisons and will
 resolve when the authorized publisher pushes the commit; no attachment
 upload operation is available through the GitHub connector.
+
+## Review follow-up
+
+The refresh regression now checks the rendered disabled background and label
+colors of both Sender actions. A separate failed-refresh regression verifies
+that the retained groups and disabled palette survive a failed read, that
+Retry keeps actions disabled while pending, and that a successful response
+restores the actions. The identical danger-button palette is shared with
+the Home removal confirmation; each caller retains its existing opacity,
+enabled state and layout.
+
+All 15 Sender inventory, Home removal and Sender revocation confirmation
+tests passed in each theme on API 37 (30 executions). Debug, release and
+instrumentation Kotlin compilation, both debug APK assemblies, `qualityCheck`
+and all 46 JVM tests passed. The full device suite was not repeated for
+this focused review fix.
+Ripwire found no incompatible callers; its quality delta flags recent-line
+churn in the Sender row and test class, minor test-class growth, and the
+reflectively invoked new JUnit test. No suppression or unrelated refactor
+was added.
+
+The screenshot publication finding remains assigned to the authorized
+publishing workflow. GitHub's contents API returned HTTP 404 for both
+comparison paths at the unpushed implementation commit. The browser was
+signed out and the connector has no attachment-upload operation. Publish
+the implementation and review-fix commits and verify both issue-comment
+links before treating the screenshot criterion as satisfied.

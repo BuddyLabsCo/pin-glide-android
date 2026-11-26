@@ -51,6 +51,7 @@ import com.buddylabs.pinglide.ui.components.ConfirmationDialogEmblem
 import com.buddylabs.pinglide.ui.components.ConfirmationDialogHeading
 import com.buddylabs.pinglide.ui.components.InfoCard
 import com.buddylabs.pinglide.ui.components.WarningInfoCard
+import com.buddylabs.pinglide.ui.components.dangerButtonColors
 import kotlinx.coroutines.launch
 
 @Composable
@@ -204,12 +205,7 @@ private fun SenderRow(
                 contentDescription = actionDescription
             },
             contentPadding = PaddingValues(horizontal = 22.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = colorResource(R.color.error_emblem_container),
-                contentColor = colorResource(R.color.on_error_emblem_container),
-                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            colors = dangerButtonColors()
         ) {
             Text(
                 stringResource(R.string.senders_revoke),
