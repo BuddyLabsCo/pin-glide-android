@@ -11,6 +11,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
@@ -18,6 +19,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -107,6 +109,85 @@ class SenderInventoryScreenTest {
         retry.assertDoesNotExist()
         compose.onNodeWithText("暂无其他发送端设备").assertIsDisplayed()
     }
+
+    @Test
+    fun refreshFailureRetainsSendersButDisablesRevocationUntilRetrySucceeds() {
+        val refreshResponse = CompletableDeferred<List<AccountSender>>()
+        var attempts = 0
+        val inventory = openInventory(AppLanguage.SimplifiedChinese, list = {
+            when (attempts++) {
+                0 -> response.await()
+                1 -> refreshResponse.await()
+                else -> listOf(AccountSender("sender", "小米 15"), AccountSender("other", "Pixel 10"))
+            }
+        })
+        val current = compose.onNodeWithContentDescription("撤销小米 15").assertIsEnabled()
+        val other = compose.onNodeWithContentDescription("撤销Pixel 9").assertIsEnabled()
+        compose.runOnIdle { inventory.refresh() }
+        compose.onNodeWithTag("sender-inventory-loading").assertIsDisplayed()
+        check(refreshResponse.completeExceptionally(IllegalStateException("Network unavailable")))
+        val message = "网络错误，无法获取设备列表，请稍后重试。"
+        compose.waitUntil(5_000) { compose.onNodeWithText(message).isDisplayed() }
+        val warning = compose.onNodeWithTag("sender-inventory-error").assertIsDisplayed()
+        val retry = compose.onNodeWithText("重试").assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithText("小米 15").assertIsDisplayed()
+        compose.onNodeWithText("Pixel 9").assertIsDisplayed()
+        current.assertIsNotEnabled()
+        other.assertIsNotEnabled()
+        retry.performClick()
+        compose.waitUntil(5_000) { compose.onNodeWithText("Pixel 10").isDisplayed() }
+        warning.assertDoesNotExist()
+        retry.assertDoesNotExist()
+        other.assertDoesNotExist()
+        current.assertIsEnabled()
+        compose.onNodeWithContentDescription("撤销Pixel 10").assertIsEnabled()
+    }
+
+    @Test
+    fun englishInitialFailureAtDoubleFontScaleKeepsWarningAndRetryReachable() =
+        compose.withSystemFontScale(2f) {
+            val initialResponse = CompletableDeferred<List<AccountSender>>()
+            var attempts = 0
+            openInventory(AppLanguage.English, load = false, list = {
+                if (attempts++ == 0) initialResponse.await() else response.await()
+            })
+            compose.onNodeWithTag("sender-inventory-loading").performScrollTo().assertIsDisplayed()
+            check(
+                initialResponse.completeExceptionally(IllegalStateException("Network unavailable"))
+            )
+            val message = "Could not get the device list. Check your connection and try again."
+            compose.waitUntil(5_000) {
+                compose.onAllNodesWithText(message).fetchSemanticsNodes().isNotEmpty()
+            }
+            val warning = compose.onNodeWithTag("sender-inventory-error").performScrollTo()
+                .assertIsDisplayed().assert(
+                    SemanticsMatcher.expectValue(
+                        SemanticsProperties.LiveRegion,
+                        LiveRegionMode.Polite
+                    )
+                )
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(message, useUnmergedTree = true).assertIsDisplayed()
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            assertTrue(!layouts.single().hasVisualOverflow)
+            val retry = compose.onNodeWithText("Retry").performScrollTo()
+                .assertIsDisplayed().assertIsEnabled()
+            val warningBounds = warning.getUnclippedBoundsInRoot()
+            val retryBounds = retry.getUnclippedBoundsInRoot()
+            assertEquals(warningBounds.left, retryBounds.left)
+            assertEquals(warningBounds.right, retryBounds.right)
+            assertTrue(retryBounds.bottom - retryBounds.top >= 48.dp)
+            compose.onNodeWithText("This device").assertDoesNotExist()
+            retry.performClick()
+            respond(listOf(AccountSender("sender", "小米 15")))
+            compose.waitUntil(5_000) {
+                compose.onAllNodesWithText("小米 15").fetchSemanticsNodes().isNotEmpty()
+            }
+            warning.assertDoesNotExist()
+            retry.assertDoesNotExist()
+            compose.onNodeWithContentDescription("Revoke 小米 15")
+                .performScrollTo().assertIsDisplayed().assertIsEnabled()
+        }
 
     @Test
     fun initialLoadingShowsApprovedStatusCardWithoutSenderRowsUntilResponse() {
@@ -254,7 +335,7 @@ class SenderInventoryScreenTest {
         ),
         load: Boolean = true,
         list: suspend () -> List<AccountSender> = { response.await() }
-    ) {
+    ): AccountSenders {
         if (load) respond(senders)
         val app = compose.activity.application as PinGlideApplication
         val store = HomePairingStore(emptyList(), Instant.now().plusSeconds(3600).toString())
@@ -287,5 +368,6 @@ class SenderInventoryScreenTest {
         val label = if (language == AppLanguage.English) "Device access management" else "设备访问管理"
         compose.onNodeWithText(label).performScrollTo().performClick()
         if (load) compose.waitUntil(5_000) { compose.onNodeWithText("小米 15").isDisplayed() }
+        return inventory
     }
 }

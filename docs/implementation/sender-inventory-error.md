@@ -58,3 +58,22 @@ this static visual change.
 The tracker comment links to the committed comparison images because the
 available GitHub tools do not support uploading issue image attachments.
 The links resolve once the authorized publisher pushes the local commit.
+
+## Review follow-up
+
+- A retained-inventory refresh failure keeps both Sender rows displayed
+  while disabling both revocation actions. Retry removes the failure
+  notice, replaces the stale row with the newly returned Sender name and
+  restores the available revocation actions.
+- At 200% system font scale, the English failure copy has no text overflow,
+  the warning retains its polite live region, and the full-width Retry
+  remains reachable with a minimum 48 dp touch target. Successful Retry
+  removes the failure and restores the current Sender's revocation action.
+- All eight inventory screen tests passed in both light and dark themes
+  on API 37. Instrumentation Kotlin compilation and `qualityCheck` passed;
+  the host unit-test task was up-to-date. The full device suite was not
+  repeated for this test-only follow-up.
+
+No production code changed. Ripwire reports the growth of the existing
+inventory test class and cannot resolve its reflective JUnit entry points;
+the executed scenarios provide the coverage evidence.
