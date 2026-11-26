@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
@@ -29,14 +30,19 @@ import com.buddylabs.pinglide.domain.identity.IdentitySnapshot
 import com.buddylabs.pinglide.domain.identity.IdentityStore
 import com.buddylabs.pinglide.domain.identity.LoginAttempt
 import com.buddylabs.pinglide.domain.identity.ManagementCredential
+import com.buddylabs.pinglide.domain.identity.QqAuthorization
+import com.buddylabs.pinglide.domain.identity.QqAuthorizationException
 import com.buddylabs.pinglide.domain.identity.RefreshCredential
+import com.buddylabs.pinglide.domain.identity.RevocationReply
 import com.buddylabs.pinglide.domain.identity.SenderIdentity
 import com.buddylabs.pinglide.domain.identity.SenderRevocation
+import com.buddylabs.pinglide.domain.identity.SenderRevocationService
 import com.buddylabs.pinglide.domain.identity.UploadCredential
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import com.buddylabs.pinglide.ui.components.captureSettledUiEvidence
 import com.buddylabs.pinglide.ui.components.withSystemFontScale
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -92,11 +98,27 @@ class SenderRevocationConfirmationTest {
         revoke.assertIsDisplayed().performClick()
         confirm.performClick()
         dialog.assertDoesNotExist()
-        compose.onNodeWithText("验证后撤销设备").assertIsDisplayed()
-        compose.onNodeWithText("使用 QQ 验证并撤销").assertIsDisplayed()
+        val eyebrow = compose.onNodeWithText("需要所有者证明").assertIsDisplayed()
+        val heading = compose.onNodeWithText("验证后撤销设备").assertIsDisplayed()
+        val verify = compose.onNodeWithText("使用 QQ 验证并撤销").assertIsDisplayed()
+        val proofCancel = compose.onNodeWithText("取消").assertIsDisplayed()
         compose.onNodeWithText(
-            "你已确认撤销“Pixel 9”。请验证当前登录的 QQ 账号，验证通过后将立即提交撤销。"
+            "你已确认撤销「Pixel 9」。请验证当前登录的 QQ 账号，验证通过后将立即提交撤销。"
         ).assertIsDisplayed()
+        val headingBounds = heading.getUnclippedBoundsInRoot()
+        val verifyBounds = verify.getUnclippedBoundsInRoot()
+        val cancelActionBounds = proofCancel.getUnclippedBoundsInRoot()
+        assertTrue(eyebrow.getUnclippedBoundsInRoot().bottom <= headingBounds.top)
+        val headingCenter = (headingBounds.left + headingBounds.right) / 2
+        val verifyCenter = (verifyBounds.left + verifyBounds.right) / 2
+        assertTrue(kotlin.math.abs((headingCenter - verifyCenter).value) < 2f)
+        assertTrue(verifyBounds.top - headingBounds.bottom > 120.dp)
+        assertTrue(verifyBounds.bottom - verifyBounds.top >= 48.dp)
+        assertTrue(cancelActionBounds.bottom - cancelActionBounds.top >= 48.dp)
+        assertTrue(cancelActionBounds.top >= verifyBounds.bottom)
+        captureSettledUiEvidence("sender-owner-proof.png", heading)
+        proofCancel.performClick()
+        compose.onNodeWithText("Pixel 9").assertIsDisplayed()
     }
 
     @Test
@@ -124,10 +146,62 @@ class SenderRevocationConfirmationTest {
             compose.onNodeWithText(
                 "Verify to revoke the device"
             ).performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText(
+                "Verify with QQ and revoke"
+            ).performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Cancel").performScrollTo().assertIsDisplayed().performClick()
+            compose.onNodeWithText("Pixel 9").performScrollTo().assertIsDisplayed()
         }
     }
 
-    private fun renderInventory(language: AppLanguage) {
+    @Test
+    fun verificationRequestsFreshProofForOnlyTheSelectedSender() {
+        val proof = CompletableDeferred<String>()
+        var attempts = 0
+        val submissions = mutableListOf<Pair<String, String>>()
+        renderInventory(
+            AppLanguage.SimplifiedChinese,
+            authorization = {
+                attempts++
+                if (attempts == 1) throw QqAuthorizationException(cancelled = true)
+                proof.await()
+            },
+            service = { _, senderId, code ->
+                submissions.add(senderId to code)
+                RevocationReply.WrongAccount
+            }
+        )
+        compose.onNodeWithContentDescription("撤销Pixel 9").performScrollTo().performClick()
+        compose.onNodeWithText("确认，验证 QQ").performClick()
+        compose.runOnIdle { assertEquals(0, attempts) }
+        val verify = compose.onNodeWithText("使用 QQ 验证并撤销")
+        verify.performClick()
+        compose.onNodeWithText(
+            "已取消 QQ 验证。尚未提交撤销，请重新验证或返回设备访问管理。"
+        ).assertIsDisplayed()
+        compose.runOnIdle { assertTrue(submissions.isEmpty()) }
+        verify.performClick()
+        compose.onNodeWithText("正在验证 QQ 账号…").assertIsNotEnabled()
+        compose.runOnIdle {
+            assertEquals(2, attempts)
+            assertTrue(submissions.isEmpty())
+            proof.complete("fresh-proof")
+        }
+        compose.onNodeWithText(
+            "请使用当前登录的 QQ 账号验证。所选设备未被撤销，当前账号未改变。"
+        ).assertIsDisplayed()
+        compose.runOnIdle { assertEquals(listOf("pixel" to "fresh-proof"), submissions) }
+        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithText("Pixel 9").assertIsDisplayed()
+    }
+
+    private fun renderInventory(
+        language: AppLanguage,
+        authorization: QqAuthorization = { error("Confirmation must not open QQ") },
+        service: SenderRevocationService = { _, _, _ ->
+            error("Confirmation must not submit revocation")
+        }
+    ) {
         val expiry = "2099-01-01T00:00:00Z"
         val identity = SenderIdentity(
             "example-account",
@@ -168,8 +242,8 @@ class SenderRevocationConfirmationTest {
             store,
             inventory,
             renewal,
-            { error("Confirmation must not open QQ") },
-            { _, _, _ -> error("Confirmation must not submit revocation") },
+            authorization,
+            service,
             scope
         )
         val app = compose.activity.application as PinGlideApplication
