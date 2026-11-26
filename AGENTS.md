@@ -16,6 +16,6 @@ Read `docs/agents/triage-labels.md` before labeling issues or organizing E2E wor
 
 Use a single-context layout. Read `docs/agents/domain.md` before codebase exploration.
 
-### Repository documentation
+### Instrumentation tests
 
-Commit only reusable documentation; keep task-specific notes and evidence in PRs or issues.
+Read `docs/instrumentation.md` before running or debugging Android Instrumentation tests.
