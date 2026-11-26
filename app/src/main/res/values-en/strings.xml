@@ -227,7 +227,7 @@
     <string name="senders_proof_description">You confirmed revoking “%1$s”. Verify the QQ Account currently signed in. Successful verification immediately submits the revocation.</string>
     <string name="senders_verify_revoke">Verify with QQ and revoke</string>
     <string name="senders_verifying">Verifying QQ Account…</string>
-    <string name="senders_proof_cancelled">QQ verification was cancelled. Revocation has not been submitted. Verify again or return to device access management.</string>
+    <string name="senders_proof_cancelled">QQ verification was cancelled. Revocation was not submitted.</string>
     <string name="senders_proof_failed">QQ verification did not complete. The selected device was not revoked. Please try again.</string>
     <string name="senders_proof_wrong_account">Verify with the QQ Account currently signed in. The selected device was not revoked and your Account has not changed.</string>
     <string name="senders_submitting">Submitting revocation</string>
