@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -82,11 +83,7 @@ class SenderInventoryScreenTest {
                 SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
             )
         val retry = compose.onNodeWithText("重试").assertIsDisplayed().assertIsEnabled()
-        val warningBounds = warning.getUnclippedBoundsInRoot()
-        val retryBounds = retry.getUnclippedBoundsInRoot()
-        assertEquals(warningBounds.left, retryBounds.left)
-        assertEquals(warningBounds.right, retryBounds.right)
-        assertTrue(retryBounds.bottom - retryBounds.top >= 48.dp)
+        assertFullWidthRetry(warning, retry)
         val warningImage = warning.captureToImage().asAndroidBitmap()
         val retryImage = retry.captureToImage().asAndroidBitmap()
         assertEquals(
@@ -172,11 +169,7 @@ class SenderInventoryScreenTest {
             assertTrue(!layouts.single().hasVisualOverflow)
             val retry = compose.onNodeWithText("Retry").performScrollTo()
                 .assertIsDisplayed().assertIsEnabled()
-            val warningBounds = warning.getUnclippedBoundsInRoot()
-            val retryBounds = retry.getUnclippedBoundsInRoot()
-            assertEquals(warningBounds.left, retryBounds.left)
-            assertEquals(warningBounds.right, retryBounds.right)
-            assertTrue(retryBounds.bottom - retryBounds.top >= 48.dp)
+            assertFullWidthRetry(warning, retry)
             compose.onNodeWithText("This device").assertDoesNotExist()
             retry.performClick()
             respond(listOf(AccountSender("sender", "小米 15")))
@@ -322,6 +315,17 @@ class SenderInventoryScreenTest {
             compose.onNodeWithContentDescription("Back").assertIsDisplayed().performClick()
             compose.onNodeWithText("Settings").assertIsDisplayed()
         }
+
+    private fun assertFullWidthRetry(
+        warning: SemanticsNodeInteraction,
+        retry: SemanticsNodeInteraction
+    ) {
+        val warningBounds = warning.getUnclippedBoundsInRoot()
+        val retryBounds = retry.getUnclippedBoundsInRoot()
+        assertEquals(warningBounds.left, retryBounds.left)
+        assertEquals(warningBounds.right, retryBounds.right)
+        assertTrue(retryBounds.bottom - retryBounds.top >= 48.dp)
+    }
 
     private fun respond(senders: List<AccountSender>) {
         check(response.complete(senders))
