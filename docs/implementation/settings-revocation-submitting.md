@@ -54,6 +54,6 @@ instrumentation Kotlin compilation, both debug APK assemblies,
 `qualityCheck`, and all 46 JVM tests passed. The comparison images were
 recaptured; the full device suite was not repeated for this focused fix.
 
-Issue attachment publication remains pending: the browser is signed out,
-the available GitHub tools cannot upload issue attachments, and pushing is
-outside this assignment's authorization.
+Issue attachment publication is complete: GitHub CLI 2.106.0 uploaded both
+comparisons directly in [the evidence comment](https://github.com/BuddyLabsCo/pin-glide-android/issues/135#issuecomment-7186961307).
+The attachments do not depend on publishing the local commits.
