@@ -270,10 +270,10 @@ class SenderInventoryScreenTest {
         val current = compose.onNodeWithContentDescription("撤销小米 15")
         val other = compose.onNodeWithContentDescription("撤销Pixel 9")
         val currentGroup = compose.onNodeWithTag("settings-group:本设备").assertIsDisplayed()
-        assertTrue(
-            currentGroup.getUnclippedBoundsInRoot().top > retry.getUnclippedBoundsInRoot().bottom
-        )
-        compose.onNodeWithTag("settings-group:其他发送端设备").assertIsDisplayed()
+        val currentBounds = currentGroup.getUnclippedBoundsInRoot()
+        assertTrue(currentBounds.top > retry.getUnclippedBoundsInRoot().bottom)
+        val otherGroup = compose.onNodeWithTag("settings-group:其他发送端设备").assertIsDisplayed()
+        assertTrue(otherGroup.getUnclippedBoundsInRoot().top > currentBounds.bottom)
         assertDisabledRevokePalette(current)
         assertDisabledRevokePalette(other)
         captureSettledUiEvidence(
