@@ -2,6 +2,18 @@
 
 CI: Actions → **Android Instrumentation** → **Run workflow** (select ref).
 
+The same workflow runs independently as part of **Android quality** on main
+and UI-facing PRs. PR selection includes `ui/`, `domain/identity/`,
+`domain/pairing/`, `domain/settings/`, and
+`domain/forwarding/PairingTestMessage.kt` under the main Kotlin package,
+`app/src/main/res/`, and `app/src/androidTest/`. Other PRs still compile
+the Instrumentation APK unless the change is documentation-only.
+Formatting and file-size checks run on every PR. Uncertain comparisons
+select the full baseline.
+
+Quality jobs restore Gradle and npm download caches; only main pushes
+write caches, with the Android job owning the shared npm cache.
+
 ## Local execution
 
 Install the SDK and toolchain pinned in [the workflow](../.github/workflows/instrumentation.yml), authenticate `gh`, and use a dedicated accelerated Google APIs (non-Play-Store) emulator.

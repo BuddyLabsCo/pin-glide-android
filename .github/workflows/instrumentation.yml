@@ -2,6 +2,12 @@ name: Android Instrumentation
 
 on:
   workflow_dispatch:
+  workflow_call:
+    secrets:
+      APP_ID:
+        required: true
+      APP_PRIVATE_KEY:
+        required: true
 
 permissions:
   contents: read
@@ -14,6 +20,8 @@ jobs:
       ANDROID_SERIAL: emulator-5554
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -21,6 +29,14 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "24.18.0"
+          package-manager-cache: false
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: ${{ github.event_name != 'push' }}
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
       - uses: android-actions/setup-android@v4.0.4
         with:
           cmdline-tools-version: "15859902"
@@ -59,7 +75,7 @@ jobs:
         run: bash ./gradlew downloadServiceContracts --console=plain
       - name: Assemble the debug and test APKs
         run: |
-          bash ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --console=plain
+          bash ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --build-cache --console=plain
           bash ./gradlew --stop
       - name: Enable hardware acceleration
         run: |
