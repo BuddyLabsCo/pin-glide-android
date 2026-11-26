@@ -194,47 +194,7 @@ internal fun SettingsPage(
     content: @Composable ColumnScope.() -> Unit
 ) {
     ScreenLayout {
-        val headerModifier = if (rootLayout) {
-            Modifier.padding(top = 16.dp).heightIn(min = 64.dp)
-        } else {
-            Modifier.padding(vertical = 8.dp)
-        }
-        Row(
-            Modifier.fillMaxWidth().then(headerModifier).semantics { paneTitle = title },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(if (rootLayout) 12.dp else 0.dp)
-        ) {
-            IconButton(
-                onClick = onBack,
-                modifier = if (rootLayout) backModifier.size(48.dp) else backModifier,
-                enabled = backEnabled
-            ) {
-                Icon(
-                    painterResource(
-                        if (rootLayout) R.drawable.ic_back_chevron else R.drawable.ic_back
-                    ),
-                    stringResource(R.string.setup_back),
-                    tint = if (rootLayout) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        LocalContentColor.current
-                    }
-                )
-            }
-            Text(
-                title,
-                style = if (rootLayout) {
-                    LocalTextStyle.current.copy(
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.7).sp
-                    )
-                } else {
-                    MaterialTheme.typography.titleLarge
-                },
-                modifier = Modifier.semantics { heading() }
-            )
-        }
+        SettingsPageHeader(title, onBack, backModifier, backEnabled, rootLayout)
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(
                 top = contentTopPadding,
@@ -242,6 +202,57 @@ internal fun SettingsPage(
             ),
             verticalArrangement = Arrangement.spacedBy(if (rootLayout) 20.dp else 16.dp),
             content = content
+        )
+    }
+}
+
+@Composable
+internal fun SettingsPageHeader(
+    title: String,
+    onBack: () -> Unit,
+    backModifier: Modifier = Modifier,
+    backEnabled: Boolean = true,
+    rootLayout: Boolean = false
+) {
+    val headerModifier = if (rootLayout) {
+        Modifier.padding(top = 16.dp).heightIn(min = 64.dp)
+    } else {
+        Modifier.padding(vertical = 8.dp)
+    }
+    Row(
+        Modifier.fillMaxWidth().then(headerModifier).semantics { paneTitle = title },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (rootLayout) 12.dp else 0.dp)
+    ) {
+        IconButton(
+            onClick = onBack,
+            modifier = if (rootLayout) backModifier.size(48.dp) else backModifier,
+            enabled = backEnabled
+        ) {
+            Icon(
+                painterResource(
+                    if (rootLayout) R.drawable.ic_back_chevron else R.drawable.ic_back
+                ),
+                stringResource(R.string.setup_back),
+                tint = if (rootLayout) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    LocalContentColor.current
+                }
+            )
+        }
+        Text(
+            title,
+            style = if (rootLayout) {
+                LocalTextStyle.current.copy(
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.7).sp
+                )
+            } else {
+                MaterialTheme.typography.titleLarge
+            },
+            modifier = Modifier.semantics { heading() }
         )
     }
 }

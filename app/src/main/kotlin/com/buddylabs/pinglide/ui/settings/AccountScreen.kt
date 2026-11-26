@@ -1,13 +1,11 @@
 package com.buddylabs.pinglide.ui.settings
 
-import android.widget.Toast
+import android.os.SystemClock
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,19 +15,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalAccessibilityManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
@@ -48,49 +46,41 @@ import com.buddylabs.pinglide.domain.identity.AccountState
 import com.buddylabs.pinglide.ui.components.ConfirmationDialog
 import com.buddylabs.pinglide.ui.components.ConfirmationDialogEmblem
 import com.buddylabs.pinglide.ui.components.ConfirmationDialogHeading
-import com.buddylabs.pinglide.ui.components.FeedbackPill
 import kotlinx.coroutines.delay
 
 @Composable
 internal fun AccountScreen(account: AccountSession, onBack: () -> Unit, onLogout: () -> Unit) {
     val state by account.state.collectAsState()
     LaunchedEffect(account) { account.open() }
-    val context = LocalContext.current
+    val notice = if (rememberFailureNotice(
+            state.failed
+        )
+    ) {
+        stringResource(R.string.account_error)
+    } else {
+        null
+    }
+    AccountPage(notice, onBack) {
+        AccountScreenContent(state, onLogout)
+    }
+}
+
+@Composable
+private fun rememberFailureNotice(failed: Boolean): Boolean {
     val accessibility = LocalAccessibilityManager.current
-    val errorMessage = stringResource(R.string.account_error)
-    var noticeVisible by remember(state.failed) { mutableStateOf(state.failed) }
-    LaunchedEffect(state.failed) {
-        if (state.failed) {
-            delay(
-                accessibility?.calculateRecommendedTimeoutMillis(4_000L, containsText = true)
-                    ?: 4_000L
-            )
-            noticeVisible = false
+    var deadline by rememberSaveable(failed) {
+        val now = SystemClock.elapsedRealtime()
+        val timeout = accessibility?.calculateRecommendedTimeoutMillis(4_000L, containsText = true)
+            ?: 4_000L
+        mutableLongStateOf(if (failed) now + timeout.coerceAtMost(Long.MAX_VALUE - now) else 0L)
+    }
+    LaunchedEffect(failed, deadline) {
+        if (failed && deadline != 0L) {
+            delay((deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
+            deadline = 0L
         }
     }
-    DisposableEffect(state.failed, context, errorMessage) {
-        val toast = if (state.failed) {
-            Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).also { it.show() }
-        } else {
-            null
-        }
-        onDispose { toast?.cancel() }
-    }
-    Box(Modifier.fillMaxSize()) {
-        SettingsPage(
-            stringResource(R.string.settings_title),
-            onBack,
-            rootLayout = true,
-            contentTopPadding = 10.dp
-        ) {
-            AccountScreenContent(state, onLogout)
-        }
-        if (noticeVisible) {
-            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 164.dp)) {
-                FeedbackPill(errorMessage, accessible = false)
-            }
-        }
-    }
+    return failed && deadline > SystemClock.elapsedRealtime()
 }
 
 @Composable
