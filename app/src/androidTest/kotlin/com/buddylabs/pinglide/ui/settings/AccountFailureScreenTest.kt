@@ -36,6 +36,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.captureSettledUiEvidence
+import com.buddylabs.pinglide.ui.components.withCompactViewport
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.abs
 import org.junit.After
@@ -90,7 +91,7 @@ class AccountFailureScreenTest {
 
     @Test
     fun compactEnglishFailureAtDoubleFontScaleKeepsNoticeAndActionsReachable() =
-        compose.withAccountViewport(366, 260) {
+        compose.withCompactViewport(366, 260) {
             fixture.openAccount(AppLanguage.English)
             fixture.fail(englishError)
             val notice = compose.onNodeWithText(englishError).assertIsDisplayed()
@@ -127,7 +128,7 @@ class AccountFailureScreenTest {
 
     @Test
     fun veryShortWindowKeepsFailureVisibleAndBackReachable() =
-        compose.withAccountViewport(366, 164) {
+        compose.withCompactViewport(366, 164) {
             fixture.openAccount(AppLanguage.English)
             fixture.fail(englishError)
             val notice = compose.onNodeWithText(englishError).assertIsDisplayed()
@@ -153,7 +154,7 @@ class AccountFailureScreenTest {
 
     @Test
     fun failureArrivingAfterScrollingToLogoutBringsNoticeIntoView() =
-        compose.withAccountViewport(366, 164) {
+        compose.withCompactViewport(366, 164) {
             fixture.openAccount(AppLanguage.English)
             compose.onNodeWithText("Log out").performScrollTo().assertIsDisplayed()
             assertTrue(

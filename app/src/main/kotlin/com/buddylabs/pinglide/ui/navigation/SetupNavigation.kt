@@ -9,12 +9,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.buddylabs.pinglide.domain.identity.LoginState
 import com.buddylabs.pinglide.domain.identity.LogoutState
 import com.buddylabs.pinglide.domain.settings.SetupProgress
 import com.buddylabs.pinglide.domain.settings.SetupState
+import com.buddylabs.pinglide.ui.components.FullScreenDialog
 import com.buddylabs.pinglide.ui.components.PrivacyScreen
 import com.buddylabs.pinglide.ui.onboarding.BatterySetupScreen
 import com.buddylabs.pinglide.ui.onboarding.QqLoginScreen
@@ -136,13 +135,7 @@ fun SetupNavigation(
         )
     }
     if (privacyOpen) {
-        Dialog(
-            onDismissRequest = { privacyOpen = false },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
-            )
-        ) {
+        FullScreenDialog(onDismissRequest = { privacyOpen = false }) {
             PrivacyScreen(onDismiss = { privacyOpen = false })
         }
     }

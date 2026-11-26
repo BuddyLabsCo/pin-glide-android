@@ -2,7 +2,6 @@ package com.buddylabs.pinglide.ui.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -22,7 +21,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,7 +29,6 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -41,17 +38,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
-import androidx.core.view.WindowCompat
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.identity.AccountSenders
 import com.buddylabs.pinglide.domain.identity.AccountSession
 import com.buddylabs.pinglide.domain.identity.RevocationStep
 import com.buddylabs.pinglide.domain.identity.SenderRevocation
 import com.buddylabs.pinglide.domain.settings.AppLanguage
-import com.buddylabs.pinglide.ui.components.PrivacyScreen
+import com.buddylabs.pinglide.ui.components.FullScreenDialog
+import com.buddylabs.pinglide.ui.components.PrivacyContent
 import com.buddylabs.pinglide.ui.components.ScreenLayout
 
 internal enum class SettingsDestination { Root, Language, Privacy, Account, DeviceAccess }
@@ -97,22 +91,7 @@ fun SettingsNavigation(
         }
     }
     BackHandler(onBack = back)
-    Dialog(
-        onDismissRequest = back,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
-    ) {
-        val view = LocalView.current
-        val window = (view.parent as DialogWindowProvider).window
-        val lightBars = !isSystemInDarkTheme()
-        SideEffect {
-            WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = lightBars
-                isAppearanceLightNavigationBars = lightBars
-            }
-        }
+    FullScreenDialog(onDismissRequest = back) {
         stateHolder.SaveableStateProvider(destination.name) {
             SettingsDestinationContent(
                 destination,
@@ -159,7 +138,14 @@ private fun SettingsDestinationContent(
         SettingsDestination.Root ->
             SettingsScreen(language, installedVersion, onBatterySettings, onNavigate, onBack)
 
-        SettingsDestination.Privacy -> PrivacyScreen(onDismiss = onBack)
+        SettingsDestination.Privacy -> SettingsPage(
+            stringResource(R.string.settings_title),
+            onBack,
+            rootLayout = true,
+            contentTopPadding = 4.dp
+        ) {
+            Column { PrivacyContent() }
+        }
 
         SettingsDestination.Account -> AccountScreen(account, onBack, onLogout)
 

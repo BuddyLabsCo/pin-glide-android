@@ -7,9 +7,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -36,15 +39,16 @@ import com.buddylabs.pinglide.R
 fun PrivacyScreen(onDismiss: () -> Unit) {
     BackHandler(onBack = onDismiss)
     val title = stringResource(R.string.privacy_title)
+    val bottomInset = with(LocalDensity.current) { WindowInsets.safeDrawing.getBottom(this).toDp() }
     ScreenLayout {
         Row(
             modifier = Modifier.fillMaxWidth().semantics {
                 paneTitle = title
-            }.padding(vertical = 8.dp).heightIn(min = 64.dp),
+            }.padding(top = 16.dp, bottom = 4.dp).heightIn(min = 64.dp),
             horizontalArrangement = Arrangement.spacedBy(11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onDismiss) {
+            IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
                 Icon(
                     painterResource(R.drawable.ic_close),
                     stringResource(R.string.close),
@@ -73,7 +77,9 @@ fun PrivacyScreen(onDismiss: () -> Unit) {
         }
         Button(
             onClick = onDismiss,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 22.dp).heightIn(min = 48.dp)
+            modifier = Modifier.fillMaxWidth()
+                .padding(bottom = (22.dp - bottomInset).coerceAtLeast(0.dp))
+                .heightIn(min = 48.dp)
         ) {
             Text(stringResource(R.string.privacy_dismiss), fontWeight = FontWeight.Bold)
         }
@@ -87,13 +93,14 @@ fun PrivacyContent() {
         style = MaterialTheme.typography.headlineSmall.copy(
             fontSize = 26.sp,
             lineHeight = 30.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight(750),
+            letterSpacing = (-1.17).sp
         ),
         modifier = Modifier.semantics { heading() }
     )
     Text(
         stringResource(R.string.privacy_intro),
-        modifier = Modifier.padding(top = 8.dp),
+        modifier = Modifier.padding(top = 2.dp),
         style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp, letterSpacing = 0.sp),
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -108,7 +115,7 @@ fun PrivacyContent() {
         )
         PrivacySection(R.drawable.ic_key, R.string.privacy_keys_title, R.string.privacy_keys_body)
         PrivacySection(
-            R.drawable.ic_devices,
+            R.drawable.ic_computer,
             R.string.privacy_routing_title,
             R.string.privacy_routing_body
         )
@@ -128,12 +135,15 @@ fun PrivacyContent() {
         Icon(
             painterResource(R.drawable.ic_shield),
             contentDescription = null,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.padding(top = 1.dp).size(18.dp),
             tint = MaterialTheme.colorScheme.primary
         )
         Text(
             stringResource(R.string.privacy_backup_body),
-            style = MaterialTheme.typography.bodySmall.copy(letterSpacing = 0.sp),
+            style = MaterialTheme.typography.bodySmall.copy(
+                lineHeight = 18.sp,
+                letterSpacing = 0.sp
+            ),
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }

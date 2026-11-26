@@ -1,7 +1,6 @@
 package com.buddylabs.pinglide.ui.home
 
 import android.content.res.Configuration
-import android.os.ParcelFileDescriptor
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Column
@@ -19,7 +18,6 @@ import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.rules.ActivityScenarioRule
-import androidx.test.platform.app.InstrumentationRegistry
 import com.buddylabs.pinglide.app.LocalizedContent
 import com.buddylabs.pinglide.app.PinGlideApplication
 import com.buddylabs.pinglide.domain.forwarding.PairingTestMessage
@@ -35,6 +33,7 @@ import com.buddylabs.pinglide.platform.crypto.encryptTestMessage
 import com.buddylabs.pinglide.ui.components.AnchoredPairingTestAction
 import com.buddylabs.pinglide.ui.components.PinGlideTheme
 import com.buddylabs.pinglide.ui.components.TestMessageAction
+import com.buddylabs.pinglide.ui.components.runUiTestShell
 import java.time.Instant
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
@@ -51,10 +50,6 @@ import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
-
-internal fun runHomeTestShell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
-    InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
-).bufferedReader().use { it.readText() }
 
 internal fun textTimeoutAccessibility(timeoutMillis: Long): AccessibilityManager =
     object : AccessibilityManager {
@@ -116,13 +111,13 @@ internal fun withShortHomeViewport(
     compose: AndroidComposeTestRule<ActivityScenarioRule<ComponentActivity>, ComponentActivity>,
     check: () -> Unit
 ) {
-    val overrideSize = Regex("Override size: (\\d+x\\d+)").find(runHomeTestShell("wm size"))
+    val overrideSize = Regex("Override size: (\\d+x\\d+)").find(runUiTestShell("wm size"))
         ?.groupValues?.get(1)
-    val originalFont = runHomeTestShell("settings get system font_scale").trim()
+    val originalFont = runUiTestShell("settings get system font_scale").trim()
     val density = compose.activity.resources.displayMetrics.density
     try {
-        runHomeTestShell("settings put system font_scale 2.0")
-        runHomeTestShell("wm size ${(366 * density).roundToInt()}x${(260 * density).roundToInt()}")
+        runUiTestShell("settings put system font_scale 2.0")
+        runUiTestShell("wm size ${(366 * density).roundToInt()}x${(260 * density).roundToInt()}")
         compose.waitUntil(5_000L) {
             compose.runOnUiThread {
                 val configuration = compose.activity.resources.configuration
@@ -131,11 +126,11 @@ internal fun withShortHomeViewport(
         }
         check()
     } finally {
-        runHomeTestShell("wm size ${overrideSize ?: "reset"}")
+        runUiTestShell("wm size ${overrideSize ?: "reset"}")
         if (originalFont == "null") {
-            runHomeTestShell("settings delete system font_scale")
+            runUiTestShell("settings delete system font_scale")
         } else {
-            runHomeTestShell("settings put system font_scale $originalFont")
+            runUiTestShell("settings put system font_scale $originalFont")
         }
         compose.waitUntil(5_000L) {
             compose.runOnUiThread {

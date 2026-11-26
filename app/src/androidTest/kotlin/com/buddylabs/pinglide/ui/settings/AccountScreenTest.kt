@@ -34,6 +34,7 @@ import androidx.core.content.ContextCompat
 import com.buddylabs.pinglide.R
 import com.buddylabs.pinglide.domain.settings.AppLanguage
 import com.buddylabs.pinglide.ui.components.captureSettledUiEvidence
+import com.buddylabs.pinglide.ui.components.withCompactViewport
 import kotlin.math.abs
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -97,7 +98,7 @@ class AccountScreenTest {
 
     @Test
     fun compactEnglishAccountAtDoubleFontScaleKeepsLogoutAndBackReachable() =
-        compose.withAccountViewport(244, 546) {
+        compose.withCompactViewport(244, 546) {
             fixture.openAccount(AppLanguage.English)
             val loadingLabel = "Loading account information…"
             compose.onNodeWithText(loadingLabel).assertIsDisplayed()

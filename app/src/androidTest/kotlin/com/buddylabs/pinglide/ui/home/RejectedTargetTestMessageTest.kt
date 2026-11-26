@@ -29,6 +29,7 @@ import com.buddylabs.pinglide.domain.pairing.PairingServiceException
 import com.buddylabs.pinglide.domain.pairing.Presence
 import com.buddylabs.pinglide.domain.pairing.RemotePairing
 import com.buddylabs.pinglide.generated.http.model.UploadRequest
+import com.buddylabs.pinglide.ui.components.runUiTestShell
 import com.buddylabs.pinglide.ui.home.PendingTargetTestMessageTest.TestMessageFeedbackEvents
 import java.time.Instant
 import java.util.Base64
@@ -146,11 +147,11 @@ class RejectedTargetTestMessageTest {
     )
 
     private fun withShortViewport(height: Int, check: () -> Unit) {
-        val originalSize = Regex("Override size: (\\d+x\\d+)").find(runHomeTestShell("wm size"))
+        val originalSize = Regex("Override size: (\\d+x\\d+)").find(runUiTestShell("wm size"))
             ?.groupValues?.get(1)
         val density = compose.activity.resources.displayMetrics.density
         try {
-            runHomeTestShell(
+            runUiTestShell(
                 "wm size ${(366 * density).roundToInt()}x${(height * density).roundToInt()}"
             )
             compose.waitUntil(5_000L) {
@@ -160,7 +161,7 @@ class RejectedTargetTestMessageTest {
             }
             check()
         } finally {
-            runHomeTestShell("wm size ${originalSize ?: "reset"}")
+            runUiTestShell("wm size ${originalSize ?: "reset"}")
         }
     }
 
