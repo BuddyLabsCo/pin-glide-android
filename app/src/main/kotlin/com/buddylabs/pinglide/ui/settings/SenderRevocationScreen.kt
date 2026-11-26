@@ -5,6 +5,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -13,14 +14,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -34,6 +34,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -52,6 +53,7 @@ import com.buddylabs.pinglide.domain.identity.SenderRevocationState
 import com.buddylabs.pinglide.ui.components.BrandIcon
 import com.buddylabs.pinglide.ui.components.RingedEmblem
 import com.buddylabs.pinglide.ui.components.ScreenLayout
+import com.buddylabs.pinglide.ui.components.WarningInfoCard
 
 @Composable
 internal fun SenderRevocationScreen(state: SenderRevocationState, revocation: SenderRevocation) {
@@ -245,12 +247,11 @@ private fun OwnerProofFeedback(notice: OwnerProofNotice) {
         OwnerProofNotice.Failed -> R.string.senders_proof_failed
         OwnerProofNotice.WrongAccount -> R.string.senders_proof_wrong_account
     }
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-    ) {
-        Text(
-            stringResource(message),
-            Modifier.padding(16.dp).semantics { liveRegion = LiveRegionMode.Assertive }
-        )
-    }
+    WarningInfoCard(
+        message,
+        Modifier.padding(top = 14.dp).width(IntrinsicSize.Max)
+            .testTag("owner-proof-warning")
+            .semantics { liveRegion = LiveRegionMode.Assertive },
+        icon = R.drawable.ic_warning
+    )
 }
