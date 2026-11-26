@@ -8,18 +8,82 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  quality:
+  classify:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      android: ${{ steps.changes.outputs.android }}
+      instrumentation: ${{ steps.changes.outputs.instrumentation }}
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
         with:
-          distribution: temurin
-          java-version: "25"
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version: "24.18.0"
+          package-manager-cache: false
+      - name: Classify changed paths
+        id: changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/quality/changes.mjs "$GITHUB_EVENT_NAME" "$BASE" "$HEAD" >> "$GITHUB_OUTPUT"
+      - name: Test quality selection
+        run: node --test scripts/quality/changes.test.mjs scripts/quality/aggregate.test.mjs
+
+  lightweight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25.0.3"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: ${{ github.event_name != 'push' }}
+      - name: Check formatting and handwritten Kotlin file size
+        run: bash ./gradlew spotlessCheck checkFileSize --build-cache --console=plain
+
+  android:
+    needs: classify
+    if: needs.classify.outputs.android == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25.0.3"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: ${{ github.event_name != 'push' }}
+      - uses: actions/cache/restore@v4
+        id: npm-cache
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
+      - uses: ./.github/actions/setup-android-sdk
       - name: Read the service repository
         id: contracts
         run: |
@@ -38,20 +102,45 @@ jobs:
           owner: ${{ steps.contracts.outputs.owner }}
           repositories: ${{ steps.contracts.outputs.repository }}
           permission-contents: read
-      - uses: android-actions/setup-android@v4
-      - name: Install the pinned Android platform and build tools
-        uses: android-actions/setup-android@v3
-        with:
-          packages: "platform-tools platforms;android-37.0 build-tools;36.0.0"
       - name: Download the pinned service contracts
         env:
           GH_TOKEN: ${{ steps.service-token.outputs.token }}
         run: bash ./gradlew downloadServiceContracts --console=plain
-      - name: Install pinned generator dependencies
-        run: npm ci --ignore-scripts
-      - name: Run the four static checks
-        run: bash ./gradlew qualityCheck --console=plain
-      - name: Build the minimal application
-        run: bash ./gradlew :app:assembleDebug :app:compileReleaseKotlin :app:testDebugUnitTest --console=plain
+      - name: Run Android static checks, compilation and JVM tests
+        run: |
+          bash ./gradlew detekt :app:lintDebug :app:lintRelease \
+            :app:assembleDebug :app:compileReleaseKotlin :app:testDebugUnitTest \
+            :app:assembleDebugAndroidTest --build-cache --console=plain
       - name: Verify build variants and distribution packaging
         run: node --test scripts/quality/build-variants.test.mjs
+      - uses: actions/cache/save@v4
+        if: github.event_name == 'push' && steps.npm-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+
+  instrumentation:
+    needs: classify
+    if: needs.classify.outputs.instrumentation == 'true'
+    uses: ./.github/workflows/instrumentation.yml
+    secrets:
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+
+  quality:
+    needs: [classify, lightweight, android, instrumentation]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - name: Require all selected checks
+        env:
+          QUALITY_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/quality/aggregate.mjs
