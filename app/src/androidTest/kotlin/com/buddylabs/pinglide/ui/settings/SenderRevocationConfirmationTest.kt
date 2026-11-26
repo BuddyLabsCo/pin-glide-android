@@ -5,9 +5,12 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -17,6 +20,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -159,7 +163,10 @@ class SenderRevocationConfirmationTest {
     @Test
     fun englishActionsRemainReachableAtDoubleFontScaleAndBackCancels() {
         compose.withSystemFontScale(2f) {
-            renderInventory(AppLanguage.English)
+            renderInventory(
+                AppLanguage.English,
+                authorization = { throw QqAuthorizationException(cancelled = true) }
+            )
             val revoke = compose.onNodeWithContentDescription("Revoke Pixel 9")
             revoke.performScrollTo().performClick()
             val pane = SemanticsMatcher.expectValue(
@@ -207,7 +214,12 @@ class SenderRevocationConfirmationTest {
             assertFalse(compose.textLayout(description).hasVisualOverflow)
             compose.onNodeWithText(
                 "Verify with QQ and revoke"
+            ).performScrollTo().assertIsDisplayed().performClick()
+            compose.onNodeWithText(
+                "QQ verification was cancelled. Revocation was not submitted."
             ).performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Verify with QQ and revoke")
+                .performScrollTo().assertIsDisplayed().assertIsEnabled()
             compose.onNodeWithText("Cancel").performScrollTo().assertIsDisplayed().performClick()
             compose.onNodeWithText("Pixel 9").performScrollTo().assertIsDisplayed()
         }
@@ -239,9 +251,7 @@ class SenderRevocationConfirmationTest {
         compose.runOnIdle { assertEquals(0, attempts) }
         val verify = compose.onNodeWithText("使用 QQ 验证并撤销")
         verify.performClick()
-        compose.onNodeWithText(
-            "已取消 QQ 验证。尚未提交撤销，请重新验证或返回设备访问管理。"
-        ).assertIsDisplayed()
+        assertCancelledOwnerProof()
         compose.runOnIdle { assertTrue(submissions.isEmpty()) }
         verify.performClick()
         compose.onNodeWithText("正在验证 QQ 账号…").assertIsNotEnabled()
@@ -256,6 +266,52 @@ class SenderRevocationConfirmationTest {
         compose.runOnIdle { assertEquals(listOf("pixel" to "fresh-proof"), submissions) }
         compose.onNodeWithText("取消").performClick()
         compose.onNodeWithText("Pixel 9").assertIsDisplayed()
+    }
+
+    private fun assertCancelledOwnerProof() {
+        val message = "QQ 验证已取消，未提交撤销。"
+        val warning = compose.onNodeWithTag("owner-proof-warning").assertIsDisplayed()
+            .assert(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.LiveRegion,
+                    LiveRegionMode.Assertive
+                )
+            )
+        val text = compose.onNodeWithText(message).assertIsDisplayed()
+        val description = compose.onNodeWithText(
+            "你已确认撤销「Pixel 9」。请验证当前登录的 QQ 账号，验证通过后将立即提交撤销。"
+        ).assertIsDisplayed()
+        val verify = compose.onNodeWithText("使用 QQ 验证并撤销")
+            .assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithText("取消").assertIsDisplayed().assertIsEnabled()
+        val bounds = warning.getUnclippedBoundsInRoot()
+        val verifyBounds = verify.getUnclippedBoundsInRoot()
+        assertDp(
+            "Centered warning",
+            (bounds.left + bounds.right) / 2,
+            (verifyBounds.left + verifyBounds.right) / 2
+        )
+        assertTrue(bounds.right - bounds.left < verifyBounds.right - verifyBounds.left)
+        assertTrue(bounds.top > description.getUnclippedBoundsInRoot().bottom)
+        assertTrue(bounds.bottom < verifyBounds.top)
+        assertTrue(text.getUnclippedBoundsInRoot().left - bounds.left >= 40.dp)
+        val image = warning.captureToImage().asAndroidBitmap()
+        val color = ContextCompat.getColor(compose.activity, R.color.setup_on_warning)
+        with(compose.density) {
+            assertEquals(
+                ContextCompat.getColor(compose.activity, R.color.setup_warning_container),
+                image.getPixel(image.width / 2, 2.dp.roundToPx())
+            )
+            assertTrue(
+                "Warning icon is visible",
+                (13.dp.roundToPx() until 31.dp.roundToPx()).any { x ->
+                    (14.dp.roundToPx() until 32.dp.roundToPx()).any { y ->
+                        image.getPixel(x, y) == color
+                    }
+                }
+            )
+        }
+        captureSettledUiEvidence("sender-owner-proof-cancelled.png", warning)
     }
 
     private fun renderInventory(
