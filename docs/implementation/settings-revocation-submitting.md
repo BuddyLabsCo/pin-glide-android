@@ -36,3 +36,24 @@ visible. No motion changes were made.
 No live QQ authorization or real revocation was performed. Issue comparison
 links point to the local commit and require the authorized publishing workflow
 before they resolve.
+
+## Review follow-up
+
+An exhaustive screen dispatch preserves the existing step behavior. The
+submitting heading and selected-Sender description form one polite live
+region with a single heading. The three text elements can use the available
+width so English remains readable at 200% system font scale.
+
+The focused regression verifies the rendered lock body and keyhole, badge
+tile, vertical group centering, and full-width wait action. The English
+case checks the merged announcement, unclipped text, absence of text layout
+overflow, disabled action, and exit after the simulated response.
+
+All five focused cases passed in both themes on API 37. Debug, release and
+instrumentation Kotlin compilation, both debug APK assemblies,
+`qualityCheck`, and all 46 JVM tests passed. The comparison images were
+recaptured; the full device suite was not repeated for this focused fix.
+
+Issue attachment publication remains pending: the browser is signed out,
+the available GitHub tools cannot upload issue attachments, and pushing is
+outside this assignment's authorization.

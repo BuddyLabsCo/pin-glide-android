@@ -5,8 +5,11 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
@@ -269,11 +272,16 @@ class SenderRevocationConfirmationTest {
         compose.onNodeWithContentDescription("撤销Pixel 9").performScrollTo().performClick()
         compose.onNodeWithText("确认，验证 QQ").performClick()
         compose.onNodeWithText("使用 QQ 验证并撤销").performClick()
-        val heading = compose.onNodeWithText("正在提交撤销").assertIsDisplayed()
+        val heading = compose.onNodeWithText(
+            "正在提交撤销",
+            useUnmergedTree = true
+        ).assertIsDisplayed()
         val wait = compose.onNodeWithText("请稍候…").assertIsDisplayed().assertIsNotEnabled()
-        compose.onNodeWithText("正在撤销「Pixel 9」…").assertIsDisplayed()
-        val viewport = compose.onNode(isRoot() and hasAnyDescendant(hasText("正在提交撤销")))
-            .getUnclippedBoundsInRoot()
+        val description = "正在撤销「Pixel 9」…"
+        compose.onNodeWithText(description, useUnmergedTree = true).assertIsDisplayed()
+        assertSubmittingAnnouncement("正在提交撤销", description)
+        val root = compose.onNode(isRoot() and hasAnyDescendant(hasText("正在提交撤销")))
+        val viewport = root.getUnclippedBoundsInRoot()
         val headingBounds = heading.getUnclippedBoundsInRoot()
         val waitBounds = wait.getUnclippedBoundsInRoot()
         assertDp(
@@ -283,12 +291,121 @@ class SenderRevocationConfirmationTest {
         )
         assertTrue(waitBounds.top > headingBounds.bottom)
         assertTrue(waitBounds.bottom - waitBounds.top >= 48.dp)
+        assertDp("Wait left inset", waitBounds.left - viewport.left, 20.dp)
+        assertDp("Wait right inset", viewport.right - waitBounds.right, 20.dp)
+        val statusBounds = compose.onNodeWithText("正在提交撤销").getUnclippedBoundsInRoot()
+        val emblemTop = statusBounds.top - 222.dp
+        val groupCenter = (emblemTop + waitBounds.bottom) / 2
+        val viewportCenter = (viewport.top + viewport.bottom) / 2
+        assertTrue(
+            "Vertically centered group",
+            kotlin.math.abs(
+                (groupCenter - viewportCenter).value
+            ) <= 16f
+        )
+        root.captureToImage()
+        val artwork =
+            checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+        with(compose.density) {
+            val centerX = artwork.width / 2
+            val centerY = (emblemTop + 111.dp - viewport.top).roundToPx()
+            val lockColor = ContextCompat.getColor(compose.activity, R.color.on_primary_container)
+            assertEquals(
+                "Lock body",
+                lockColor,
+                artwork.getPixel(
+                    centerX - 10.dp.roundToPx(),
+                    centerY + 6.dp.roundToPx()
+                )
+            )
+            assertTrue(
+                "Lock keyhole",
+                artwork.getPixel(
+                    centerX + 3.dp.roundToPx(),
+                    centerY + 5.dp.roundToPx()
+                ) != lockColor
+            )
+            val surface = ContextCompat.getColor(compose.activity, R.color.surface)
+            assertTrue(
+                "Badge tile",
+                artwork.getPixel(centerX + 60.dp.roundToPx(), centerY) != surface
+            )
+            assertEquals(
+                "Outside badge",
+                surface,
+                artwork.getPixel(
+                    centerX + 80.dp.roundToPx(),
+                    centerY
+                )
+            )
+        }
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         wait.assertIsDisplayed().assertIsNotEnabled()
         captureSettledUiEvidence("sender-revoke-submitting.png", heading)
         compose.runOnIdle { response.complete(RevocationReply.WrongAccount) }
         wait.assertDoesNotExist()
         compose.onNodeWithText("验证后撤销设备").assertIsDisplayed()
+    }
+
+    @Test
+    fun englishSubmittingRemainsReachableAtDoubleFontScale() {
+        compose.withSystemFontScale(2f) {
+            val response = CompletableDeferred<RevocationReply>()
+            renderInventory(
+                AppLanguage.English,
+                authorization = { "fresh-proof" },
+                service = { _, _, _ -> response.await() }
+            )
+            compose.onNodeWithContentDescription("Revoke Pixel 9").performScrollTo().performClick()
+            compose.onNodeWithText("Confirm and verify QQ").performScrollTo().performClick()
+            compose.onNodeWithText("Verify with QQ and revoke").performScrollTo().performClick()
+            val title = "Submitting revocation"
+            val description = "Revoking “Pixel 9”…"
+            assertSubmittingAnnouncement(title, description)
+            for (text in listOf(title, description, "Please wait…")) {
+                val node = compose.onNodeWithText(text, useUnmergedTree = true)
+                    .performScrollTo().assertIsDisplayed()
+                val bounds = node.getUnclippedBoundsInRoot()
+                val clipped = node.fetchSemanticsNode().boundsInRoot
+                with(compose.density) {
+                    assertDp(
+                        "Unclipped $text height",
+                        clipped.height.toDp(),
+                        bounds.bottom - bounds.top
+                    )
+                    assertDp(
+                        "Unclipped $text width",
+                        clipped.width.toDp(),
+                        bounds.right - bounds.left
+                    )
+                }
+                val layout = compose.textLayout(text)
+                assertFalse(
+                    "$text overflows: ${layout.size}, ${layout.lineCount} lines",
+                    layout.hasVisualOverflow
+                )
+            }
+            val wait = compose.onNodeWithText("Please wait…").assertIsNotEnabled()
+            val waitBounds = wait.getUnclippedBoundsInRoot()
+            assertTrue(waitBounds.bottom - waitBounds.top >= 48.dp)
+            compose.runOnIdle { response.complete(RevocationReply.WrongAccount) }
+            wait.assertDoesNotExist()
+            compose.onNodeWithText(
+                "Verify to revoke the device"
+            ).performScrollTo().assertIsDisplayed()
+        }
+    }
+
+    private fun assertSubmittingAnnouncement(title: String, description: String) {
+        val liveStatus = SemanticsMatcher.expectValue(
+            SemanticsProperties.LiveRegion,
+            LiveRegionMode.Polite
+        )
+        compose.onAllNodes(liveStatus).assertCountEquals(1)
+        compose.onNode(liveStatus)
+            .assert(hasText(title) and hasText(description))
+            .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
+        compose.onAllNodes(hasText(title), useUnmergedTree = true).assertCountEquals(1)
     }
 
     private fun renderInventory(
