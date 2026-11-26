@@ -17,7 +17,7 @@ const fixtureBaseline = previousRelease ? `${previousRelease[1]}:${previousRelea
 
 function gradle(tasks, inputs = {}) {
   const args = [...tasks, "--console=plain", "--no-configuration-cache", "--no-build-cache"];
-  const env = { ...environment, PINGLIDE_PUBLISHED_RELEASE: fixtureBaseline, ...inputs };
+  const env = { ...environment, ...inputs };
   const result = process.platform === "win32"
     ? spawnSync("cmd.exe", ["/d", "/c", `.\\gradlew.bat ${args.join(" ")}`], {
       env, encoding: "utf8", maxBuffer: 8 * 1024 * 1024,
@@ -137,6 +137,11 @@ test("ordinary Debug packaging needs no distribution inputs", () => {
   const result = gradle([":app:assembleDebug"]);
   assert.equal(result.status, 0, result.output);
   assert.match(apkSigner("debug"), /CN=Android Debug/);
+  assert.deepEqual(apkVersion("debug"), {
+    packageName: "com.buddylabs.pinglide.dev",
+    versionCode: branchVersion.versionCode,
+    versionName: `${branchVersion.versionName}-dev`,
+  });
 });
 
 test("partial Dev signing inputs cannot fall back to the default key", () => {
@@ -156,10 +161,12 @@ for (const [variant, prefix, options] of [
   for (const entry of ["assemble", "bundle"]) {
     test(`${entry}${variant} distribution rejects missing public and signing inputs`, () => {
       const tasks = [`:app:${entry}${variant}`, ...options];
-      const unconfigured = gradle(tasks);
+      const baseline = variant === "Release" ? { PINGLIDE_PUBLISHED_RELEASE: fixtureBaseline } : {};
+      const unconfigured = gradle(tasks, baseline);
       assert.notEqual(unconfigured.status, 0);
       assert.match(unconfigured.output, /Distribution requires/);
       const unsigned = gradle(tasks, {
+        ...baseline,
         [`${prefix}SERVICE_URL`]: "https://example.test",
         [`${prefix}QQ_APP_ID`]: "123",
       });
@@ -226,26 +233,33 @@ test("APK and bundle packaging use the intended independent signing identities",
     const debug = testSigning(directory, "debug", "PINGLIDE_DEV_");
     const release = testSigning(directory, "release", "PINGLIDE_");
     assert.notEqual(debug.fingerprint, release.fingerprint);
-    const inputs = {
-      ...debug.inputs, ...release.inputs,
+    const devInputs = {
+      ...debug.inputs,
       PINGLIDE_DEV_SERVICE_URL: "http://localhost:8080",
       PINGLIDE_DEV_QQ_APP_ID: "123",
+    };
+    const prodInputs = {
+      ...release.inputs,
       PINGLIDE_SERVICE_URL: "https://production.example",
       PINGLIDE_QQ_APP_ID: "456",
     };
     const reused = gradle([":app:assembleRelease"], {
-      ...inputs, PINGLIDE_PUBLISHED_RELEASE: `${branchVersion.versionName}:${branchVersion.versionCode}`,
+      ...prodInputs, PINGLIDE_PUBLISHED_RELEASE: `${branchVersion.versionName}:${branchVersion.versionCode}`,
     });
     assert.notEqual(reused.status, 0);
     assert.match(reused.output, /higher stable version/);
-    const missing = gradle([":app:bundleRelease"], { ...inputs, PINGLIDE_PUBLISHED_RELEASE: "" });
+    const missing = gradle([":app:bundleRelease"], prodInputs);
     assert.notEqual(missing.status, 0);
     assert.match(missing.output, /PINGLIDE_PUBLISHED_RELEASE/);
-    const result = gradle([
-      ":app:assembleDebug", ":app:bundleDebug", ":app:assembleRelease", ":app:bundleRelease",
+    const devResult = gradle([
+      ":app:assembleDebug", ":app:bundleDebug",
       "-Ppinglide.devDistribution=true",
-    ], inputs);
-    assert.equal(result.status, 0, result.output);
+    ], devInputs);
+    assert.equal(devResult.status, 0, devResult.output);
+    const prodResult = gradle([":app:assembleRelease", ":app:bundleRelease"], {
+      ...prodInputs, PINGLIDE_PUBLISHED_RELEASE: fixtureBaseline,
+    });
+    assert.equal(prodResult.status, 0, prodResult.output);
     for (const [variant, signing] of [["debug", debug], ["release", release]]) {
       const apk = apkSigner(variant);
       assert.match(apk, new RegExp(`certificate SHA-256 digest: ${signing.fingerprint}\\b`));

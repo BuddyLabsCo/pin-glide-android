@@ -46,33 +46,114 @@ function assignment(name) {
   return new RegExp(`^([ \\t]*${name}[ \\t]*=[ \\t]*)([^\\r\\n]+)(?=\\r?$)`, "gm");
 }
 
-function defaultConfig(gradle) {
-  if (/\/\*|\*\/|"""/.test(gradle)) {
-    throw new Error("Unsupported Gradle source: block comments or multiline strings");
+const versionIdentifier = /^(?:versionName|versionCode|setVersionName|setVersionCode)$/;
+
+function gradleTokens(source) {
+  const lexer = /\/\/[^\r\n]*|\/\*|\*\/|"""|["']|`[^`\r\n]+`|[a-zA-Z_]\w*|\d+|[^\s]/g;
+  const tokens = [];
+
+  function quoted(quote) {
+    while (lexer.lastIndex < source.length) {
+      const character = source[lexer.lastIndex++];
+      if (character === quote) return;
+      if (character === "\\") {
+        lexer.lastIndex++;
+      } else if (quote === '"' && character === "$" && source[lexer.lastIndex] === "{") {
+        lexer.lastIndex++;
+        scan(true);
+      } else if (character === "\r" || character === "\n") {
+        break;
+      }
+    }
+    throw new Error("Unsupported Gradle source: unterminated string");
   }
-  const android = [...gradle.matchAll(/^android[ \t]*\{[ \t]*\r?\n([\s\S]*?)^\}[ \t]*\r?$/gm)];
-  const blocks = android.length === 1 &&
-    [...android[0][1].matchAll(/^    defaultConfig[ \t]*\{[ \t]*\r?\n[^{}]*?^    \}[ \t]*(?=\r?$)/gm)];
-  if (!blocks || blocks.length !== 1) {
-    throw new Error("Expected exactly one simple android defaultConfig block");
+
+  function scan(template = false) {
+    let depth = 0;
+    let match;
+    while ((match = lexer.exec(source))) {
+      const text = match[0];
+      if (text.startsWith("//")) continue;
+      if (["/*", "*/", '"""'].includes(text)) {
+        throw new Error("Unsupported Gradle source: block comments or multiline strings");
+      }
+      if (text === '"' || text === "'") quoted(text);
+      const name = text.startsWith("`") ? text.slice(1, -1) : text;
+      if (template) {
+        if (versionIdentifier.test(name) || name === "defaultConfig") {
+          throw new Error(`Unsupported Gradle source: ${name} in string interpolation`);
+        }
+        if (text === "{") depth++;
+        if (text === "}" && depth-- === 0) return;
+      } else {
+        tokens.push({ text: source.slice(match.index, lexer.lastIndex), name, index: match.index });
+      }
+    }
+    if (template) throw new Error("Unsupported Gradle source: unterminated interpolation");
   }
-  return blocks[0][0];
+
+  scan();
+  const stack = [];
+  const pairs = { "}": "{", ")": "(", "]": "[" };
+  for (const token of tokens) {
+    token.parent = stack.at(-1);
+    if (["{", "(", "["].includes(token.text)) {
+      stack.push(token);
+    } else if (Object.hasOwn(pairs, token.text)) {
+      const open = stack.pop();
+      if (open?.text !== pairs[token.text]) throw new Error("Unsupported Gradle source: unbalanced delimiters");
+      open.close = token;
+    }
+  }
+  if (stack.length) throw new Error("Unsupported Gradle source: unbalanced delimiters");
+  return tokens;
 }
 
-function readAssignment(gradle, block, name, pattern) {
+function defaultConfig(gradle) {
+  const tokens = gradleTokens(gradle);
+  function bareCall(token) {
+    const previous = tokens[tokens.indexOf(token) - 1];
+    if ([".", "=", "else", "do"].includes(previous?.text)) return false;
+    return previous?.text !== ")" ||
+      !["if", "for", "while"].includes(tokens[tokens.indexOf(previous.parent) - 1]?.text);
+  }
+  const android = tokens.filter((token, index) => token.name === "android" && tokens[index + 1]?.text === "{");
+  const configs = tokens.filter(token => token.name === "defaultConfig");
+  const androidOpen = android.length === 1 && tokens[tokens.indexOf(android[0]) + 1];
+  const configOpen = configs.length === 1 && tokens[tokens.indexOf(configs[0]) + 1];
+  if (!androidOpen || android[0].parent || android[0].text !== "android" || !bareCall(android[0]) ||
+      !configOpen || configOpen.text !== "{" || configs[0].text !== "defaultConfig" ||
+      configs[0].parent !== androidOpen || !bareCall(configs[0])) {
+    throw new Error("Expected exactly one direct android defaultConfig block");
+  }
+  const block = gradle.slice(configs[0].index, configOpen.close.index + 1);
+  return { block, start: configs[0].index, configOpen, tokens };
+}
+
+function readAssignment({ block, configOpen, tokens }, name, pattern) {
+  const identifiers = tokens.filter(token => token.name === name || token.name ===
+    `set${name[0].toUpperCase()}${name.slice(1)}`);
   const matches = [...block.matchAll(assignment(name))];
-  const value = matches.length === 1 && [...gradle.matchAll(assignment(name))].length === 1 &&
-    pattern.exec(matches[0][2].trim());
-  if (!value) throw new Error(`Expected exactly one literal ${name} assignment in ${gradlePath}`);
+  const value = identifiers.length === 1 && identifiers[0].text === name &&
+    identifiers[0].parent === configOpen && matches.length === 1 && pattern.exec(matches[0][2].trim());
+  if (!value) throw new Error(`Expected exactly one literal ${name} assignment in android defaultConfig`);
   return value[1];
 }
 
 function readGradle(gradle) {
-  const block = defaultConfig(gradle);
-  return metadata(
-    readAssignment(gradle, block, "versionName", /^"([^"]+)"$/),
-    Number(readAssignment(gradle, block, "versionCode", /^([1-9]\d*)$/)),
+  const config = defaultConfig(gradle);
+  const current = metadata(
+    readAssignment(config, "versionName", /^"([^"]+)"$/),
+    Number(readAssignment(config, "versionCode", /^([1-9]\d*)$/)),
   );
+  const children = config.tokens.filter(token => token.parent === config.configOpen && token !== config.configOpen.close);
+  for (let index = 0; index < children.length; index += 3) {
+    if (!/^[a-zA-Z_]\w*$/.test(children[index].text) || children[index + 1]?.text !== "=" ||
+        !/^(?:\d+|true|false|"[^"\r\n]*")$/.test(children[index + 2]?.text ?? "")) {
+      throw new Error("Unsupported Gradle source: defaultConfig must contain only simple literal assignments");
+    }
+  }
+  return current;
 }
 
 function readChangelog(changelog) {
@@ -128,11 +209,11 @@ export function proposeRelease(gradle, changelog, published, notes, selected) {
     requireSuccessor(next, published);
     kept = refreshing ? releases.slice(1) : releases;
   }
-  const block = defaultConfig(gradle);
+  const { block, start } = defaultConfig(gradle);
   const updatedBlock = block
     .replace(assignment("versionName"), (_, prefix) => `${prefix}"${next.versionName}"`)
     .replace(assignment("versionCode"), (_, prefix) => `${prefix}${next.versionCode}`);
-  const updatedGradle = gradle.replace(block, () => updatedBlock);
+  const updatedGradle = gradle.slice(0, start) + updatedBlock + gradle.slice(start + block.length);
   const updatedChangelog = [
     "# Changelog",
     `## ${next.versionName} (versionCode ${next.versionCode})\n\n${notes.trim()}`,

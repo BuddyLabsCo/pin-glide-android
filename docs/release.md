@@ -31,9 +31,10 @@ names consist of three decimal components with no leading zeroes, prefixes,
 prerelease suffixes or build metadata. Codes are positive integers up to
 2,100,000,000. Each changelog heading records both values and has release notes;
 published sections are retained, newest first.
-The policy expects one simple `android`/`defaultConfig` block with literal
-version assignments, and rejects unsupported Gradle source shapes (including
-block comments or multiline strings) rather than treating them as metadata.
+The policy expects one top-level `android` block with one direct `defaultConfig`
+child containing only literal assignments. It rejects additional version property
+references, setters, or unsupported source shapes (including block comments and
+multiline strings) rather than treating them as metadata.
 
 Use the dependency-free policy from the repository root:
 

@@ -102,6 +102,43 @@ test("only accepts active literal assignments in defaultConfig", () => {
     .replace("    }\n}", "        }\n    }\n}"), history), /defaultConfig/);
 });
 
+test("requires a unique direct defaultConfig child regardless of indentation", () => {
+  const nested = gradle().replace("    defaultConfig {", "    if (false) {\n    defaultConfig {")
+    .replace("    }\n}", "    }\n    }\n}");
+  assert.throws(() => checkVersion(nested, history), /defaultConfig/);
+  assert.throws(() => checkVersion(gradle().replace("    defaultConfig {", "    if (false)\n    defaultConfig {"), history),
+    /defaultConfig/);
+  assert.throws(() => checkVersion("if (false)\n" + gradle(), history), /defaultConfig/);
+  const duplicate = gradle().replace("    }\n}", '    }\n    defaultConfig { versionCode = 2; versionName = "0.1.1" }\n}');
+  assert.throws(() => checkVersion(duplicate, history), /defaultConfig/);
+  const reformatted = gradle().replaceAll("    ", "  ");
+  assert.deepEqual(checkVersion(reformatted, history, null), initial);
+  const proposal = proposeRelease(reformatted, history, initial, "- Fix.");
+  assert.equal(proposal.gradle, reformatted.replace('versionName = "0.1.0"', 'versionName = "0.1.1"')
+    .replace("versionCode = 1", "versionCode = 2"));
+});
+
+test("rejects qualified and nonliteral version mutations even outside defaultConfig", () => {
+  for (const extra of [
+    'this.versionName = "9.0.0"\n        this.versionCode = 9',
+    "versionCode++",
+    'setVersionName("9.0.0")',
+    "this.`versionCode` = 9",
+    'versionName.set("9.0.0")',
+  ]) {
+    const overridden = gradle().replace("    }\n}", `        ${extra}\n    }\n}`);
+    assert.throws(() => checkVersion(overridden, history), /versionName|versionCode|unsupported/i);
+  }
+  assert.throws(() => checkVersion(gradle() + '\nandroid.defaultConfig.versionCode = 9\n', history),
+    /defaultConfig|versionCode/);
+});
+
+test("scope ignores braces and property names in comments and ordinary strings", () => {
+  const source = 'val unrelated = "}"\n// android { defaultConfig { versionName = "other" } }\n' +
+    'val template = "${listOf("{", "}").joinToString("")}"\n' + gradle();
+  assert.deepEqual(checkVersion(source, history, null), initial);
+});
+
 const cliPath = fileURLToPath(new URL("./version-policy.mjs", import.meta.url));
 
 function checkout(context) {
