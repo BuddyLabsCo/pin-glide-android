@@ -99,3 +99,48 @@ test("full Git comparison includes deletions, both rename ends and paths beyond 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+function documentationHistory(context) {
+  const directory = mkdtempSync(join(tmpdir(), "pinglide-history-"));
+  context.after(() => rmSync(directory, { recursive: true, force: true }));
+  const git = (...args) => execFileSync("git", args, { cwd: directory, encoding: "utf8" }).trim();
+  git("init", "-q");
+  const commit = (message, ...parents) => {
+    writeFileSync(join(directory, "guide.md"), message);
+    git("add", "guide.md");
+    return git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "-c", "commit.gpgsign=false",
+      "commit-tree", git("write-tree"), ...parents.flatMap((parent) => ["-p", parent]), "-m", message);
+  };
+  const compare = (base, head) => classifyRange("pull_request", base, head, directory);
+  return { directory, git, commit, compare };
+}
+
+test("shallow history selects full checks even when a documentation comparison is available", (context) => {
+  const { directory, git, commit, compare } = documentationHistory(context);
+  const root = commit("root");
+  const base = commit("base", root);
+  const head = commit("head", base);
+  assert.deepEqual(compare(base, head), docsOnly);
+
+  writeFileSync(join(directory, ".git", "shallow"), `${base}\n`);
+  assert.equal(git("rev-parse", "--is-shallow-repository"), "true");
+  assert.equal(git("merge-base", "--all", base, head), base);
+  assert.equal(git("diff", "--name-only", base, head), "guide.md");
+  assert.deepEqual(compare(base, head), full);
+});
+
+test("multiple best merge bases select full checks even when either comparison is documentation-only", (context) => {
+  const { git, commit, compare } = documentationHistory(context);
+  const root = commit("root");
+  const left = commit("left", root);
+  const right = commit("right", root);
+  const base = commit("base merge", left, right);
+  const head = commit("head merge", right, left);
+
+  assert.deepEqual(git("merge-base", "--all", base, head).split("\n").sort(), [left, right].sort());
+  for (const ancestor of [left, right]) {
+    assert.equal(git("diff", "--name-only", ancestor, head), "guide.md");
+    assert.deepEqual(compare(ancestor, head), docsOnly);
+  }
+  assert.deepEqual(compare(base, head), full);
+});
