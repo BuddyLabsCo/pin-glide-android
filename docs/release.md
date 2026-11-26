@@ -219,6 +219,90 @@ four `PINGLIDE_DEV_SIGNING_*` inputs above, alongside `PINGLIDE_DEV_SERVICE_URL`
 and `PINGLIDE_DEV_QQ_APP_ID`. Use the Dev distribution build command below and
 the independently approved Dev certificate fingerprint when verifying.
 
+## Production publication
+
+Configure the protected GitHub Environment named `production` with the same
+variable and secret **names** as `development`, but with the production HTTPS
+Service origin, production QQ registration and independently approved production
+signing key and certificate fingerprint. Do not reuse the Dev signer.
+Restrict this Environment and the `auto-release` branch to trusted maintainers,
+require reviewed changes to `main`, and keep automatic merging disabled for
+release proposals. The production workflow checks the merged event, including
+the merging user and any auto-merge configuration in the payload; repository
+protections enforce actual manual approval.
+
+Only closing a merged same-repository `auto-release` PR into `main` can authorize
+the **Production release** workflow. Ordinary pushes, closed unmerged PRs, forks
+and manual workflow dispatch are not production authorizations. Automatic
+proposal creation is not enabled by this workflow. Before Environment access,
+the workflow verifies that the event, workflow SHA and checkout match, rejects
+broader-scope distribution variables and signing secrets, and compares the
+Gradle/changelog version with the published stable Release history. Production
+jobs queue without canceling the active job; the package job repeats the
+publication-state check while holding that queue slot.
+
+The job checks out the authorized merge SHA, not the latest `main`. It downloads
+the pinned Service contracts with the read-only Service App token and assembles
+Release without shared build, dependency or configuration caches. The production
+keystore exists only during signing in a private runner temporary directory and is
+removed when that step exits, including failures. The existing Release build
+requires HTTPS and the production network policy disables cleartext and uses
+TLS for HTTP and WebSockets. The shared APK verifier checks the candidate's
+signature and approved signer, version, package, manifest, non-debuggability,
+cleartext policy, QQ callback and page alignment.
+
+Before any tag or Release mutation, the job retains these files as the immutable
+`production-release-candidate` Actions artifact for the authorized workflow run:
+
+- `pin-glide-<versionName>.apk`
+- `pin-glide-<versionName>.apk.sha256` (SHA-256 digest in checksum-file format)
+- `release-candidate.json` (merge SHA, version name/code, package, approved signer,
+  QQ App ID, filename and digest; no signing credentials)
+
+Publication re-verifies the retained candidate identity, digest and APK, creates
+the exact `v<versionName>` tag and a draft GitHub Release with the corresponding
+changelog notes and candidate identity, and uploads those three files. The
+Release becomes public only after the API confirms all three assets' sizes and
+SHA-256 digests. No uploaded asset is replaced. A failed upload leaving an empty
+`starter` asset in the matching draft may be removed and retried; a mismatched
+asset, version/code, tag, draft or candidate is an error.
+
+### Recovering an interrupted release
+
+1. Find the original **Production release** run for the authorized merge.
+   Inspect the failure and confirm the authorized SHA and candidate artifact.
+   Do not create another release proposal for the same version.
+2. Correct the external cause (for example, a temporary network failure) and
+   rerun the failed job or original workflow. GitHub keeps the original run ID
+   and authorized commit. Keep the approved production signer and QQ identity
+   unchanged while recovery is pending.
+3. If the candidate exists, the job downloads it from that run, verifies its
+   identity, digest and APK again and publishes those exact bytes. It skips
+   Service contract download, assembly and signing. Successfully uploaded files
+   are retained; missing files are uploaded, and a complete matching Release
+   is left unchanged.
+4. If an earlier attempt never reached candidate verification and there is no
+   candidate, tag or Release, a retry can build normally. If verification was
+   reached, or publication state exists, missing/expired/ambiguous recovery
+   artifacts cause the retry to fail closed. Recover the original verified files
+   from protected backups or escalate for maintainer reconciliation; never
+   rebuild, resign, move a tag or overwrite a release asset to make the same
+   version succeed. Retain the candidate artifact for the configured Actions
+   retention period and preserve verified copies if a release remains pending.
+
+The workflow's preflight needs read-only repository contents. Only the serialized
+package/publication job has `contents: write` for tags and Releases and
+`actions: read` for candidate recovery. Signing secrets are provided only to the
+assembly step. The production publication workflow must not be tested against
+real production Releases: use the focused local tests instead:
+
+```powershell
+node --test scripts/release/production-policy.test.mjs scripts/release/production-publication.test.mjs
+```
+
+The tests use isolated temporary files and an in-memory GitHub API fixture;
+they never create a real tag, Release or workflow run.
+
 ## Build and verify
 
 From the repository root, without deployment inputs:
