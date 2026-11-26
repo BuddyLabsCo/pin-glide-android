@@ -33,5 +33,5 @@ On Windows, use Git Bash and `avdmanager.bat`. For a single class, add `-Pandroi
 
 ## Conditional coverage
 
-- Camera QR sequence: skipped by default; follow [the camera procedure](implementation/pairing-scanner-camera-test.md) to run with `cameraQrSequence=true`.
+- Camera QR sequence: skipped by default; requires `cameraQrSequence=true` and a back-camera feed with an invalid QR followed by the fixture's valid QR.
 - TalkBack speech: install and enable TalkBack and set `verifyTalkBackSpeech=true`; native live-region checks always run.
