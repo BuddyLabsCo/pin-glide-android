@@ -231,7 +231,7 @@
     <string name="senders_verify_revoke">使用 QQ 验证并撤销</string>
     <string name="senders_verifying">正在验证 QQ 账号…</string>
     <string name="senders_proof_cancelled">QQ 验证已取消，未提交撤销。</string>
-    <string name="senders_proof_failed">QQ 验证未完成，所选设备未被撤销。请重试。</string>
+    <string name="senders_proof_failed">QQ 验证失败，未提交撤销。</string>
     <string name="senders_proof_wrong_account">请使用当前登录的 QQ 账号验证。所选设备未被撤销，当前账号未改变。</string>
     <string name="senders_submitting">正在提交撤销</string>
     <string name="senders_submitting_description">正在撤销「%1$s」…</string>

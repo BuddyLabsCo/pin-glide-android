@@ -16,6 +16,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -236,7 +237,7 @@ class SenderRevocationConfirmationTest {
         compose.runOnIdle { assertEquals(0, attempts) }
         val verify = compose.onNodeWithText("使用 QQ 验证并撤销")
         verify.performClick()
-        assertCancelledOwnerProof()
+        assertOwnerProofWarning("QQ 验证已取消，未提交撤销。", "sender-owner-proof-cancelled.png")
         compose.runOnIdle { assertTrue(submissions.isEmpty()) }
         verify.performClick()
         compose.onNodeWithText("正在验证 QQ 账号…").assertIsNotEnabled()
@@ -253,8 +254,73 @@ class SenderRevocationConfirmationTest {
         compose.onNodeWithText("Pixel 9").assertIsDisplayed()
     }
 
-    private fun assertCancelledOwnerProof() {
-        val message = "QQ 验证已取消，未提交撤销。"
+    @Test
+    fun failedOwnerProofShowsApprovedWarningAndAllowsRetry() {
+        val retry = CompletableDeferred<Unit>()
+        var attempts = 0
+        compose.renderRevocationInventory(
+            scope,
+            AppLanguage.SimplifiedChinese,
+            authorization = {
+                attempts++
+                if (attempts == 2) retry.await()
+                throw QqAuthorizationException()
+            }
+        )
+        compose.onNodeWithContentDescription("撤销Pixel 9").performScrollTo().performClick()
+        compose.onNodeWithText("确认，验证 QQ").performClick()
+        val verify = compose.onNodeWithText("使用 QQ 验证并撤销")
+        verify.performClick()
+        assertOwnerProofWarning("QQ 验证失败，未提交撤销。", "sender-owner-proof-failed.png")
+        verify.performClick()
+        compose.onNodeWithText("正在验证 QQ 账号…").assertIsNotEnabled()
+        compose.runOnIdle {
+            assertEquals(2, attempts)
+            retry.complete(Unit)
+        }
+        compose.onNodeWithText("QQ 验证失败，未提交撤销。").assertIsDisplayed()
+        verify.assertIsEnabled()
+        compose.onNodeWithText("取消").performClick()
+        compose.waitUntil(5_000) { compose.onNodeWithText("Pixel 9").isDisplayed() }
+        compose.onNodeWithText("Pixel 9").assertIsDisplayed()
+    }
+
+    @Test
+    fun serviceRejectedOwnerProofRequiresFreshAuthorizationOnExplicitRetry() {
+        var attempts = 0
+        val submissions = mutableListOf<Pair<String, String>>()
+        compose.renderRevocationInventory(
+            scope,
+            AppLanguage.SimplifiedChinese,
+            authorization = { "proof-${++attempts}" },
+            service = { _, senderId, code ->
+                submissions.add(senderId to code)
+                RevocationReply.ProofFailed
+            }
+        )
+        compose.onNodeWithContentDescription("撤销Pixel 9").performScrollTo().performClick()
+        compose.onNodeWithText("确认，验证 QQ").performClick()
+        val verify = compose.onNodeWithText("使用 QQ 验证并撤销")
+        verify.performClick()
+        val warning = compose.onNodeWithTag("owner-proof-warning")
+        warning.assertIsDisplayed().assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Assertive)
+        )
+        verify.assertIsEnabled()
+        compose.runOnIdle {
+            assertEquals(1, attempts)
+            assertEquals(listOf("pixel" to "proof-1"), submissions)
+        }
+        verify.performClick()
+        warning.assertIsDisplayed()
+        verify.assertIsEnabled()
+        compose.runOnIdle {
+            assertEquals(2, attempts)
+            assertEquals(listOf("pixel" to "proof-1", "pixel" to "proof-2"), submissions)
+        }
+    }
+
+    private fun assertOwnerProofWarning(message: String, evidenceFile: String) {
         val warning = compose.onNodeWithTag("owner-proof-warning").assertIsDisplayed()
             .assert(
                 SemanticsMatcher.expectValue(
@@ -296,7 +362,7 @@ class SenderRevocationConfirmationTest {
                 }
             )
         }
-        captureSettledUiEvidence("sender-owner-proof-cancelled.png", warning)
+        captureSettledUiEvidence(evidenceFile, warning)
     }
 
     @Test
@@ -321,8 +387,7 @@ class SenderRevocationConfirmationTest {
             val verify = compose.onNodeWithText("Verify with QQ and revoke")
             verify.performScrollTo().performClick()
             assertLargeOwnerProofWarning(
-                "QQ verification did not complete. The selected device was not revoked. " +
-                    "Please try again."
+                "QQ verification failed. Revocation was not submitted."
             )
             compose.runOnIdle { assertTrue(submissions.isEmpty()) }
             verify.performScrollTo().performClick()
