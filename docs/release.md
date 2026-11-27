@@ -76,6 +76,64 @@ changelog that does not match the supplied published baseline.
 These commands do not open proposals, sign packages, tag commits or publish
 releases.
 
+## Automatic release proposals
+
+**Auto-release proposal** runs on pushes to `main`. It checks out current
+`main` with full history and serializes runs without canceling an active proposal.
+The existing repository-scoped GitHub App (`APP_ID` and `APP_PRIVATE_KEY`)
+must grant `contents: write` and `pull-requests: write` for this repository.
+Only the `auto-release` branch and its same-repository PR into `main` are
+written. The App token lets the PR trigger ordinary, independent `quality` CI;
+no signing or distribution Environment inputs are used.
+
+- A main change outside `.github/` and the release metadata is eligible.
+  Changes to `CHANGELOG.md` and only the two Gradle version assignments do not
+  by themselves open or refresh a proposal; ordinary Gradle changes do.
+  When an ineligible push follows an interrupted proposal, current main is
+  compared against the main ancestor of the open proposal, the latest published
+  commit, or the initial root commit before the first release. Outstanding
+  eligible changes still receive a proposal. Release PR merges and stale
+  pushes already included in a published release are ignored.
+- The proposal uses the latest published stable Release, its tagged source
+  and the shared version policy, not a version guessed from main or a reserved
+  tag. The proposal and production workflows share historical Release
+  validation; the release PR's independent read-only quality check verifies
+  the next version and published changelog sections. Notes summarize non-merge
+  commits since that publication (or from the repository root for the first
+  release). The proposal updates the Gradle
+  version fields and changelog together.
+- To select a higher stable version, use the version policy on the open
+  `auto-release` branch and commit the resulting consistent metadata. Subsequent
+  eligible pushes preserve that version and regenerate notes from current
+  main without incrementing its code again. The first release is fixed at
+  `0.1.0` / code `1`. Do not put unrelated changes on the proposal branch.
+- The workflow checks remote main, the proposal branch and PR state before
+  updates, uses an explicit force-with-lease on the proposal branch, and skips
+  identical branch and PR metadata updates. If state changes concurrently,
+  the next queued main push reconciles outstanding eligible changes or repairs
+  stale PR metadata from the already-pushed proposal without rebuilding it;
+  rerun the failed proposal if no newer run is queued.
+- An authorized but not yet published production release blocks another
+  proposal. A matching release PR merged by a bot or with auto-merge is an
+  explicit error, not an authorized release awaiting publication. After the
+  production workflow successfully completes, the proposal
+  workflow checks current main for eligible changes since the published release
+  to catch up pushes made during packaging. Failed publication must be recovered
+  through the original production run, not another release proposal.
+
+Review the version, notes and independent `quality` status before manually
+merging. Retain required reviews and branch protection on `main`; do not give
+the App a main-protection bypass or permission to merge automatically. Allow
+the App to create and force-update only the dedicated proposal branch. The
+proposal workflow never merges, signs, reserves tags or publishes. Only the
+separate production workflow below can publish from the authorized merge SHA.
+Ordinary CI runs the proposal fixture tests together with the existing release
+policy and publication tests:
+
+```powershell
+node --test scripts/release/auto-release-pr.test.mjs
+```
+
 ## Build prerequisites
 
 Use the checked-in Gradle wrapper and pinned dependencies. The current environment
@@ -233,8 +291,9 @@ protections enforce actual manual approval.
 
 Only closing a merged same-repository `auto-release` PR into `main` can authorize
 the **Production release** workflow. Ordinary pushes, closed unmerged PRs, forks
-and manual workflow dispatch are not production authorizations. Automatic
-proposal creation is not enabled by this workflow. Before Environment access,
+and manual workflow dispatch are not production authorizations. The separate
+proposal workflow above opens or refreshes PRs; this workflow does not create
+them. Before Environment access,
 the workflow verifies that the event, workflow SHA and checkout match, rejects
 broader-scope distribution variables and signing secrets, and compares the
 Gradle/changelog version with the published stable Release history. Production

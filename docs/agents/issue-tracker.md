@@ -48,3 +48,7 @@ PRs as a request surface: no.
 - **Title** — follows the Conventional Commits spec in the form
   `<type>: [issue-<issue-number>] <subject>`, for example `fix: [issue-42] correct retry backoff`.
 - **Description** — must end with `Closes #<issue-number>`
+
+Exception: automated `auto-release` proposals have no originating issue; their
+title uses `chore: propose release v<version>` and their description omits an
+issue-closing reference.

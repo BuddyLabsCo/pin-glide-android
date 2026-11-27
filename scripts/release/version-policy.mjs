@@ -26,7 +26,7 @@ function metadata(versionName, versionCode) {
   return { versionName, versionCode };
 }
 
-function compareVersions(left, right) {
+export function compareVersions(left, right) {
   const parts = requireVersion(left).split(".").map(BigInt);
   const other = requireVersion(right).split(".").map(BigInt);
   for (const [index, part] of parts.entries()) {

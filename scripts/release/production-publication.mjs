@@ -119,39 +119,59 @@ function recordedCandidate(release, identity) {
   return recorded;
 }
 
+export async function publicationSnapshot(api) {
+  return { releases: await api.list("/releases"), tags: (await api.list("/tags")).filter(tag => stableTag(tag.name)) };
+}
+
+export function publishedHistory(releases, tags, readVersionAt) {
+  const published = [];
+  const signers = new Set();
+  for (const release of releases) {
+    assert.ok(stableTag(release.tag_name) && release.name === release.tag_name &&
+      release.draft === false && release.prerelease === false, "Conflicting or pending production Release");
+    const source = tags.find(item => item.name === release.tag_name);
+    assert.ok(source, "Published release tag missing");
+    const version = readVersionAt(source.commit.sha);
+    assert.equal(release.tag_name, version.tag, "Published release version mismatch");
+    signers.add(recordedCandidate(release, version).signerSha256);
+    published.push(version);
+  }
+  assert.equal(new Set(published.map(version => version.versionCode)).size, published.length,
+    "Duplicate published versionCode");
+  published.sort((left, right) => left.versionCode - right.versionCode);
+  for (const [index, version] of published.entries()) {
+    assert.equal(version.versionCode, index + 1, "Missing published versionCode");
+  }
+  assert.ok(signers.size <= 1, "Production signer differs from published release identity");
+  return { published, signers, baseline: published.at(-1) ?? null };
+}
+
+export function checkPublishedHistory(changelog, published) {
+  const history = readChangelog(changelog);
+  for (const version of published) {
+    assert.equal(history.find(entry => entry.versionCode === version.versionCode)?.section,
+      version.section, "Published changelog section changed or missing");
+  }
+}
+
+export function checkUnreservedPublication({ releases, tags }) {
+  assert.ok(releases.every(release => release.draft === false), "Conflicting or pending production Release");
+  assert.ok(tags.every(tag => releases.some(release => release.tag_name === tag.name)),
+    "Unpublished conflicting stable tag");
+}
+
 export async function inspectPublication(api, identity, gradle, changelog, readVersionAt, approvedSigner) {
-  const releases = await api.list("/releases");
-  const tags = (await api.list("/tags")).filter(tag => stableTag(tag.name));
+  const { releases, tags } = await publicationSnapshot(api);
   const tag = tags.find(tag => tag.name === identity.tag);
   if (tag) assert.equal(tag.commit.sha, identity.commit, "Conflicting release tag");
   const matching = releases.filter(release => release.tag_name === identity.tag || release.name === identity.tag);
   assert.ok(matching.length <= 1, "Duplicate release version");
   const release = matching[0];
-  const published = [];
-  const history = readChangelog(changelog);
-  const signers = new Set();
-  for (const other of releases.filter(item => item !== release)) {
-    assert.ok(stableTag(other.tag_name) && other.name === other.tag_name &&
-      other.draft === false && other.prerelease === false, "Conflicting or pending production Release");
-    const source = tags.find(item => item.name === other.tag_name);
-    assert.ok(source, "Published release tag missing");
-    const version = readVersionAt(source.commit.sha);
-    assert.equal(other.tag_name, `v${version.versionName}`, "Published release version mismatch");
-    assert.equal(history.find(entry => entry.versionCode === version.versionCode)?.section,
-      version.section, "Published changelog section changed or missing");
-    signers.add(recordedCandidate(other, version).signerSha256);
-    published.push(version);
-  }
-  assert.equal(new Set(published.map(version => version.versionCode)).size, published.length,
-    "Duplicate published versionCode");
-  for (const other of tags.filter(item => item !== tag)) {
-    assert.ok(releases.some(item => item.tag_name === other.name), "Unpublished conflicting stable tag");
-  }
-  published.sort((left, right) => left.versionCode - right.versionCode);
-  for (const [index, version] of published.entries()) {
-    assert.equal(version.versionCode, index + 1, "Missing published versionCode");
-  }
-  const baseline = published.at(-1) ?? null;
+  const historicalReleases = releases.filter(item => item !== release);
+  const historicalTags = tags.filter(item => item !== tag);
+  const { published, signers, baseline } = publishedHistory(historicalReleases, historicalTags, readVersionAt);
+  checkUnreservedPublication({ releases: historicalReleases, tags: historicalTags });
+  checkPublishedHistory(changelog, published);
   checkVersion(gradle, changelog, baseline);
   let recorded;
   if (release) {

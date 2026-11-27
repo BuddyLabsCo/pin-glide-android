@@ -4,7 +4,8 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { github, runProduction } from "./production.mjs";
+import { github } from "./github.mjs";
+import { runProduction } from "./production.mjs";
 import { artifactName } from "./production-publication.mjs";
 import { proposeRelease } from "./version-policy.mjs";
 
