@@ -81,6 +81,7 @@ function fixture(t, published = false) {
   };
   const proposalHead = () => rawGit("rev-parse", "refs/remotes/origin/auto-release");
   let beforeVerify;
+  let afterProposalPush;
   const git = (...args) => {
     if (args[0] === "ls-remote" && beforeVerify) {
       const callback = beforeVerify;
@@ -88,12 +89,19 @@ function fixture(t, published = false) {
       callback();
     }
     if (args[0] === "push") mutations.push({ push: args });
-    return rawGit(...args);
+    const result = rawGit(...args);
+    if (args[0] === "push" && afterProposalPush) {
+      const callback = afterProposalPush;
+      afterProposalPush = undefined;
+      callback();
+    }
+    return result;
   };
   return {
     seed, api, pulls, mutations, read, write, commit, pushMain, proposalHead, rawGit,
     checkoutMain: sha => rawGit("reset", "--hard", sha),
     beforeVerify: callback => { beforeVerify = callback; },
+    afterProposalPush: callback => { afterProposalPush = callback; },
     run: (before, after) => updateProposal({ before, after, repository, api, git, read, write }),
     check: () => checkReleasePr(api, rawGit, read(gradlePath), read(changelogPath)),
   };
@@ -214,6 +222,56 @@ test("a later release-only push recovers an interrupted refresh of an open propo
   assert.equal(repo.pulls.length, 1);
   assert.equal(repo.mutations[1].method, "PATCH");
   assert.match(repo.pulls[0].body, /- Change notes\n- Improve pairing\n- Improve forwarding/);
+});
+
+test("a workflow-only push repairs stale PR metadata after a successful proposal branch push", async t => {
+  const repo = fixture(t, true);
+  const first = repo.commit("Improve forwarding", { "app/feature.txt": "first" });
+  repo.pushMain(first);
+  await repo.run(repo.seed, first);
+  const oldTitle = repo.pulls[0].title;
+  const oldBody = repo.pulls[0].body;
+  const selected = proposeRelease(repo.read(gradlePath), repo.read(changelogPath),
+    initial, "- Maintainer notes", "2.0.0");
+  const override = repo.commit("Select major version", {
+    [gradlePath]: selected.gradle, [changelogPath]: selected.changelog,
+  });
+  repo.rawGit("push", "origin", `${override}:refs/heads/auto-release`);
+  repo.checkoutMain(first);
+  const eligible = repo.commit("Improve pairing", { "app/feature.txt": "second" });
+  const concurrent = repo.commit("Change workflow", { ".github/workflows/ci.yml": "name: Changed\n" });
+  repo.pushMain(eligible);
+  repo.checkoutMain(eligible);
+  repo.mutations.length = 0;
+  repo.afterProposalPush(() => repo.pushMain(concurrent));
+  await assert.rejects(repo.run(first, eligible), /Main changed/);
+  const refreshed = repo.proposalHead();
+  assert.equal(repo.rawGit("rev-parse", `${refreshed}^`), eligible);
+  assert.equal(repo.mutations.length, 1);
+  assert.ok(repo.mutations[0].push);
+  assert.equal(repo.pulls[0].title, oldTitle);
+  assert.equal(repo.pulls[0].body, oldBody);
+  assert.match(repo.rawGit("show", `${refreshed}:${changelogPath}`),
+    /## 2\.0\.0 \(versionCode 2\)\n\n- Improve pairing\n- Improve forwarding/);
+
+  repo.checkoutMain(concurrent);
+  repo.mutations.length = 0;
+  await repo.run(eligible, concurrent);
+  assert.equal(repo.rawGit("rev-parse", "HEAD"), concurrent);
+  assert.equal(repo.rawGit("status", "--porcelain"), "");
+  assert.equal(repo.proposalHead(), refreshed);
+  assert.equal(repo.pulls.length, 1);
+  assert.equal(repo.mutations.length, 1);
+  assert.equal(repo.mutations[0].method, "PATCH");
+  assert.equal(repo.mutations[0].path, "/pulls/7");
+  assert.equal(repo.pulls[0].title, "chore: propose release v2.0.0");
+  assert.match(repo.pulls[0].body, /## Proposed release 2\.0\.0 \(versionCode 2\)/);
+  assert.match(repo.pulls[0].body, /### Changelog\n\n- Improve pairing\n- Improve forwarding\n\n/);
+  assert.doesNotMatch(repo.pulls[0].body, /Change workflow/);
+  repo.mutations.length = 0;
+  await repo.run(eligible, concurrent);
+  assert.deepEqual(repo.mutations, []);
+  assert.equal(repo.proposalHead(), refreshed);
 });
 
 test("release quality rejects internally consistent but unpublished or rewritten history", async t => {

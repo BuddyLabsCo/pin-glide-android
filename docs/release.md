@@ -110,8 +110,9 @@ no signing or distribution Environment inputs are used.
 - The workflow checks remote main, the proposal branch and PR state before
   updates, uses an explicit force-with-lease on the proposal branch, and skips
   identical branch and PR metadata updates. If state changes concurrently,
-  the next queued main push reconciles outstanding eligible changes; rerun
-  the failed proposal if no newer run is queued.
+  the next queued main push reconciles outstanding eligible changes or repairs
+  stale PR metadata from the already-pushed proposal without rebuilding it;
+  rerun the failed proposal if no newer run is queued.
 - An authorized but not yet published production release blocks another
   proposal. A matching release PR merged by a bot or with auto-merge is an
   explicit error, not an authorized release awaiting publication. After the

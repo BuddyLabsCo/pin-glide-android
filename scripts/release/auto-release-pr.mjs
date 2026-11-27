@@ -49,6 +49,18 @@ function eligiblePaths(git, before, after) {
     withoutVersion(git("show", `${before}:${gradlePath}`)) !== withoutVersion(git("show", `${after}:${gradlePath}`));
 }
 
+function proposalMetadata({ versionName, versionCode, notes }, baseline) {
+  return {
+    title: `chore: propose release v${versionName}`,
+    body: [
+      `## Proposed release ${versionName} (versionCode ${versionCode})`, "",
+      `Changelog base: ${baseline?.tag ?? "the repository root"}.`, "", "### Changelog", "", notes, "",
+      "Review the version, changelog and independent quality checks before merging manually.",
+      "Only the manual merge authorizes the separate production APK publication workflow.",
+    ].join("\n"),
+  };
+}
+
 export async function updateProposal({ before, after, publicationRun, repository, git, api, read, write }) {
   assert.equal(git("branch", "--show-current"), "main", "Expected main checkout");
   assert.equal(git("status", "--porcelain"), "", "Expected clean checkout");
@@ -78,12 +90,31 @@ export async function updateProposal({ before, after, publicationRun, repository
   }
   const previous = git("for-each-ref", "--format=%(objectname)", "refs/remotes/origin/auto-release");
   if (state.open) assert.match(previous, sha, "Open release PR has no branch reference");
+  async function syncPull(proposalHead, metadata) {
+    if (state.open?.title === metadata.title && state.open.body === metadata.body) return;
+    await verifyState(git, api, repository, head, proposalHead, state);
+    if (state.open) {
+      await api.request("PATCH", `/pulls/${state.open.number}`, metadata);
+    } else {
+      await api.request("POST", "/pulls", { head: "auto-release", base: "main", ...metadata });
+    }
+  }
+
   const eventEligible = !publicationRun && eligiblePaths(git, before, after);
   if (!eventEligible) {
     const covered = state.open ? git("merge-base", previous, head) :
       baseline?.commit ?? git("rev-list", "--max-parents=0", head);
     assert.match(covered, sha, "Expected a unique release comparison base");
-    if (!eligiblePaths(git, covered, head)) return;
+    if (!eligiblePaths(git, covered, head)) {
+      if (!state.open) return;
+      checkUnreservedPublication(snapshot);
+      const gradle = git("show", `${previous}:${gradlePath}`);
+      const changelog = git("show", `${previous}:${changelogPath}`);
+      checkVersion(gradle, changelog, baseline);
+      checkPublishedHistory(changelog, published);
+      await syncPull(previous, proposalMetadata(releaseIdentity(previous, gradle, changelog), baseline));
+      return;
+    }
   }
   checkUnreservedPublication(snapshot);
 
@@ -94,24 +125,16 @@ export async function updateProposal({ before, after, publicationRun, repository
   const gradle = read(gradlePath);
   const changelog = read(changelogPath);
   let proposal = proposeRelease(gradle, changelog, baseline, notes);
-  let version = checkVersion(proposal.gradle, proposal.changelog, baseline);
+  const version = checkVersion(proposal.gradle, proposal.changelog, baseline);
   if (state.open) {
     const selected = checkVersion(git("show", `${previous}:${gradlePath}`),
       git("show", `${previous}:${changelogPath}`), baseline);
     if (compareVersions(selected.versionName, version.versionName) > 0) {
       proposal = proposeRelease(gradle, changelog, baseline, notes, selected.versionName);
-      version = checkVersion(proposal.gradle, proposal.changelog, baseline);
     }
   }
   checkPublishedHistory(proposal.changelog, published);
-  releaseIdentity(head, proposal.gradle, proposal.changelog);
-  const title = `chore: propose release v${version.versionName}`;
-  const body = [
-    `## Proposed release ${version.versionName} (versionCode ${version.versionCode})`, "",
-    `Changelog base: ${baseline?.tag ?? "the repository root"}.`, "", "### Changelog", "", notes, "",
-    "Review the version, changelog and independent quality checks before merging manually.",
-    "Only the manual merge authorizes the separate production APK publication workflow.",
-  ].join("\n");
+  const metadata = proposalMetadata(releaseIdentity(head, proposal.gradle, proposal.changelog), baseline);
   write(gradlePath, proposal.gradle);
   write(changelogPath, proposal.changelog);
   git("add", "--", gradlePath, changelogPath);
@@ -119,17 +142,12 @@ export async function updateProposal({ before, after, publicationRun, repository
   let proposalHead = previous;
   if (!previous || git("diff", "--cached", "--name-only", previous)) {
     git("-c", "user.name=github-actions[bot]", "-c",
-      "user.email=41898282+github-actions[bot]@users.noreply.github.com", "commit", "-m", title);
+      "user.email=41898282+github-actions[bot]@users.noreply.github.com", "commit", "-m", metadata.title);
     await verifyState(git, api, repository, head, previous, state);
     git("push", `--force-with-lease=${branchRef}:${previous}`, "origin", `HEAD:${branchRef}`);
     proposalHead = git("rev-parse", "HEAD");
   }
-  await verifyState(git, api, repository, head, proposalHead, state);
-  if (!state.open) {
-    await api.request("POST", "/pulls", { head: "auto-release", base: "main", title, body });
-  } else if (state.open.title !== title || state.open.body !== body) {
-    await api.request("PATCH", `/pulls/${state.open.number}`, { title, body });
-  }
+  await syncPull(proposalHead, metadata);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
